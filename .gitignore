@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Logs / local env / secrets
+*.log
+.env
+.env.*
+secrets.env
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.sw?
