@@ -5,6 +5,7 @@ import {
   commits,
   currentBranch,
   fetchingRepos,
+  githubActionsRuns,
   headCommit,
   isDirty,
   openContextMenu,
@@ -23,6 +24,7 @@ const CORNER_RADIUS = 8;
 const GHOST_ROW_HEIGHT = COLLAPSED_ROW_HEIGHT;
 const GHOST_RADIUS = 5;
 const DIRTY_COLOR = "#8993A4";
+const CI_ACTIVE_COLOR = "#4c9aff";
 
 interface Edge {
   key: string;
@@ -55,6 +57,13 @@ export function GraphPanel() {
   const chronological = createMemo(() => commits());
   const lanes = createMemo(() => computeColumns(chronological(), currentBranch()));
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
+  const runningActionsByHash = createMemo(() => {
+    const hashes = new Set<string>();
+    for (const [hash, runs] of Object.entries(githubActionsRuns())) {
+      if (runs.some((run) => run.status === "running")) hashes.add(hash);
+    }
+    return hashes;
+  });
 
   const isFetching = createMemo(() => {
     const repo = activeRepo();
@@ -150,7 +159,7 @@ export function GraphPanel() {
   const width = createMemo(() => {
     let max = 0;
     for (const c of chronological()) max = Math.max(max, xFor(c.hash));
-    return max + LANE_MARGIN + DOT_RADIUS;
+    return max + LANE_MARGIN + DOT_RADIUS + 16;
   });
 
   return (
@@ -205,6 +214,11 @@ export function GraphPanel() {
               {isPushing() && headCommit() === c.hash && (
                 <circle class="push-spinner" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 4} fill="none" stroke={colorForBranch(c.branch)} stroke-width="2" stroke-dasharray="10 5">
                   <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.85s" repeatCount="indefinite" />
+                </circle>
+              )}
+              {runningActionsByHash().has(c.hash) && (
+                <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 7} cy={yFor(c.hash)} r="3" fill={CI_ACTIVE_COLOR}>
+                  <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                 </circle>
               )}
               {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={TAG_COLOR} />}

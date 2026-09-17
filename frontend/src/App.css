@@ -614,6 +614,10 @@
   filter: drop-shadow(0 0 3px rgba(76, 154, 255, 0.55));
 }
 
+.ci-active-dot {
+  filter: drop-shadow(0 0 4px rgba(76, 154, 255, 0.8));
+}
+
 .commit-row {
   border-bottom: 1px solid var(--border);
   border-left: 3px solid transparent;

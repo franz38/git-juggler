@@ -8,6 +8,7 @@ import {
   noteTerminalOutput,
   registerTerminalSender,
   scheduleCheckoutRefresh,
+  scheduleCommitRefresh,
   scheduleGitHubActionsRefreshAfterPush,
   scheduleGraphRefresh,
   startFetch,
@@ -21,8 +22,9 @@ import {
 // typed by hand or injected via a menu action (see runInTerminal).
 const FETCH_COMMAND_RE = /\bgit\s+fetch\b/;
 const CHECKOUT_COMMAND_RE = /\bgit\s+(checkout|switch)\b/;
+const COMMIT_COMMAND_RE = /\bgit\s+commit\b/;
 const PUSH_COMMAND_RE = /\bgit\s+push\b/;
-const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(commit|merge|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
+const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\r/g;
 const LINE_BUFFER_MAX = 200;
@@ -75,6 +77,7 @@ export function TerminalPanel(props: { repo: string | null }) {
         if (ch === "\n") {
           if (FETCH_COMMAND_RE.test(lineBuffer)) startFetch(repo);
           if (CHECKOUT_COMMAND_RE.test(lineBuffer)) scheduleCheckoutRefresh(repo);
+          if (COMMIT_COMMAND_RE.test(lineBuffer)) scheduleCommitRefresh(repo);
           if (GRAPH_MUTATION_COMMAND_RE.test(lineBuffer)) scheduleGraphRefresh(repo);
           if (PUSH_COMMAND_RE.test(lineBuffer)) {
             startPush(repo);

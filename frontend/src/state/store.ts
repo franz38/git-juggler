@@ -156,6 +156,7 @@ const graphRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const checkoutRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
 const CHECKOUT_REFRESH_DEBOUNCE_MS = 600;
 const CHECKOUT_REFRESH_DELAYS_MS = [600, 1500];
+const COMMIT_REFRESH_DELAYS_MS = [600, 1500, 3000];
 
 // Debounced so a burst of output from one checkout command only triggers a
 // single refresh, once things settle.
@@ -176,6 +177,27 @@ export function scheduleCheckoutRefresh(repoId: string): void {
   for (const timer of existing) clearTimeout(timer);
   const timers: ReturnType<typeof setTimeout>[] = [];
   for (const delay of CHECKOUT_REFRESH_DELAYS_MS) {
+    const timer = setTimeout(() => {
+      const current = checkoutRefreshTimers.get(repoId) ?? [];
+      const remaining = current.filter((item) => item !== timer);
+      if (remaining.length > 0) checkoutRefreshTimers.set(repoId, remaining);
+      else checkoutRefreshTimers.delete(repoId);
+      void refreshRepoGraph(repoId);
+    }, delay);
+    timers.push(timer);
+  }
+  checkoutRefreshTimers.set(repoId, timers);
+}
+
+export function scheduleCommitRefresh(repoId: string): void {
+  scheduleTimedGraphRefreshes(repoId, COMMIT_REFRESH_DELAYS_MS);
+}
+
+function scheduleTimedGraphRefreshes(repoId: string, delays: number[]): void {
+  const existing = checkoutRefreshTimers.get(repoId) ?? [];
+  for (const timer of existing) clearTimeout(timer);
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  for (const delay of delays) {
     const timer = setTimeout(() => {
       const current = checkoutRefreshTimers.get(repoId) ?? [];
       const remaining = current.filter((item) => item !== timer);
