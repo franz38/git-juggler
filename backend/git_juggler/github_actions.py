@@ -5,8 +5,10 @@ import os
 from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
+
+from git import Repo
 
 from .schemas import GitHubActionsRunInfo
 
@@ -54,8 +56,51 @@ def _matching_repo_config(github_config: dict, repo_path: Path) -> dict | None:
     return None
 
 
+def _api_base_url_for_host(host: str) -> str | None:
+    normalized = host.lower().removeprefix("www.")
+    if normalized == "github.com":
+        return "https://api.github.com"
+    if "." not in normalized:
+        return None
+    return f"https://{normalized}/api/v3"
+
+
+def _repo_config_from_remote_url(url: str) -> dict | None:
+    parsed = urlparse(url)
+    if parsed.scheme:
+        host = parsed.hostname or ""
+        path = parsed.path.lstrip("/")
+    else:
+        if ":" not in url:
+            return None
+        host, path = url.split(":", 1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[1]
+
+    api_base_url = _api_base_url_for_host(host)
+    if api_base_url is None:
+        return None
+
+    parts = path.removesuffix(".git").split("/")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    return {"api_base_url": api_base_url, "owner": parts[0], "repo": parts[1]}
+
+
+def _inferred_repo_config(repo_path: Path) -> dict | None:
+    try:
+        remote_url = Repo(repo_path).remotes.origin.url
+    except Exception:
+        return None
+    if not isinstance(remote_url, str):
+        return None
+    return _repo_config_from_remote_url(remote_url)
+
+
 def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
-    api_base_url = str(github_config.get("api_base_url") or "https://api.github.com").rstrip("/")
+    api_base_url = str(
+        repo_config.get("api_base_url") or github_config.get("api_base_url") or "https://api.github.com"
+    ).rstrip("/")
     owner = repo_config.get("owner")
     repo = repo_config.get("repo")
     if not isinstance(owner, str) or not owner or not isinstance(repo, str) or not repo:
@@ -69,7 +114,7 @@ def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    token_env = github_config.get("token_env")
+    token_env = github_config.get("token_env") or "GITHUB_TOKEN"
     token = os.environ.get(token_env) if isinstance(token_env, str) and token_env else None
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -91,10 +136,11 @@ def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
 
 
 def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_config: dict | None) -> dict[str, list[GitHubActionsRunInfo]]:
-    if not github_config or not commit_hashes:
+    if not commit_hashes:
         return {}
 
-    repo_config = _matching_repo_config(github_config, repo_path)
+    github_config = github_config or {}
+    repo_config = _matching_repo_config(github_config, repo_path) or _inferred_repo_config(repo_path)
     if repo_config is None:
         return {}
 
