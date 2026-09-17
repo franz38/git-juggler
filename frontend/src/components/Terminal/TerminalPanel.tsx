@@ -7,6 +7,7 @@ import {
   flushPendingCommands,
   noteTerminalOutput,
   registerTerminalSender,
+  scheduleCheckoutRefresh,
   scheduleGitHubActionsRefreshAfterPush,
   scheduleGraphRefresh,
   startFetch,
@@ -73,7 +74,7 @@ export function TerminalPanel(props: { repo: string | null }) {
       for (const ch of clean) {
         if (ch === "\n") {
           if (FETCH_COMMAND_RE.test(lineBuffer)) startFetch(repo);
-          if (CHECKOUT_COMMAND_RE.test(lineBuffer)) scheduleGraphRefresh(repo);
+          if (CHECKOUT_COMMAND_RE.test(lineBuffer)) scheduleCheckoutRefresh(repo);
           if (GRAPH_MUTATION_COMMAND_RE.test(lineBuffer)) scheduleGraphRefresh(repo);
           if (PUSH_COMMAND_RE.test(lineBuffer)) {
             startPush(repo);

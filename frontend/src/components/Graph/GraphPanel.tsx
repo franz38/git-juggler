@@ -185,10 +185,7 @@ export function GraphPanel() {
       </For>
       <For each={rowLayout().order}>
         {(c) => {
-          const isCheckedOut = () => {
-            const branch = currentBranch();
-            return branch !== null && c.refs.branches.includes(branch);
-          };
+          const isCheckedOut = () => headCommit() === c.hash;
           return (
             <g>
               <circle
