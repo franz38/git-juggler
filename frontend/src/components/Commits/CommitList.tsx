@@ -7,13 +7,14 @@ export function CommitList() {
     const repo = activeRepo();
     return repo !== null && fetchingRepos().has(repo);
   });
+  const hasCommits = createMemo(() => rowLayout().order.length > 0);
 
   return (
     <div class="commit-list">
       <Show when={errorMessage()}>
         <div class="error-banner">{errorMessage()}</div>
       </Show>
-      <Show when={graphLoading()}>
+      <Show when={graphLoading() && !hasCommits()}>
         <div class="loading-banner">Loading commits…</div>
       </Show>
       <Show when={isDirty() && headCommit() !== null}>
