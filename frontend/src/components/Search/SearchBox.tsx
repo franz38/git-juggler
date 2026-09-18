@@ -1,13 +1,11 @@
-import { For, Show, createSignal } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import { scrollToCommit } from "../../lib/scrollToCommit";
 import { authorFilter, commentFilter, commitAuthors, matchingHashes, searchQuery, setAuthorFilter, setCommentFilter, setSearchQuery } from "../../state/store";
+import { MultiSelect } from "./MultiSelect";
 
 export function SearchBox() {
   const [filterOpen, setFilterOpen] = createSignal(false);
   const activeFilterCount = () => (authorFilter().length > 0 ? 1 : 0) + (commentFilter().trim().length > 0 ? 1 : 0);
-  const setSelectedAuthors = (select: HTMLSelectElement) => {
-    setAuthorFilter([...select.selectedOptions].map((option) => option.value));
-  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key !== "Enter") return;
@@ -55,14 +53,10 @@ export function SearchBox() {
               onInput={(e) => setCommentFilter(e.currentTarget.value)}
             />
           </label>
-          <label class="filter-field">
+          <div class="filter-field">
             <span>Author</span>
-            <select multiple onChange={(e) => setSelectedAuthors(e.currentTarget)}>
-              <For each={commitAuthors()}>
-                {(author) => <option value={author} selected={authorFilter().includes(author)}>{author}</option>}
-              </For>
-            </select>
-          </label>
+            <MultiSelect options={commitAuthors()} selected={authorFilter()} onChange={setAuthorFilter} placeholder="All authors" />
+          </div>
           <button type="button" class="filter-clear-button" onClick={() => setAuthorFilter([])}>
             Clear authors
           </button>
