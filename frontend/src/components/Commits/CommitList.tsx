@@ -22,12 +22,16 @@ export function CommitList() {
         <UncommittedRow files={uncommittedFiles()} />
       </Show>
       {/* Matches the graph's reserved ghost-commit band so rows stay aligned
-          with their dots while a fetch is running. */}
-      <Show when={isFetching()}>
-        <div class="ghost-row-spacer" style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }}>
-          Fetching…
-        </div>
-      </Show>
+          with their dots while a fetch is running. Stays mounted (collapsed
+          via max-height) so it animates open/closed instead of snapping the
+          rows below it into place. */}
+      <div
+        class="ghost-row-spacer"
+        classList={{ "ghost-row-spacer--visible": isFetching() }}
+        style={{ "--ghost-row-height": `${COLLAPSED_ROW_HEIGHT}px` }}
+      >
+        Fetching…
+      </div>
       <For each={rowLayout().order}>{(commit) => <CommitRow commit={commit} />}</For>
     </div>
   );

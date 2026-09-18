@@ -762,11 +762,25 @@
   font-size: 11px;
   font-style: italic;
   color: var(--text-dim);
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    height 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.ghost-row-spacer--visible {
+  height: var(--ghost-row-height);
   opacity: 0.7;
 }
 
-.ghost-row-spacer.blank {
-  opacity: 0;
+.graph-panel {
+  transition: height 0.18s ease;
+}
+
+.fetch-band-shift {
+  transition: transform 0.18s ease;
 }
 
 @keyframes push-edge-flash {
