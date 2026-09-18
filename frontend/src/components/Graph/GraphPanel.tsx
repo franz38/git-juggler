@@ -12,6 +12,7 @@ import {
   pushingRepos,
   rowLayout,
   toggleExpand,
+  uncommittedRowHeight,
   upstreamCommit,
 } from "../../state/store";
 import { colorForBranch, TAG_COLOR } from "./branchColor";
@@ -74,11 +75,11 @@ export function GraphPanel() {
     return repo !== null && pushingRepos().has(repo);
   });
   const hasDirtyGhost = createMemo(() => isDirty() && headCommit() !== null);
-  const dirtyOffset = createMemo(() => (hasDirtyGhost() ? GHOST_ROW_HEIGHT : 0));
+  const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeight() : 0));
   const fetchOffset = createMemo(() => dirtyOffset() + (isFetching() ? GHOST_ROW_HEIGHT : 0));
   const commitOffset = createMemo(() => fetchOffset());
   const fetchGhostY = createMemo(() => dirtyOffset() + GHOST_ROW_HEIGHT / 2);
-  const dirtyGhostY = createMemo(() => GHOST_ROW_HEIGHT / 2);
+  const dirtyGhostY = createMemo(() => uncommittedRowHeight() / 2);
 
   const columnFor = (hash: string) => lanes().get(hash)?.column ?? 0;
   const xForColumn = (column: number) => LANE_MARGIN + column * LANE_WIDTH;

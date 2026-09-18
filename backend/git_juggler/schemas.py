@@ -58,6 +58,11 @@ class CommitSummary(BaseModel):
     refs: RefsInfo
 
 
+class FileChange(BaseModel):
+    path: str
+    status: str
+
+
 class GraphResponse(BaseModel):
     commits: list[CommitSummary]
     branches: list[str]
@@ -65,6 +70,7 @@ class GraphResponse(BaseModel):
     head_commit: str | None = None
     upstream_commit: str | None = None
     is_dirty: bool = False
+    uncommitted_files: list[FileChange] = Field(default_factory=list)
 
 
 class RepoStatusResponse(BaseModel):
@@ -72,11 +78,7 @@ class RepoStatusResponse(BaseModel):
     head_commit: str | None = None
     upstream_commit: str | None = None
     is_dirty: bool = False
-
-
-class FileChange(BaseModel):
-    path: str
-    status: str
+    uncommitted_files: list[FileChange] = Field(default_factory=list)
 
 
 class CommitDetail(BaseModel):

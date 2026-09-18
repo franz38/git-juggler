@@ -60,6 +60,7 @@ export interface GraphResponse {
   head_commit: string | null;
   upstream_commit: string | null;
   is_dirty: boolean;
+  uncommitted_files: FileChange[];
 }
 
 export interface RepoStatusResponse {
@@ -67,6 +68,7 @@ export interface RepoStatusResponse {
   head_commit: string | null;
   upstream_commit: string | null;
   is_dirty: boolean;
+  uncommitted_files: FileChange[];
 }
 
 export interface FileChange {

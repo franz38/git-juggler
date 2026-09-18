@@ -706,6 +706,16 @@
   background: var(--active-bg);
 }
 
+.uncommitted-row .commit-row-main {
+  color: var(--text-h);
+}
+
+.uncommitted-badge {
+  background: rgba(137, 147, 164, 0.15);
+  border-color: #8993a4;
+  color: #8993a4;
+}
+
 .commit-hash {
   color: var(--text-dim);
   flex: 0 0 auto;

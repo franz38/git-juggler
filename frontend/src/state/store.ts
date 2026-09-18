@@ -1,12 +1,13 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { fetchCommitDetail, fetchConfig, fetchGitHubActionsRuns, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { CommitDetail, CommitSummary, GitHubActionsRunInfo, GitHubConfig, RepoSummary } from "../api/types";
+import type { CommitDetail, CommitSummary, FileChange, GitHubActionsRunInfo, GitHubConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
 export const FILE_ROW_HEIGHT = 20;
 export const DETAIL_LOADING_HEIGHT = 40;
+export const UNCOMMITTED_ROW_KEY = "__git-juggler-uncommitted__";
 
 export interface TabInfo {
   id: string;
@@ -25,6 +26,8 @@ interface RepoState {
   headCommit: string | null;
   upstreamCommit: string | null;
   isDirty: boolean;
+  uncommittedFiles: FileChange[];
+  uncommittedExpanded: boolean;
   expanded: Set<string>;
   details: Record<string, CommitDetail>;
   githubActionsRuns: Record<string, GitHubActionsRunInfo[]>;
@@ -133,6 +136,8 @@ function ensureRepoState(name: string): void {
       headCommit: null,
       upstreamCommit: null,
       isDirty: false,
+      uncommittedFiles: [],
+      uncommittedExpanded: false,
       expanded: new Set(),
       details: {},
       githubActionsRuns: {},
@@ -154,6 +159,7 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
     setRepoStates(name, "isDirty", data.is_dirty);
+    setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
     void loadGitHubActionsInto(name);
   } catch (e) {
     setRepoStates(name, "error", (e as Error).message);
@@ -188,6 +194,7 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
     }
     setRepoStates(repoId, "upstreamCommit", status.upstream_commit);
     setRepoStates(repoId, "isDirty", status.is_dirty);
+    setRepoStates(repoId, "uncommittedFiles", status.uncommitted_files);
   } catch {
     // Status polling is opportunistic; the next graph load can surface errors.
   }
@@ -335,6 +342,23 @@ export const isDirty = createMemo<boolean>(() => {
   return name ? repoStates[name]?.isDirty ?? false : false;
 });
 
+export const uncommittedFiles = createMemo<FileChange[]>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.uncommittedFiles ?? [] : [];
+});
+
+export const uncommittedExpanded = createMemo<boolean>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.uncommittedExpanded ?? false : false;
+});
+
+export function toggleUncommittedExpanded(): void {
+  const name = activeRepo();
+  if (!name) return;
+  ensureRepoState(name);
+  setRepoStates(name, "uncommittedExpanded", !repoStates[name].uncommittedExpanded);
+}
+
 // For displaying a tab's branch without it being the active repo.
 export function repoCurrentBranch(name: string): string | null {
   return repoStates[name]?.currentBranch ?? null;
@@ -405,6 +429,15 @@ function rowHeight(name: string, hash: string): number {
   if (!detail) return COLLAPSED_ROW_HEIGHT + DETAIL_LOADING_HEIGHT;
   return COLLAPSED_ROW_HEIGHT + EXPANDED_BASE_HEIGHT + detail.files.length * FILE_ROW_HEIGHT;
 }
+
+export const uncommittedRowHeight = createMemo<number>(() => {
+  const name = activeRepo();
+  if (!name || !isDirty() || headCommit() === null) return 0;
+  const measured = measuredHeights[UNCOMMITTED_ROW_KEY];
+  if (measured !== undefined) return measured;
+  if (!repoStates[name]?.uncommittedExpanded) return COLLAPSED_ROW_HEIGHT;
+  return COLLAPSED_ROW_HEIGHT + 16 + uncommittedFiles().length * FILE_ROW_HEIGHT;
+});
 
 // Single source of truth for vertical layout, shared by the graph SVG and
 // the commit list so expanding a row shifts both in lockstep. Newest first,

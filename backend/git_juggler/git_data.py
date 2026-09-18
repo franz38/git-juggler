@@ -5,7 +5,7 @@ from pathlib import Path
 from git import Head, Repo
 
 from .git_utils import get_current_branch
-from .schemas import CommitSummary, PersonInfo, RefsInfo, RepoStatusResponse
+from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
 
 
 def _head_sort_key(head: Head, current_branch: str | None) -> tuple[int, int]:
@@ -49,6 +49,47 @@ def _current_upstream_commit(repo: Repo) -> str | None:
         upstream = repo.active_branch.tracking_branch()
     except TypeError:
         return None
+    if upstream is None:
+        return None
+    try:
+        return upstream.commit.hexsha
+    except Exception:
+        return None
+
+
+def _diff_status(change_type: str) -> str:
+    return {
+        "A": "added",
+        "D": "deleted",
+        "M": "modified",
+        "R": "renamed",
+        "T": "modified",
+    }.get(change_type, "modified")
+
+
+def _uncommitted_files(repo: Repo) -> list[FileChange]:
+    changes: dict[str, str] = {}
+
+    def add_change(path: str | None, status: str) -> None:
+        if path:
+            changes[path] = status
+
+    try:
+        for diff in repo.index.diff("HEAD"):
+            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type))
+    except Exception:
+        pass
+
+    try:
+        for diff in repo.index.diff(None):
+            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type))
+    except Exception:
+        pass
+
+    for path in repo.untracked_files:
+        add_change(path, "untracked")
+
+    return [FileChange(path=path, status=status) for path, status in sorted(changes.items())]
 
 
 def get_repo_status(repo_path: Path) -> RepoStatusResponse:
@@ -62,16 +103,11 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
         head_commit=head_commit,
         upstream_commit=_current_upstream_commit(repo),
         is_dirty=repo.is_dirty(untracked_files=True),
+        uncommitted_files=_uncommitted_files(repo),
     )
-    if upstream is None:
-        return None
-    try:
-        return upstream.commit.hexsha
-    except Exception:
-        return None
 
 
-def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool]:
+def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange]]:
     repo = Repo(repo_path)
     heads = list(repo.heads)
     tags = list(repo.tags)
@@ -79,13 +115,14 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
     status = get_repo_status(repo_path)
     upstream_commit = status.upstream_commit
     is_dirty = status.is_dirty
+    uncommitted_files = status.uncommitted_files
     try:
         head_commit = repo.head.commit.hexsha
     except Exception:
         head_commit = None
 
     if not heads:
-        return [], [], current_branch, head_commit, upstream_commit, is_dirty
+        return [], [], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files
 
     tags_by_commit: dict[str, list[str]] = {}
     for t in tags:
@@ -158,4 +195,4 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
             )
         )
 
-    return summaries, [h.name for h in heads], current_branch, head_commit, upstream_commit, is_dirty
+    return summaries, [h.name for h in heads], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files

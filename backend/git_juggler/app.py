@@ -79,7 +79,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
     def api_graph(repo_id: str) -> GraphResponse:
         path = _resolve_repo_path(repo_id)
-        commits, branches, current_branch, head_commit, upstream_commit, is_dirty = get_graph(path)
+        commits, branches, current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files = get_graph(path)
         return GraphResponse(
             commits=commits,
             branches=branches,
@@ -87,6 +87,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             head_commit=head_commit,
             upstream_commit=upstream_commit,
             is_dirty=is_dirty,
+            uncommitted_files=uncommitted_files,
         )
 
     @app.get("/api/repos/{repo_id}/status", response_model=RepoStatusResponse)
@@ -105,7 +106,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/github/actions", response_model=dict[str, list[GitHubActionsRunInfo]])
     def api_github_actions(repo_id: str) -> dict[str, list[GitHubActionsRunInfo]]:
         path = _resolve_repo_path(repo_id)
-        commits, _, _, _, _, _ = get_graph(path)
+        commits, _, _, _, _, _, _ = get_graph(path)
         return get_github_actions_runs(path, {c.hash for c in commits}, config.load_github_config())
 
     @app.websocket("/ws/terminal")
