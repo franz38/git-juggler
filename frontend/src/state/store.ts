@@ -322,11 +322,16 @@ export const commits = createMemo<CommitSummary[]>(() => {
   return name ? repoStates[name]?.commits ?? [] : [];
 });
 
-const [authorFilter, setAuthorFilterSignal] = createSignal<string | null>(null);
-export { authorFilter };
+const [authorFilter, setAuthorFilterSignal] = createSignal<string[]>([]);
+const [commentFilter, setCommentFilterSignal] = createSignal("");
+export { authorFilter, commentFilter };
 
-export function setAuthorFilter(author: string | null): void {
-  setAuthorFilterSignal(author);
+export function setAuthorFilter(authors: string[]): void {
+  setAuthorFilterSignal(authors);
+}
+
+export function setCommentFilter(value: string): void {
+  setCommentFilterSignal(value);
 }
 
 export const commitAuthors = createMemo<string[]>(() => {
@@ -338,9 +343,13 @@ export const commitAuthors = createMemo<string[]>(() => {
 });
 
 export const filteredCommits = createMemo<CommitSummary[]>(() => {
-  const author = authorFilter();
-  if (!author) return commits();
-  return commits().filter((commit) => commit.author.name === author);
+  const authors = authorFilter();
+  const comment = commentFilter().trim().toLowerCase();
+  return commits().filter((commit) => {
+    if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
+    if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
+    return true;
+  });
 });
 
 export const currentBranch = createMemo<string | null>(() => {

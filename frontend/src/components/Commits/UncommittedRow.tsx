@@ -64,9 +64,6 @@ export function UncommittedRow(props: { files: FileChange[] }) {
           <span class="badge uncommitted-badge">working tree</span>
         </span>
         <span class="commit-subject">Uncommitted changes ({props.files.length})</span>
-        <span class="commit-date">{props.files.length} file{props.files.length === 1 ? "" : "s"}</span>
-        <span class="commit-author">not committed</span>
-        <span class="commit-hash mono">dirty</span>
       </div>
       <Show when={uncommittedExpanded()}>
         <div class="commit-detail">
