@@ -193,7 +193,7 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
             sha = parents[0] if parents else None
 
     for stash in stash_infos:
-        owner[stash.sha] = "stash"
+        owner[stash.sha] = stash.ref
 
     # Fallback for commits only reachable via a merge's non-first-parent edge
     # (e.g. a feature branch whose ref was deleted after merging): inherit

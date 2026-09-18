@@ -20,13 +20,18 @@ interface BranchInterval {
  *    compact instead of giving every branch a permanent, unique column.
  */
 export function computeColumns(chronological: CommitSummary[], currentBranch: string | null): Map<string, LaneInfo> {
+  const indexByHash = new Map(chronological.map((commit, index) => [commit.hash, index]));
   const intervalByBranch = new Map<string, BranchInterval>();
   chronological.forEach((c, index) => {
+    const parentIndex = c.refs.stashes.length > 0 && c.parents[0] ? indexByHash.get(c.parents[0]) : undefined;
+    const start = parentIndex === undefined ? index : Math.min(index, parentIndex);
+    const end = parentIndex === undefined ? index : Math.max(index, parentIndex);
     const existing = intervalByBranch.get(c.branch);
     if (existing) {
-      existing.end = index;
+      existing.start = Math.min(existing.start, start);
+      existing.end = Math.max(existing.end, end);
     } else {
-      intervalByBranch.set(c.branch, { name: c.branch, start: index, end: index });
+      intervalByBranch.set(c.branch, { name: c.branch, start, end });
     }
   });
 

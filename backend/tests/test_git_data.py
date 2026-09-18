@@ -34,7 +34,7 @@ class GitGraphTest(unittest.TestCase):
             self.assertIn(stash_commit.hexsha, by_hash)
             stash_node = by_hash[stash_commit.hexsha]
             self.assertEqual(stash_node.parents, [base_commit.hexsha])
-            self.assertEqual(stash_node.branch, "stash")
+            self.assertEqual(stash_node.branch, "stash@{0}")
             self.assertEqual(stash_node.refs.stashes, ["stash@{0}"])
             self.assertEqual(by_hash[base_commit.hexsha].refs.stashes, [])
 
