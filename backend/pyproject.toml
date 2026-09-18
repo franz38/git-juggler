@@ -3,6 +3,7 @@ name = "git-juggler"
 version = "0.1.0"
 description = "Browse multiple local git repos' commit graphs and a shell, from one local web UI."
 requires-python = ">=3.10"
+license = "MIT"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -18,3 +19,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["git_juggler"]
+artifacts = ["git_juggler/frontend_dist/**"]
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["git_juggler/frontend_dist/**"]

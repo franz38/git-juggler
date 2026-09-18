@@ -2,11 +2,25 @@ from __future__ import annotations
 
 import argparse
 import os
+from importlib import resources
 from pathlib import Path
 
 import uvicorn
 
 from .app import create_app
+
+
+def packaged_frontend_dist() -> Path | None:
+    candidate = resources.files("git_juggler").joinpath("frontend_dist")
+    if candidate.is_dir():
+        return Path(str(candidate))
+
+    # Local fallback for running from the source tree after `npm run build`.
+    source_tree_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    if source_tree_dist.exists():
+        return source_tree_dist
+
+    return None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -33,8 +47,7 @@ def cli() -> None:
         os.environ["GIT_JUGGLER_ROOT"] = str(root_path)
         uvicorn.run("git_juggler.dev_app:app", host=args.host, port=args.port, reload=True)
     else:
-        frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-        app = create_app(root_path, frontend_dist=frontend_dist if frontend_dist.exists() else None)
+        app = create_app(root_path, frontend_dist=packaged_frontend_dist())
         uvicorn.run(app, host=args.host, port=args.port)
 
 
