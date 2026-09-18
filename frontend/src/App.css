@@ -716,6 +716,76 @@
   color: #8993a4;
 }
 
+.uncommitted-detail-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.uncommitted-action-panel {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.uncommitted-message-label {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.uncommitted-message-input {
+  resize: vertical;
+  min-height: 72px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.uncommitted-message-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.uncommitted-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.uncommitted-action-buttons button {
+  flex: 1;
+  background: var(--active-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-h);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.uncommitted-action-buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.uncommitted-files {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.uncommitted-file-checkbox {
+  flex: 0 0 auto;
+}
+
 .commit-hash {
   color: var(--text-dim);
   flex: 0 0 auto;
