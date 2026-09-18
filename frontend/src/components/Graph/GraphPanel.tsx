@@ -217,7 +217,7 @@ export function GraphPanel() {
                 </circle>
               )}
               {runningActionsByHash().has(c.hash) && (
-                <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 7} cy={yFor(c.hash)} r="3" fill={CI_ACTIVE_COLOR}>
+                <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 4} cy={yFor(c.hash)} r="2" fill={CI_ACTIVE_COLOR}>
                   <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                 </circle>
               )}
