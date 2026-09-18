@@ -334,10 +334,16 @@ export function setCommentFilter(value: string): void {
   setCommentFilterSignal(value);
 }
 
+// Authors from every open tab's repo, not just the active one — opening a
+// tab always loads its commits (see openRepoTab), so this covers every repo
+// the user currently has open, letting them filter the active repo by an
+// author they only recognize from another tab.
 export const commitAuthors = createMemo<string[]>(() => {
   const authors = new Set<string>();
-  for (const commit of commits()) {
-    if (commit.author.name) authors.add(commit.author.name);
+  for (const tab of tabs()) {
+    for (const commit of repoStates[tab.id]?.commits ?? []) {
+      if (commit.author.name) authors.add(commit.author.name);
+    }
   }
   return [...authors].sort((a, b) => a.localeCompare(b));
 });
