@@ -2,8 +2,7 @@ name: Build Python package
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags: ["*"]
   workflow_dispatch:
 
 jobs:
