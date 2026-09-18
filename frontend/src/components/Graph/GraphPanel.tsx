@@ -76,8 +76,11 @@ export function GraphPanel() {
   });
   const hasDirtyGhost = createMemo(() => isDirty() && headCommit() !== null);
   const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeight() : 0));
-  const fetchOffset = createMemo(() => dirtyOffset() + (isFetching() ? GHOST_ROW_HEIGHT : 0));
-  const commitOffset = createMemo(() => fetchOffset());
+  // The fetch band's height is applied to real commits via a CSS-transitioned
+  // group transform (see the <g> below) rather than baked into yFor, so the
+  // dots slide into place instead of snapping when a fetch starts/ends.
+  const fetchBandHeight = createMemo(() => (isFetching() ? GHOST_ROW_HEIGHT : 0));
+  const commitOffset = createMemo(() => dirtyOffset());
   const fetchGhostY = createMemo(() => dirtyOffset() + GHOST_ROW_HEIGHT / 2);
   const dirtyGhostY = createMemo(() => uncommittedRowHeight() / 2);
 
@@ -119,7 +122,7 @@ export function GraphPanel() {
     const columnTopY = new Map<number, number>();
     for (const c of chronological()) {
       const column = columnFor(c.hash);
-      const y = yFor(c.hash);
+      const y = yFor(c.hash) + fetchBandHeight();
       const currentTop = columnTopY.get(column);
       if (currentTop === undefined || y < currentTop) columnTopY.set(column, y);
       if (c.refs.branches.length > 0 && !columnColor.has(column)) {
@@ -164,10 +167,10 @@ export function GraphPanel() {
   });
 
   return (
-    <svg class="graph-panel" width={width()} height={commitOffset() + rowLayout().total}>
+    <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayout().total}px` }}>
       {hasDirtyGhost() && headCommit() && (
         <g class="dirty-ghost">
-          <line x1={xFor(headCommit()!)} y1={dirtyGhostY()} x2={xFor(headCommit()!)} y2={yFor(headCommit()!)} stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="2 3" opacity="0.5" />
+          <line x1={xFor(headCommit()!)} y1={dirtyGhostY()} x2={xFor(headCommit()!)} y2={yFor(headCommit()!) + fetchBandHeight()} stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="2 3" opacity="0.5" />
           <circle cx={xFor(headCommit()!)} cy={dirtyGhostY()} r={GHOST_RADIUS} fill="var(--panel-bg)" stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="3 3" opacity="0.9" />
         </g>
       )}
@@ -188,45 +191,50 @@ export function GraphPanel() {
           </g>
         )}
       </For>
-      <For each={edges()}>
-        {(seg) => (
-          <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" />
-        )}
-      </For>
-      <For each={rowLayout().order}>
-        {(c) => {
-          const isCheckedOut = () => headCommit() === c.hash;
-          return (
-            <g>
-              <circle
-                cx={xFor(c.hash)}
-                cy={yFor(c.hash)}
-                r={DOT_RADIUS}
-                fill={isCheckedOut() ? "var(--panel-bg)" : colorForBranch(c.branch)}
-                stroke={isCheckedOut() ? colorForBranch(c.branch) : "var(--panel-bg)"}
-                stroke-width={isCheckedOut() ? 3 : 2}
-                style={{ cursor: "pointer" }}
-                onClick={() => toggleExpand(c.hash)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  openContextMenu(e.clientX, e.clientY, c.hash);
-                }}
-              />
-              {isPushing() && headCommit() === c.hash && (
-                <circle class="push-spinner" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 4} fill="none" stroke={colorForBranch(c.branch)} stroke-width="2" stroke-dasharray="10 5">
-                  <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.85s" repeatCount="indefinite" />
-                </circle>
-              )}
-              {runningActionsByHash().has(c.hash) && (
-                <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 4} cy={yFor(c.hash)} r="2" fill={CI_ACTIVE_COLOR}>
-                  <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
-                </circle>
-              )}
-              {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={TAG_COLOR} />}
-            </g>
-          );
-        }}
-      </For>
+      {/* Real commits + their edges live in one group so the fetch band's
+          appearance/disappearance is a single CSS-transitioned slide instead
+          of every dot snapping to a new y in one frame. */}
+      <g class="fetch-band-shift" style={{ transform: `translateY(${fetchBandHeight()}px)` }}>
+        <For each={edges()}>
+          {(seg) => (
+            <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" />
+          )}
+        </For>
+        <For each={rowLayout().order}>
+          {(c) => {
+            const isCheckedOut = () => headCommit() === c.hash;
+            return (
+              <g>
+                <circle
+                  cx={xFor(c.hash)}
+                  cy={yFor(c.hash)}
+                  r={DOT_RADIUS}
+                  fill={isCheckedOut() ? "var(--panel-bg)" : colorForBranch(c.branch)}
+                  stroke={isCheckedOut() ? colorForBranch(c.branch) : "var(--panel-bg)"}
+                  stroke-width={isCheckedOut() ? 3 : 2}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => toggleExpand(c.hash)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openContextMenu(e.clientX, e.clientY, c.hash);
+                  }}
+                />
+                {isPushing() && headCommit() === c.hash && (
+                  <circle class="push-spinner" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 4} fill="none" stroke={colorForBranch(c.branch)} stroke-width="2" stroke-dasharray="10 5">
+                    <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.85s" repeatCount="indefinite" />
+                  </circle>
+                )}
+                {runningActionsByHash().has(c.hash) && (
+                  <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 4} cy={yFor(c.hash)} r="2" fill={CI_ACTIVE_COLOR}>
+                    <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
+                  </circle>
+                )}
+                {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={TAG_COLOR} />}
+              </g>
+            );
+          }}
+        </For>
+      </g>
     </svg>
   );
 }
