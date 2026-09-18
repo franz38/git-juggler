@@ -322,6 +322,27 @@ export const commits = createMemo<CommitSummary[]>(() => {
   return name ? repoStates[name]?.commits ?? [] : [];
 });
 
+const [authorFilter, setAuthorFilterSignal] = createSignal<string | null>(null);
+export { authorFilter };
+
+export function setAuthorFilter(author: string | null): void {
+  setAuthorFilterSignal(author);
+}
+
+export const commitAuthors = createMemo<string[]>(() => {
+  const authors = new Set<string>();
+  for (const commit of commits()) {
+    if (commit.author.name) authors.add(commit.author.name);
+  }
+  return [...authors].sort((a, b) => a.localeCompare(b));
+});
+
+export const filteredCommits = createMemo<CommitSummary[]>(() => {
+  const author = authorFilter();
+  if (!author) return commits();
+  return commits().filter((commit) => commit.author.name === author);
+});
+
 export const currentBranch = createMemo<string | null>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.currentBranch ?? null : null;
@@ -444,7 +465,7 @@ export const uncommittedRowHeight = createMemo<number>(() => {
 // which is the reverse of the backend's replay order.
 export const rowLayout = createMemo(() => {
   const name = activeRepo();
-  const order = [...commits()].reverse();
+  const order = [...filteredCommits()].reverse();
   const offsetByHash = new Map<string, number>();
   let y = 0;
   for (const c of order) {
@@ -465,7 +486,7 @@ export const matchingHashes = createMemo<Set<string>>(() => {
   const query = searchQuery().trim().toLowerCase();
   if (!query) return new Set();
   const matches = new Set<string>();
-  for (const c of commits()) {
+  for (const c of filteredCommits()) {
     if (c.hash.toLowerCase().includes(query) || c.subject.toLowerCase().includes(query)) {
       matches.add(c.hash);
     }
