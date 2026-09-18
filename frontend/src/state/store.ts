@@ -14,6 +14,11 @@ export interface TabInfo {
   pinned: boolean;
 }
 
+interface PersistedTabsState {
+  tabs: TabInfo[];
+  activeRepo: string | null;
+}
+
 interface RepoState {
   commits: CommitSummary[];
   currentBranch: string | null;
@@ -29,11 +34,48 @@ interface RepoState {
   error: string | null;
 }
 
+const TABS_STATE_KEY = "git-juggler:tabs";
+
+function loadTabsState(): PersistedTabsState {
+  try {
+    const raw = localStorage.getItem(TABS_STATE_KEY);
+    if (!raw) return { tabs: [], activeRepo: null };
+    const parsed = JSON.parse(raw) as PersistedTabsState;
+    const parsedTabs = Array.isArray(parsed.tabs) ? parsed.tabs : [];
+    const restoredTabs = parsedTabs
+      .filter((tab) => typeof tab.id === "string" && typeof tab.name === "string")
+      .map((tab) => ({ id: tab.id, name: tab.name, pinned: Boolean(tab.pinned) }));
+    const restoredActive = typeof parsed.activeRepo === "string" && restoredTabs.some((tab) => tab.id === parsed.activeRepo) ? parsed.activeRepo : restoredTabs[0]?.id ?? null;
+    return { tabs: restoredTabs, activeRepo: restoredActive };
+  } catch {
+    return { tabs: [], activeRepo: null };
+  }
+}
+
+const restoredTabsState = loadTabsState();
 const [repos, setRepos] = createSignal<RepoSummary[]>([]);
-const [tabs, setTabs] = createSignal<TabInfo[]>([]);
-const [activeRepo, setActiveRepo] = createSignal<string | null>(null);
+const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
+const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
 const inFlightDetailRequests = new Set<string>();
+
+function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo()): void {
+  try {
+    localStorage.setItem(TABS_STATE_KEY, JSON.stringify({ tabs: nextTabs, activeRepo: nextActiveRepo }));
+  } catch {
+    // Not critical — tabs just won't survive a reload.
+  }
+}
+
+function setTabs(nextTabs: TabInfo[]): void {
+  setTabsSignal(nextTabs);
+  persistTabsState(nextTabs, activeRepo());
+}
+
+function setActiveRepo(nextActiveRepo: string | null): void {
+  setActiveRepoSignal(nextActiveRepo);
+  persistTabsState(tabs(), nextActiveRepo);
+}
 
 // Actual rendered row heights (in px), reported by each CommitRow via
 // ResizeObserver. The estimate constants below are only a placeholder for
@@ -80,9 +122,8 @@ export async function toggleRepoPinned(path: string): Promise<void> {
 }
 
 // --- Tabs ------------------------------------------------------------------
-// Single click opens/reuses a "preview" tab (replaced by the next single
-// click elsewhere, VS Code style). Double-clicking a tab pins it so it
-// survives future preview replacements.
+// Open tabs are local UI state and persist across sessions, including tabs
+// opened with a single click. Double-click still marks a tab as pinned visually.
 
 function ensureRepoState(name: string): void {
   if (!repoStates[name]) {
@@ -213,12 +254,7 @@ function scheduleTimedGraphRefreshes(repoId: string, delays: number[]): void {
 export function openRepoTab(id: string, name: string): void {
   const current = tabs();
   if (!current.some((t) => t.id === id)) {
-    const previewIndex = current.findIndex((t) => !t.pinned);
-    if (previewIndex === -1) {
-      setTabs([...current, { id, name, pinned: false }]);
-    } else {
-      setTabs(current.map((t, i) => (i === previewIndex ? { id, name, pinned: false } : t)));
-    }
+    setTabs([...current, { id, name, pinned: false }]);
   }
   setActiveRepo(id);
   void loadRepoGraphIfNeeded(id);
@@ -229,8 +265,35 @@ export function activateTab(id: string): void {
   void loadRepoGraphIfNeeded(id);
 }
 
+export function loadActiveTabGraph(): void {
+  const active = activeRepo();
+  if (active) void loadRepoGraphIfNeeded(active);
+}
+
 export function pinTab(id: string): void {
   setTabs(tabs().map((t) => (t.id === id ? { ...t, pinned: true } : t)));
+}
+
+export function moveTab(draggedId: string, targetId: string, placement: "before" | "after" = "before"): void {
+  if (draggedId === targetId) return;
+  const current = tabs();
+  const from = current.findIndex((tab) => tab.id === draggedId);
+  const to = current.findIndex((tab) => tab.id === targetId);
+  if (from === -1 || to === -1) return;
+  const next = [...current];
+  const [dragged] = next.splice(from, 1);
+  const targetIndex = next.findIndex((tab) => tab.id === targetId);
+  next.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, dragged);
+  setTabs(next);
+}
+
+export function activateAdjacentTab(direction: 1 | -1): void {
+  const current = tabs();
+  if (current.length === 0) return;
+  const active = activeRepo();
+  const index = Math.max(0, current.findIndex((tab) => tab.id === active));
+  const nextIndex = (index + direction + current.length) % current.length;
+  activateTab(current[nextIndex].id);
 }
 
 export function closeTab(id: string): void {

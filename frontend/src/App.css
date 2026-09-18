@@ -471,6 +471,51 @@
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: width 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
+}
+
+.tab[draggable="true"] {
+  cursor: grab;
+}
+
+.tab[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.tab.dragging {
+  opacity: 0.45;
+}
+
+@keyframes tab-ghost-collapse {
+  to {
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    opacity: 0;
+  }
+}
+
+.tab-collapse-ghost {
+  flex: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.45;
+  animation: tab-ghost-collapse 120ms ease forwards;
+}
+
+.tab.collapsing {
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+}
+
+.tab-drop-gap {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 -2px var(--accent);
+  transition: width 140ms ease, opacity 140ms ease;
 }
 
 .tab.preview {

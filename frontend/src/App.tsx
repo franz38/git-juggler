@@ -11,7 +11,9 @@ import { TabsBar } from "./components/Tabs/TabsBar";
 import { TerminalPanel } from "./components/Terminal/TerminalPanel";
 import {
   activeRepo,
+  activateAdjacentTab,
   closeMenu,
+  loadActiveTabGraph,
   menuOpen,
   pollRepoStatus,
   setTerminalHeight,
@@ -38,8 +40,15 @@ function App() {
   });
 
   onMount(() => {
+    loadActiveTabGraph();
     const handleKeydown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        activateAdjacentTab(1);
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        activateAdjacentTab(-1);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
         toggleMenu();
       } else if (e.key === "Escape" && menuOpen()) {
