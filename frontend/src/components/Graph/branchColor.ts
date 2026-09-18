@@ -1,4 +1,4 @@
-import { dynamicBranchColors } from "../../state/store";
+import { branchColorMode } from "../../state/store";
 
 // 6-color palette (for now) — each branch is mapped to one of these based on
 // a hash of its name. Used consistently for the graph lines/dots AND the
@@ -12,11 +12,10 @@ export const BRANCH_PALETTE = [
   "#00B8D9", // teal
 ];
 
-// Used for every branch when "dynamic branch colors" is turned off.
-export const STATIC_BRANCH_COLOR = "#4C9AFF";
-
 // Tags are always gray, never part of the branch palette.
 export const TAG_COLOR = "#8993A4";
+
+const sequentialColorByBranch = new Map<string, string>();
 
 function hashString(input: string): number {
   let hash = 0;
@@ -27,7 +26,14 @@ function hashString(input: string): number {
 }
 
 export function colorForBranch(name: string): string {
-  if (!dynamicBranchColors()) return STATIC_BRANCH_COLOR;
+  if (branchColorMode() === "sequential") {
+    const existing = sequentialColorByBranch.get(name);
+    if (existing) return existing;
+    const color = BRANCH_PALETTE[sequentialColorByBranch.size % BRANCH_PALETTE.length];
+    sequentialColorByBranch.set(name, color);
+    return color;
+  }
+
   const index = hashString(name) % BRANCH_PALETTE.length;
   return BRANCH_PALETTE[index];
 }

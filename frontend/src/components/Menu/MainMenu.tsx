@@ -2,8 +2,8 @@ import { For, Show, createEffect, createSignal } from "solid-js";
 import type { GitHubConfig } from "../../api/types";
 import {
   addRepoPath,
+  branchColorMode,
   closeMenu,
-  dynamicBranchColors,
   githubConfig,
   githubConfigError,
   menuOpen,
@@ -11,11 +11,11 @@ import {
   repoPaths,
   repoPathsError,
   saveGitHubConfig,
-  setDynamicBranchColors,
+  setBranchColorMode,
   setTheme,
   theme,
 } from "../../state/store";
-import type { Theme } from "../../state/store";
+import type { BranchColorMode, Theme } from "../../state/store";
 
 type Section = "repos" | "github" | "appearance";
 
@@ -227,19 +227,18 @@ export function MainMenu() {
 
               <div class="menu-setting">
                 <div class="menu-setting-main">
-                  <div class="menu-setting-label">Dynamic branch colors</div>
-                  <p class="menu-hint">Branch colors are determined by branch hash.</p>
+                  <div class="menu-setting-label">Branch colors</div>
+                  <p class="menu-hint">Choose whether branch colors come from the branch name or from discovery order.</p>
                 </div>
-                <label class="switch">
-                  <input
-                    type="checkbox"
-                    checked={dynamicBranchColors()}
-                    onChange={(e) => setDynamicBranchColors(e.currentTarget.checked)}
-                  />
-                  <span class="switch-track">
-                    <span class="switch-thumb" />
-                  </span>
-                </label>
+                <div class="theme-options">
+                  <For each={[["hash", "Name hash based"], ["sequential", "Sequential"]] as [BranchColorMode, string][]}>
+                    {([value, label]) => (
+                      <button classList={{ active: branchColorMode() === value }} onClick={() => setBranchColorMode(value)}>
+                        {label}
+                      </button>
+                    )}
+                  </For>
+                </div>
               </div>
             </Show>
           </div>

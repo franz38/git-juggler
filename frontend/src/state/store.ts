@@ -868,24 +868,31 @@ export function setTheme(next: Theme): void {
   }
 }
 
+export type BranchColorMode = "hash" | "sequential";
+
+const BRANCH_COLOR_MODE_KEY = "git-juggler:branchColorMode";
 const DYNAMIC_BRANCH_COLORS_KEY = "git-juggler:dynamicBranchColors";
 
-function loadDynamicBranchColors(): boolean {
+function loadBranchColorMode(): BranchColorMode {
   try {
-    const raw = localStorage.getItem(DYNAMIC_BRANCH_COLORS_KEY);
-    return raw === null ? true : raw === "true";
+    const mode = localStorage.getItem(BRANCH_COLOR_MODE_KEY);
+    if (mode === "hash" || mode === "sequential") return mode;
+
+    // Migrate the old hash-color on/off toggle into the new two-mode setting.
+    const legacy = localStorage.getItem(DYNAMIC_BRANCH_COLORS_KEY);
+    return legacy === "false" ? "sequential" : "hash";
   } catch {
-    return true;
+    return "hash";
   }
 }
 
-const [dynamicBranchColors, setDynamicBranchColorsSignal] = createSignal(loadDynamicBranchColors());
-export { dynamicBranchColors };
+const [branchColorMode, setBranchColorModeSignal] = createSignal<BranchColorMode>(loadBranchColorMode());
+export { branchColorMode };
 
-export function setDynamicBranchColors(value: boolean): void {
-  setDynamicBranchColorsSignal(value);
+export function setBranchColorMode(next: BranchColorMode): void {
+  setBranchColorModeSignal(next);
   try {
-    localStorage.setItem(DYNAMIC_BRANCH_COLORS_KEY, String(value));
+    localStorage.setItem(BRANCH_COLOR_MODE_KEY, next);
   } catch {
     // Not critical — the setting just won't survive a reload.
   }
