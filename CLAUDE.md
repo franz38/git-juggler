@@ -1,5 +1,28 @@
 # git-juggler
 
+## How to run locally
+
+Dev mode (hot reload on both sides):
+
+```
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/git-juggler <path-to-scan> --reload   # http://127.0.0.1:8000
+```
+
+```
+cd frontend
+npm install
+npm run dev                                     # http://localhost:5173 (proxies /api and /ws to :8000)
+```
+
+Open http://localhost:5173 — that's the app, hot-reloading both frontend and backend.
+
+- `<path-to-scan>` is the directory whose first-level children get scanned for git repos (e.g. `~/Documents/2026`).
+- If port 8000 is unavailable on this machine (it can be occupied by unrelated local processes), run the backend with a different `--port` and update `frontend/vite.config.ts`'s proxy target to match — but don't commit that port change, it's a local workaround, not a project default.
+- Single-port production mode (backend serves the built frontend, no Vite) is documented in `README.md`.
+
 ## Architecture guideline: git mutations go through the terminal only
 
 All UI-triggered git actions (e.g. right-click on a commit → Checkout) must be
@@ -39,3 +62,9 @@ commit, a tag (`v0.1.0`), and a stash, with a clean working tree.
 - If a test needs a specific extra state (dirty working tree, a particular
   conflict, more branches, etc.), set that up in `demo-repo` (or a fresh
   scratch repo elsewhere), not in a real project.
+
+## Don't push without consensus
+
+Never run `git push` (including to a branch, a fork, or opening a PR) until
+the user has explicitly agreed to it in that conversation. Committing
+locally is fine; pushing is not, until they say so.
