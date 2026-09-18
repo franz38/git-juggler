@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from git import Head, Repo
@@ -19,15 +20,25 @@ def _head_sort_key(head: Head, current_branch: str | None) -> tuple[int, int]:
     return (priority, -head.commit.committed_date)
 
 
-def _stash_badges_by_commit(repo: Repo) -> dict[str, list[str]]:
-    """Attach a badge (e.g. "stash@{0}") to the commit each stash was taken
-    on top of. Stash commits themselves aren't part of the drawn graph —
-    they're synthetic side-commits, not real history."""
-    badges: dict[str, list[str]] = {}
+@dataclass(frozen=True)
+class StashInfo:
+    ref: str
+    sha: str
+    base_sha: str
+
+
+def _stash_infos(repo: Repo) -> list[StashInfo]:
+    """Return stash commits as graphable side commits.
+
+    Git represents a stash as a synthetic merge commit whose first parent is
+    the commit it was created from. The other parents are implementation
+    details for index/untracked state, so the graph only draws the base edge.
+    """
+    stashes: list[StashInfo] = []
     try:
         raw = repo.git.stash("list")
     except Exception:
-        return badges
+        return stashes
     for line in raw.splitlines():
         ref, sep, _ = line.partition(":")
         ref = ref.strip()
@@ -40,8 +51,8 @@ def _stash_badges_by_commit(repo: Repo) -> dict[str, list[str]]:
         if not stash_commit.parents:
             continue
         base_sha = stash_commit.parents[0].hexsha
-        badges.setdefault(base_sha, []).append(ref)
-    return badges
+        stashes.append(StashInfo(ref=ref, sha=stash_commit.hexsha, base_sha=base_sha))
+    return stashes
 
 
 def _current_upstream_commit(repo: Repo) -> str | None:
@@ -132,16 +143,36 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
     for h in heads:
         branches_by_commit.setdefault(h.commit.hexsha, []).append(h.name)
 
-    stashes_by_commit = _stash_badges_by_commit(repo)
+    stash_infos = _stash_infos(repo)
+    stashes_by_commit: dict[str, list[str]] = {}
+    for stash in stash_infos:
+        stashes_by_commit.setdefault(stash.sha, []).append(stash.ref)
+    stash_base_by_sha = {stash.sha: stash.base_sha for stash in stash_infos}
 
-    # Walk history reachable from branches and tags only — NOT `--all`, which
-    # would also pull in refs/stash (synthetic side-commits) and remote-
-    # tracking branches. `topo_order` + `reverse` gives a correct global
-    # oldest -> newest order across every branch in one shot.
+    # Walk history reachable from branches and tags, then explicitly add stash
+    # commits as side nodes. We still avoid `--all` so remote-tracking branches
+    # do not silently expand the local graph.
     raw_commits = list(repo.iter_commits(branches=True, tags=True, topo_order=True, reverse=True))
-    ordered_shas = [c.hexsha for c in raw_commits]
     commits_by_sha = {c.hexsha: c for c in raw_commits}
-    parents_map = {c.hexsha: [p.hexsha for p in c.parents] for c in raw_commits}
+    stash_commits = []
+    for stash in stash_infos:
+        if stash.sha not in commits_by_sha:
+            try:
+                stash_commits.append((stash, repo.commit(stash.sha)))
+            except Exception:
+                continue
+    for stash, stash_commit in sorted(stash_commits, key=lambda item: (item[1].committed_date, item[1].hexsha)):
+        insert_at = 0
+        for index, commit in enumerate(raw_commits):
+            if commit.hexsha == stash.base_sha or commit.committed_date <= stash_commit.committed_date:
+                insert_at = index + 1
+        raw_commits.insert(insert_at, stash_commit)
+        commits_by_sha[stash.sha] = stash_commit
+    ordered_shas = [c.hexsha for c in raw_commits]
+    parents_map = {
+        c.hexsha: [stash_base_by_sha[c.hexsha]] if c.hexsha in stash_base_by_sha else [p.hexsha for p in c.parents]
+        for c in raw_commits
+    }
 
     children_map: dict[str, list[str]] = {}
     for sha, parents in parents_map.items():
@@ -160,6 +191,9 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
             owner[sha] = h.name
             parents = parents_map.get(sha, [])
             sha = parents[0] if parents else None
+
+    for stash in stash_infos:
+        owner[stash.sha] = "stash"
 
     # Fallback for commits only reachable via a merge's non-first-parent edge
     # (e.g. a feature branch whose ref was deleted after merging): inherit

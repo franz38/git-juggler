@@ -1,5 +1,5 @@
 import { For, Show, createSignal } from "solid-js";
-import { activateTab, activeRepo, closeTab, moveTab, pinTab, repoCurrentBranch, tabs } from "../../state/store";
+import { activateTab, activeRepo, closeTab, moveTab, openRepoContextMenu, pinTab, repoCurrentBranch, tabs } from "../../state/store";
 import type { TabInfo } from "../../state/store";
 
 interface CollapsingGhost {
@@ -117,6 +117,10 @@ export function TabsBar() {
               draggable="true"
               onClick={() => activateTab(tab.id)}
               onDblClick={() => pinTab(tab.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openRepoContextMenu(e.clientX, e.clientY, tab.id, tab.name);
+              }}
               onDragStart={(e) => {
                 setDraggedTabId(tab.id);
                 setInsertionIndex(null);

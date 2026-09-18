@@ -22,6 +22,10 @@ export function CommitRow(props: { commit: CommitSummary }) {
   const isExpanded = () => expandedHashes().has(props.commit.hash);
   const isMatch = () => matchingHashes().has(props.commit.hash);
   const actionsRuns = () => githubActionsRuns()[props.commit.hash] ?? [];
+  const openRowContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    openContextMenu(e.clientX, e.clientY, props.commit.hash);
+  };
 
   // The graph SVG stacks its dots using each row's real rendered height
   // (not an estimate) so it can never drift out of alignment with the list.
@@ -39,15 +43,12 @@ export function CommitRow(props: { commit: CommitSummary }) {
       ref={rowRef}
       class="commit-row"
       classList={{ expanded: isExpanded(), match: isMatch() }}
+      onContextMenu={openRowContextMenu}
     >
       <div
         class="commit-row-main"
         style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }}
         onClick={() => toggleExpand(props.commit.hash)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          openContextMenu(e.clientX, e.clientY, props.commit.hash);
-        }}
       >
         <span class="commit-refs">
           <For each={props.commit.refs.branches}>{(b) => <BranchBadge name={b} />}</For>

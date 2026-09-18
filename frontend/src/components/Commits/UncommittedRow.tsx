@@ -25,7 +25,7 @@ export function UncommittedRow(props: { files: FileChange[] }) {
   });
 
   return (
-    <div ref={rowRef} class="commit-row uncommitted-row" classList={{ expanded: uncommittedExpanded() }}>
+    <div ref={rowRef} class="commit-row uncommitted-row" classList={{ expanded: uncommittedExpanded() }} onContextMenu={(e) => e.preventDefault()}>
       <div class="commit-row-main" style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }} onClick={toggleUncommittedExpanded}>
         <span class="commit-refs">
           <span class="badge uncommitted-badge">working tree</span>

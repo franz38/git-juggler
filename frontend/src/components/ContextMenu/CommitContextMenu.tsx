@@ -1,7 +1,35 @@
-import { Show } from "solid-js";
-import { activeRepo, closeContextMenu, contextMenu, runInTerminal, scheduleGraphRefresh } from "../../state/store";
+import { Show, createMemo } from "solid-js";
+import { activeRepo, closeContextMenu, commits, contextMenu, runInTerminal, scheduleGraphRefresh } from "../../state/store";
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function copyText(value: string): void {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
 
 export function CommitContextMenu() {
+  const selectedCommit = createMemo(() => {
+    const menu = contextMenu();
+    if (!menu) return undefined;
+    return commits().find((commit) => commit.hash === menu.hash);
+  });
+  const stashRef = createMemo(() => selectedCommit()?.refs.stashes[0]);
+  const hashType = createMemo(() => (stashRef() ? "stash" : "commit"));
+
   const handleCheckout = () => {
     const menu = contextMenu();
     const repo = activeRepo();
@@ -15,14 +43,48 @@ export function CommitContextMenu() {
     closeContextMenu();
   };
 
+  const runStashCommand = (action: "apply" | "pop" | "drop") => {
+    const repo = activeRepo();
+    const ref = stashRef();
+    if (!repo || !ref) return;
+    runInTerminal(repo, `git stash ${action} ${shellQuote(ref)}`);
+    scheduleGraphRefresh(repo);
+    closeContextMenu();
+  };
+
+  const handleCopyHash = () => {
+    const commit = selectedCommit();
+    if (!commit) return;
+    copyText(commit.hash);
+    closeContextMenu();
+  };
+
   return (
     <Show when={contextMenu()}>
       {(menu) => (
         <>
           <div class="context-menu-overlay" onClick={closeContextMenu} onContextMenu={(e) => e.preventDefault()} />
           <div class="context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
-            <div class="context-menu-item" onClick={handleCheckout}>
-              Checkout
+            <Show
+              when={stashRef()}
+              fallback={
+                <div class="context-menu-item" onClick={handleCheckout}>
+                  Checkout
+                </div>
+              }
+            >
+              <div class="context-menu-item" onClick={() => runStashCommand("apply")}>
+                Apply stash
+              </div>
+              <div class="context-menu-item" onClick={() => runStashCommand("pop")}>
+                Pop stash
+              </div>
+              <div class="context-menu-item" onClick={() => runStashCommand("drop")}>
+                Drop stash
+              </div>
+            </Show>
+            <div class="context-menu-item" onClick={handleCopyHash}>
+              Copy {hashType()} hash
             </div>
           </div>
         </>
