@@ -22,6 +22,12 @@ Open http://localhost:5173 — that's the app, hot-reloading both frontend and b
 - `<path-to-scan>` is the directory whose first-level children get scanned for git repos (e.g. `~/Documents/2026`).
 - If port 8000 is unavailable on this machine (it can be occupied by unrelated local processes), run the backend with a different `--port` and update `frontend/vite.config.ts`'s proxy target to match — but don't commit that port change, it's a local workaround, not a project default.
 - Single-port production mode (backend serves the built frontend, no Vite) is documented in `README.md`.
+- Unless explicitly told otherwise, run both the backend and frontend from
+  the primary checkout on the `main` branch — not from a
+  `.claude/worktrees/*` copy. Worktrees exist to isolate one task's
+  in-progress changes; they don't reflect what's actually landed on `main`,
+  so running (or leaving running) a dev server out of one can silently show
+  stale or unrelated behavior for work that's already merged.
 
 ## Architecture guideline: git mutations go through the terminal only
 
