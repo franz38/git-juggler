@@ -1,6 +1,6 @@
 [project]
 name = "git-juggler"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Browse multiple local git repos' commit graphs and a shell, from one local web UI."
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,8 +14,15 @@ dependencies = [
 git-juggler = "git_juggler.main:cli"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# pyproject.toml lives in backend/, one level below the actual git root.
+root = ".."
 
 [tool.hatch.build.targets.wheel]
 packages = ["git_juggler"]
