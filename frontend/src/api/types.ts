@@ -8,12 +8,14 @@ export interface RepoSummary {
 export interface ConfigResponse {
   repo_paths: string[];
   pinned_repo_paths: string[];
+  excluded_paths: string[];
   github: GitHubConfig | null;
 }
 
 export interface ConfigUpdateRequest {
   repo_paths?: string[];
   pinned_repo_paths?: string[];
+  excluded_paths?: string[];
   github?: GitHubConfig | null;
 }
 

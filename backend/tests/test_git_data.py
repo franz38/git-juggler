@@ -3,10 +3,11 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from git import Actor, Repo
 
-from git_juggler.git_data import get_graph
+from git_juggler.git_data import get_graph, get_repo_status
 
 
 class GitGraphTest(unittest.TestCase):
@@ -67,6 +68,48 @@ class GitGraphTest(unittest.TestCase):
             by_hash = {commit.hash: commit for commit in commits}
 
             self.assertIn(f"origin/{branch}", by_hash[pushed_commit.hexsha].refs.remote_branches)
+
+    def test_excluded_paths_are_filtered_from_uncommitted_files(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+
+            tracked_file = path / "notes.txt"
+            tracked_file.write_text("base\n", encoding="utf-8")
+            repo.index.add(["notes.txt"])
+            repo.index.commit("initial commit", author=author, committer=author)
+
+            (path / ".claude").mkdir()
+            (path / ".claude" / "session.json").write_text("{}", encoding="utf-8")
+            (path / "real_change.txt").write_text("oops\n", encoding="utf-8")
+
+            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[".claude"]):
+                status = get_repo_status(path)
+
+            paths = {f.path for f in status.uncommitted_files}
+            self.assertIn("real_change.txt", paths)
+            self.assertNotIn(".claude/session.json", paths)
+
+    def test_is_dirty_false_when_only_excluded_paths_changed(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+
+            tracked_file = path / "notes.txt"
+            tracked_file.write_text("base\n", encoding="utf-8")
+            repo.index.add(["notes.txt"])
+            repo.index.commit("initial commit", author=author, committer=author)
+
+            (path / ".claude").mkdir()
+            (path / ".claude" / "session.json").write_text("{}", encoding="utf-8")
+
+            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[".claude"]):
+                status = get_repo_status(path)
+
+            self.assertFalse(status.is_dirty)
+            self.assertEqual(status.uncommitted_files, [])
 
 
 if __name__ == "__main__":

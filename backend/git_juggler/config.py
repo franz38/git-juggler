@@ -50,6 +50,25 @@ def save_pinned_repo_paths(paths: list[str]) -> None:
     _save_raw(data)
 
 
+def load_excluded_paths() -> list[str]:
+    """Paths ignored when detecting a repo's uncommitted changes. Defaults to
+    [".claude"] whenever the key is absent -- not just on first run like
+    ensure_seeded -- so an existing config.json from before this setting
+    existed still gets the default. An explicit empty list (the user cleared
+    the field) is respected and returned as-is.
+    """
+    raw = _load_raw().get("excluded_paths")
+    if raw is None or not isinstance(raw, list):
+        return [".claude"]
+    return [p for p in raw if isinstance(p, str)]
+
+
+def save_excluded_paths(paths: list[str]) -> None:
+    data = _load_raw()
+    data["excluded_paths"] = paths
+    _save_raw(data)
+
+
 def load_github_config() -> dict | None:
     raw = _load_raw().get("github")
     return raw if isinstance(raw, dict) else None

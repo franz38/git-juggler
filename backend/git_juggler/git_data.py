@@ -5,6 +5,7 @@ from pathlib import Path
 
 from git import Head, Repo
 
+from . import config
 from .git_utils import get_current_branch, get_worktree_branches
 from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
 
@@ -78,7 +79,16 @@ def _diff_status(change_type: str) -> str:
     }.get(change_type, "modified")
 
 
-def _uncommitted_files(repo: Repo) -> list[FileChange]:
+def _is_excluded(path: str, excluded_paths: list[str]) -> bool:
+    normalized = path.strip("/")
+    for excluded in excluded_paths:
+        norm = excluded.strip().strip("/")
+        if norm and (normalized == norm or normalized.startswith(f"{norm}/")):
+            return True
+    return False
+
+
+def _uncommitted_files(repo: Repo, excluded_paths: list[str]) -> list[FileChange]:
     changes: dict[str, str] = {}
 
     def add_change(path: str | None, status: str) -> None:
@@ -100,7 +110,11 @@ def _uncommitted_files(repo: Repo) -> list[FileChange]:
     for path in repo.untracked_files:
         add_change(path, "untracked")
 
-    return [FileChange(path=path, status=status) for path, status in sorted(changes.items())]
+    return [
+        FileChange(path=path, status=status)
+        for path, status in sorted(changes.items())
+        if not _is_excluded(path, excluded_paths)
+    ]
 
 
 def get_repo_status(repo_path: Path) -> RepoStatusResponse:
@@ -109,12 +123,13 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
         head_commit = repo.head.commit.hexsha
     except Exception:
         head_commit = None
+    uncommitted_files = _uncommitted_files(repo, config.load_excluded_paths())
     return RepoStatusResponse(
         current_branch=get_current_branch(repo),
         head_commit=head_commit,
         upstream_commit=_current_upstream_commit(repo),
-        is_dirty=repo.is_dirty(untracked_files=True),
-        uncommitted_files=_uncommitted_files(repo),
+        is_dirty=bool(uncommitted_files),
+        uncommitted_files=uncommitted_files,
     )
 
 

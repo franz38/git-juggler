@@ -579,6 +579,10 @@ const [repoPaths, setRepoPaths] = createSignal<string[]>([]);
 const [repoPathsError, setRepoPathsError] = createSignal<string | null>(null);
 export { repoPaths, repoPathsError };
 
+const [excludedPaths, setExcludedPaths] = createSignal<string[]>([]);
+const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(null);
+export { excludedPaths, excludedPathsError };
+
 const defaultGitHubConfig: GitHubConfig = {
   api_base_url: "https://api.github.com",
   token_env: "GITHUB_TOKEN",
@@ -627,8 +631,10 @@ export async function loadConfig(): Promise<void> {
     const data = await fetchConfig();
     setRepoPaths(data.repo_paths);
     setPinnedRepos(new Set(data.pinned_repo_paths));
+    setExcludedPaths(data.excluded_paths);
     setGitHubConfig(data.github ?? defaultGitHubConfig);
     setRepoPathsError(null);
+    setExcludedPathsError(null);
     setGitHubConfigError(null);
   } catch (e) {
     setRepoPathsError((e as Error).message);
@@ -700,6 +706,16 @@ export async function addRepoPath(path: string): Promise<void> {
 
 export async function removeRepoPath(path: string): Promise<void> {
   await saveRepoPaths(repoPaths().filter((p) => p !== path));
+}
+
+export async function saveExcludedPaths(next: string[]): Promise<void> {
+  try {
+    const data = await updateConfig({ excluded_paths: next });
+    setExcludedPaths(data.excluded_paths);
+    setExcludedPathsError(null);
+  } catch (e) {
+    setExcludedPathsError((e as Error).message);
+  }
 }
 
 // --- Terminal ---------------------------------------------------------

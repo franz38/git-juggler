@@ -4,12 +4,15 @@ import {
   addRepoPath,
   branchColorMode,
   closeMenu,
+  excludedPaths,
+  excludedPathsError,
   githubConfig,
   githubConfigError,
   menuOpen,
   removeRepoPath,
   repoPaths,
   repoPathsError,
+  saveExcludedPaths,
   saveGitHubConfig,
   setBranchColorMode,
   setTheme,
@@ -34,6 +37,18 @@ export function MainMenu() {
     const config = githubConfig();
     setGitHubDraft({ ...config, repos: config.repos.map((repo) => ({ ...repo })) });
   });
+
+  const [excludedPathsDraft, setExcludedPathsDraft] = createSignal("");
+  createEffect(() => {
+    setExcludedPathsDraft(excludedPaths().join(", "));
+  });
+  const handleSaveExcludedPaths = () => {
+    const next = excludedPathsDraft()
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    void saveExcludedPaths(next);
+  };
 
   const handleAdd = () => {
     const path = newPath().trim();
@@ -135,6 +150,20 @@ export function MainMenu() {
               </div>
               <Show when={repoPathsError()}>
                 <div class="menu-error">{repoPathsError()}</div>
+              </Show>
+              <label class="menu-field">
+                <span>Excluded paths</span>
+                <input
+                  type="text"
+                  placeholder=".claude"
+                  value={excludedPathsDraft()}
+                  onInput={(e) => setExcludedPathsDraft(e.currentTarget.value)}
+                  onBlur={handleSaveExcludedPaths}
+                />
+              </label>
+              <p class="menu-hint">Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes.</p>
+              <Show when={excludedPathsError()}>
+                <div class="menu-error">{excludedPathsError()}</div>
               </Show>
             </Show>
             <Show when={activeSection() === "github"}>

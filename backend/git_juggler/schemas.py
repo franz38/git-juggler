@@ -25,12 +25,14 @@ class GitHubConfig(BaseModel):
 class ConfigResponse(BaseModel):
     repo_paths: list[str]
     pinned_repo_paths: list[str]
+    excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
     github: GitHubConfig | None = None
 
 
 class ConfigUpdateRequest(BaseModel):
     repo_paths: list[str] | None = None
     pinned_repo_paths: list[str] | None = None
+    excluded_paths: list[str] | None = None
     github: GitHubConfig | None = None
 
 

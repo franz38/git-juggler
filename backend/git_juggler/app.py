@@ -44,6 +44,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         return ConfigResponse(
             repo_paths=[str(p) for p in config.load_repo_paths()],
             pinned_repo_paths=config.load_pinned_repo_paths(),
+            excluded_paths=config.load_excluded_paths(),
             github=config.load_github_config(),
         )
 
@@ -70,6 +71,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         if body.pinned_repo_paths is not None:
             deduped = list(dict.fromkeys(body.pinned_repo_paths))
             config.save_pinned_repo_paths(deduped)
+
+        if body.excluded_paths is not None:
+            config.save_excluded_paths(body.excluded_paths)
 
         if body.github is not None:
             config.save_github_config(body.github.model_dump())
