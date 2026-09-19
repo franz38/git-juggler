@@ -732,6 +732,125 @@ export function runInTerminal(repoId: string, command: string): void {
   }
 }
 
+// --- Create tag modal -----------------------------------------------------
+// Same constraint as everywhere else in this file: no structured "command
+// finished" signal exists for a real terminal. Unlike Checkout (fire and
+// forget, assume success), this feature needs a real success/failure
+// result, so the command we send is extended with a plain shell `&&`/`||`
+// tail that echoes a distinct marker line depending on `git tag`'s actual
+// exit code. It's still the literal command that runs in the visible
+// terminal — just a normal shell idiom — and we watch the WebSocket output
+// for that repo for either marker to resolve a promise with the outcome.
+
+export interface CreateTagTarget {
+  hash: string;
+  shortHash: string;
+  subject: string;
+}
+
+const [createTagModal, setCreateTagModal] = createSignal<CreateTagTarget | null>(null);
+export { createTagModal };
+
+export function openCreateTagModal(target: CreateTagTarget): void {
+  setCreateTagModal(target);
+}
+
+export function closeCreateTagModal(): void {
+  setCreateTagModal(null);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+const TAG_COMMAND_TIMEOUT_MS = 15000;
+
+interface TerminalOutputWatcher {
+  repoId: string;
+  onChunk: (chunk: string) => void;
+}
+
+const terminalOutputWatchers = new Map<string, TerminalOutputWatcher>();
+
+export function feedTerminalOutput(repoId: string, chunk: string): void {
+  for (const watcher of terminalOutputWatchers.values()) {
+    if (watcher.repoId === repoId) watcher.onChunk(chunk);
+  }
+}
+
+// We can't reconstruct a clean, human-readable copy of *what git printed*
+// from the raw PTY byte stream here: real interactive shells (prompt
+// themes, syntax highlighting) redraw lines and emit control sequences with
+// no accompanying newlines, so naively stripping ANSI codes out of the raw
+// stream produces garbled text (verified against a real zsh session). A
+// plain substring search for one of these two literal marker strings is
+// robust instead — `echo` never colors or wraps its own output — so that's
+// all this resolves: whether the tag was created, not what git said. The
+// real output is always visible in the (already-open) terminal pane itself,
+// which is the one place this repo's guideline says git output should be
+// shown.
+//
+// The interactive shell echoes back exactly what we send it, *before*
+// running it — so if the marker text appeared literally inside the command
+// we send (as the argument to `echo`), that echoed *input* line would
+// itself contain both markers, and a naive substring search would resolve
+// "success" immediately, regardless of the real outcome (verified against a
+// real pty: this was the actual behavior). `echoSafe` splits each marker
+// across two adjacently-quoted shell strings ("git-juggler: tag ""created")
+// — the shell concatenates them into the intact marker in its *evaluated
+// output*, but the raw *echoed input* text still has the `""` in the
+// middle, so it never contains the marker as a contiguous substring.
+function echoSafe(marker: string): string {
+  const mid = Math.ceil(marker.length / 2);
+  return `"${marker.slice(0, mid)}""${marker.slice(mid)}"`;
+}
+
+function runTrackedTagCommand(repoId: string, gitTagCommand: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const watcherId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const successMarker = "git-juggler: tag created";
+    const failureMarker = "git-juggler: tag failed";
+    const fullCommand = `${gitTagCommand} && echo ${echoSafe(successMarker)} || echo ${echoSafe(failureMarker)}`;
+
+    let buffer = "";
+    let settled = false;
+
+    const finish = (success: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      terminalOutputWatchers.delete(watcherId);
+      resolve(success);
+    };
+
+    const timeoutHandle = setTimeout(() => finish(false), TAG_COMMAND_TIMEOUT_MS);
+
+    terminalOutputWatchers.set(watcherId, {
+      repoId,
+      onChunk: (chunk) => {
+        buffer += chunk;
+        if (buffer.includes(successMarker)) finish(true);
+        else if (buffer.includes(failureMarker)) finish(false);
+      },
+    });
+
+    runInTerminal(repoId, fullCommand);
+  });
+}
+
+export function createLightweightTagInTerminal(repoId: string, hash: string, name: string): Promise<boolean> {
+  return runTrackedTagCommand(repoId, `git tag ${shellQuote(name)} ${hash}`);
+}
+
+export function createAnnotatedTagInTerminal(
+  repoId: string,
+  hash: string,
+  name: string,
+  message: string,
+): Promise<boolean> {
+  return runTrackedTagCommand(repoId, `git tag -a ${shellQuote(name)} -m ${shellQuote(message)} ${hash}`);
+}
+
 // --- Commit context menu ------------------------------------------------
 
 export interface ContextMenuState {

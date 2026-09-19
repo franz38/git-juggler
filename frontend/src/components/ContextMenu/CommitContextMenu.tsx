@@ -1,5 +1,13 @@
 import { Show, createMemo } from "solid-js";
-import { activeRepo, closeContextMenu, commits, contextMenu, runInTerminal, scheduleGraphRefresh } from "../../state/store";
+import {
+  activeRepo,
+  closeContextMenu,
+  commits,
+  contextMenu,
+  openCreateTagModal,
+  runInTerminal,
+  scheduleGraphRefresh,
+} from "../../state/store";
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
@@ -43,6 +51,13 @@ export function CommitContextMenu() {
     closeContextMenu();
   };
 
+  const handleCreateTag = () => {
+    const commit = selectedCommit();
+    if (!commit) return;
+    openCreateTagModal({ hash: commit.hash, shortHash: commit.short_hash, subject: commit.subject });
+    closeContextMenu();
+  };
+
   const runStashCommand = (action: "apply" | "pop" | "drop") => {
     const repo = activeRepo();
     const ref = stashRef();
@@ -68,9 +83,14 @@ export function CommitContextMenu() {
             <Show
               when={stashRef()}
               fallback={
-                <div class="context-menu-item" onClick={handleCheckout}>
-                  Checkout
-                </div>
+                <>
+                  <div class="context-menu-item" onClick={handleCheckout}>
+                    Checkout
+                  </div>
+                  <div class="context-menu-item" onClick={handleCreateTag}>
+                    Create tag
+                  </div>
+                </>
               }
             >
               <div class="context-menu-item" onClick={() => runStashCommand("apply")}>

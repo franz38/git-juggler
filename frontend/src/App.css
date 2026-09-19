@@ -178,6 +178,7 @@
 }
 
 .menu-field input,
+.menu-field textarea,
 .github-repo-row input {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -188,10 +189,36 @@
   padding: 6px 8px;
 }
 
+.menu-field textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
 .menu-field input:focus,
+.menu-field textarea:focus,
 .github-repo-row input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.create-tag-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  padding: 20px 24px;
+}
+
+.create-tag-dialog h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-h);
 }
 
 .menu-subheading {

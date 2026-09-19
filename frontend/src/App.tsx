@@ -2,6 +2,7 @@ import { For, Show, createEffect, onCleanup, onMount } from "solid-js";
 import "./App.css";
 import { GraphPanel } from "./components/Graph/GraphPanel";
 import { CommitContextMenu } from "./components/ContextMenu/CommitContextMenu";
+import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
 import { MainMenu } from "./components/Menu/MainMenu";
@@ -78,6 +79,7 @@ function App() {
     <div class="app">
       <MainMenu />
       <CommitContextMenu />
+      <CreateTagModal />
       <RepoContextMenu />
       <aside class="sidebar">
         <RepoList />

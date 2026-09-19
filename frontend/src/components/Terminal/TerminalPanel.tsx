@@ -3,7 +3,9 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { createEffect, onCleanup, onMount } from "solid-js";
 import { getTerminalTheme } from "../../lib/terminalTheme";
+import { stripAnsi } from "../../lib/stripAnsi";
 import {
+  feedTerminalOutput,
   flushPendingCommands,
   noteTerminalOutput,
   registerTerminalSender,
@@ -25,8 +27,6 @@ const CHECKOUT_COMMAND_RE = /\bgit\s+(checkout|switch)\b/;
 const COMMIT_COMMAND_RE = /\bgit\s+commit\b/;
 const PUSH_COMMAND_RE = /\bgit\s+push\b/;
 const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\r/g;
 const LINE_BUFFER_MAX = 200;
 
 export function TerminalPanel(props: { repo: string | null }) {
@@ -72,7 +72,7 @@ export function TerminalPanel(props: { repo: string | null }) {
     const scanForGitCommands = (chunk: string) => {
       if (!props.repo) return;
       const repo = props.repo;
-      const clean = chunk.replace(ANSI_RE, "");
+      const clean = stripAnsi(chunk);
       for (const ch of clean) {
         if (ch === "\n") {
           if (FETCH_COMMAND_RE.test(lineBuffer)) startFetch(repo);
@@ -109,7 +109,10 @@ export function TerminalPanel(props: { repo: string | null }) {
         const payload = JSON.parse(event.data) as { type: string; data: string };
         if (payload.type === "output") {
           term.write(payload.data);
-          if (props.repo) noteTerminalOutput(props.repo);
+          if (props.repo) {
+            noteTerminalOutput(props.repo);
+            feedTerminalOutput(props.repo, payload.data);
+          }
           scanForGitCommands(payload.data);
         }
       } catch {
