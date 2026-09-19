@@ -23,6 +23,7 @@ interface PersistedTabsState {
 interface RepoState {
   commits: CommitSummary[];
   currentBranch: string | null;
+  checkedOutBranches: string[];
   headCommit: string | null;
   upstreamCommit: string | null;
   isDirty: boolean;
@@ -133,6 +134,7 @@ function ensureRepoState(name: string): void {
     setRepoStates(name, {
       commits: [],
       currentBranch: null,
+      checkedOutBranches: [],
       headCommit: null,
       upstreamCommit: null,
       isDirty: false,
@@ -156,6 +158,7 @@ async function loadGraphInto(name: string): Promise<void> {
     const data = await fetchGraph(name);
     setRepoStates(name, "commits", data.commits);
     setRepoStates(name, "currentBranch", data.current_branch);
+    setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
     setRepoStates(name, "isDirty", data.is_dirty);
@@ -361,6 +364,14 @@ export const filteredCommits = createMemo<CommitSummary[]>(() => {
 export const currentBranch = createMemo<string | null>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.currentBranch ?? null : null;
+});
+
+// Branches checked out in any worktree of the repo (including the one this
+// repo path points at) — see computeColumns, which gives each of these its
+// own stable lane instead of packing it like an ordinary branch.
+export const checkedOutBranches = createMemo<string[]>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.checkedOutBranches ?? [] : [];
 });
 
 export const headCommit = createMemo<string | null>(() => {

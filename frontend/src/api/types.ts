@@ -61,6 +61,7 @@ export interface GraphResponse {
   upstream_commit: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
+  checked_out_branches: string[];
 }
 
 export interface RepoStatusResponse {

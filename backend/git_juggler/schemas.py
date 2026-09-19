@@ -71,6 +71,7 @@ class GraphResponse(BaseModel):
     upstream_commit: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
+    checked_out_branches: list[str] = Field(default_factory=list)
 
 
 class RepoStatusResponse(BaseModel):

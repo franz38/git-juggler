@@ -5,7 +5,7 @@ from pathlib import Path
 
 from git import Head, Repo
 
-from .git_utils import get_current_branch
+from .git_utils import get_current_branch, get_worktree_branches
 from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
 
 
@@ -118,11 +118,14 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
     )
 
 
-def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange]]:
+def get_graph(
+    repo_path: Path,
+) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange], list[str]]:
     repo = Repo(repo_path)
     heads = list(repo.heads)
     tags = list(repo.tags)
     current_branch = get_current_branch(repo)
+    checked_out_branches = get_worktree_branches(repo)
     status = get_repo_status(repo_path)
     upstream_commit = status.upstream_commit
     is_dirty = status.is_dirty
@@ -133,7 +136,7 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
         head_commit = None
 
     if not heads:
-        return [], [], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files
+        return [], [], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files, checked_out_branches
 
     tags_by_commit: dict[str, list[str]] = {}
     for t in tags:
@@ -229,4 +232,13 @@ def get_graph(repo_path: Path) -> tuple[list[CommitSummary], list[str], str | No
             )
         )
 
-    return summaries, [h.name for h in heads], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files
+    return (
+        summaries,
+        [h.name for h in heads],
+        current_branch,
+        head_commit,
+        upstream_commit,
+        is_dirty,
+        uncommitted_files,
+        checked_out_branches,
+    )
