@@ -93,25 +93,38 @@ export function GraphPanel() {
     return commitOffset() + offset + COLLAPSED_ROW_HEIGHT / 2;
   };
 
-  const pushingEdges = createMemo(() => {
-    if (!isPushing()) return new Set<string>();
+  // Walks first-parent from HEAD back to the upstream tip to find every
+  // commit (and edge) currently being pushed, so the spinner isn't pinned to
+  // HEAD alone when a push carries more than one commit. Falls back to just
+  // HEAD (matching the old single-dot behavior) whenever the walk can't be
+  // resolved -- no upstream yet (first push of a new branch), nothing to
+  // push, or a parent missing from the loaded history -- rather than
+  // showing no spinner at all.
+  const pushingChain = createMemo<{ commits: Set<string>; edges: Set<string> }>(() => {
+    if (!isPushing()) return { commits: new Set(), edges: new Set() };
     const head = headCommit();
+    if (!head) return { commits: new Set(), edges: new Set() };
     const upstream = upstreamCommit();
-    if (!head || !upstream || head === upstream) return new Set<string>();
+    if (!upstream || head === upstream) return { commits: new Set([head]), edges: new Set() };
     const byHash = commitByHash();
-    const keys = new Set<string>();
+    const commits = new Set<string>();
+    const edges = new Set<string>();
     let cursor: string | undefined = head;
     const seen = new Set<string>();
     while (cursor && cursor !== upstream && !seen.has(cursor)) {
       seen.add(cursor);
+      commits.add(cursor);
       const commit = byHash.get(cursor);
       const parent = commit?.parents[0];
-      if (!parent) return new Set<string>();
-      keys.add(`${cursor}-${parent}`);
+      if (!parent) return { commits: new Set([head]), edges: new Set() };
+      edges.add(`${cursor}-${parent}`);
       cursor = parent;
     }
-    return cursor === upstream ? keys : new Set<string>();
+    return cursor === upstream ? { commits, edges } : { commits: new Set([head]), edges: new Set() };
   });
+
+  const pushingEdges = createMemo(() => pushingChain().edges);
+  const pushingCommits = createMemo(() => pushingChain().commits);
 
   // One "ghost" marker per branch tip's lane, sitting in the reserved band
   // above the graph while a fetch is running — we don't know yet whether
@@ -220,7 +233,7 @@ export function GraphPanel() {
                     openContextMenu(e.clientX, e.clientY, c.hash);
                   }}
                 />
-                {isPushing() && headCommit() === c.hash && (
+                {pushingCommits().has(c.hash) && (
                   <circle class="push-spinner" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 4} fill="none" stroke={colorForBranch(c.branch)} stroke-width="2" stroke-dasharray="10 5">
                     <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.85s" repeatCount="indefinite" />
                   </circle>
