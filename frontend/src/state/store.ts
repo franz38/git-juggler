@@ -713,6 +713,12 @@ export async function saveExcludedPaths(next: string[]): Promise<void> {
     const data = await updateConfig({ excluded_paths: next });
     setExcludedPaths(data.excluded_paths);
     setExcludedPathsError(null);
+    // The exclusion list affects every loaded repo's uncommitted-change
+    // detection, not just the active tab, so refresh all of them now
+    // instead of waiting for each one's next 2.5s status poll.
+    for (const repoId of Object.keys(repoStates)) {
+      void pollRepoStatus(repoId);
+    }
   } catch (e) {
     setExcludedPathsError((e as Error).message);
   }
