@@ -6,12 +6,14 @@ import { BranchContextMenu } from "./components/ContextMenu/BranchContextMenu";
 import { CommitContextMenu } from "./components/ContextMenu/CommitContextMenu";
 import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
+import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
 import { MainMenu } from "./components/Menu/MainMenu";
 import { RepoList } from "./components/Sidebar/RepoList";
 import { SearchBox } from "./components/Search/SearchBox";
 import { TabsBar } from "./components/Tabs/TabsBar";
 import { TerminalPanel } from "./components/Terminal/TerminalPanel";
+import { DeleteTagModal } from "./components/Tags/DeleteTagModal";
 import {
   activeRepo,
   activateAdjacentTab,
@@ -84,7 +86,9 @@ function App() {
       <CommitContextMenu />
       <CreateTagModal />
       <DeleteBranchModal />
+      <DeleteTagModal />
       <RepoContextMenu />
+      <TagContextMenu />
       <aside class="sidebar">
         <RepoList />
       </aside>

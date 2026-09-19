@@ -881,7 +881,7 @@ export function closeContextMenu(): void {
   setContextMenu(null);
 }
 
-// --- Branch context menu / delete modal -----------------------------------
+// --- Ref context menus / delete modals -----------------------------------
 
 export interface BranchContextMenuState {
   x: number;
@@ -895,9 +895,21 @@ export interface DeleteBranchModalState {
   remote: boolean;
 }
 
+export interface TagContextMenuState {
+  x: number;
+  y: number;
+  name: string;
+}
+
+export interface DeleteTagModalState {
+  name: string;
+}
+
 const [branchContextMenu, setBranchContextMenu] = createSignal<BranchContextMenuState | null>(null);
 const [deleteBranchModal, setDeleteBranchModal] = createSignal<DeleteBranchModalState | null>(null);
-export { branchContextMenu, deleteBranchModal };
+const [tagContextMenu, setTagContextMenu] = createSignal<TagContextMenuState | null>(null);
+const [deleteTagModal, setDeleteTagModal] = createSignal<DeleteTagModalState | null>(null);
+export { branchContextMenu, deleteBranchModal, tagContextMenu, deleteTagModal };
 
 export function openBranchContextMenu(x: number, y: number, name: string, remote: boolean): void {
   setBranchContextMenu({ x, y, name, remote });
@@ -913,6 +925,22 @@ export function openDeleteBranchModal(target: DeleteBranchModalState): void {
 
 export function closeDeleteBranchModal(): void {
   setDeleteBranchModal(null);
+}
+
+export function openTagContextMenu(x: number, y: number, name: string): void {
+  setTagContextMenu({ x, y, name });
+}
+
+export function closeTagContextMenu(): void {
+  setTagContextMenu(null);
+}
+
+export function openDeleteTagModal(target: DeleteTagModalState): void {
+  setDeleteTagModal(target);
+}
+
+export function closeDeleteTagModal(): void {
+  setDeleteTagModal(null);
 }
 
 // --- Repo context menu ---------------------------------------------------
