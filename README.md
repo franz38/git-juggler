@@ -3,6 +3,44 @@
 Scans the first-level children of a directory for git repos, and serves a web UI
 to browse each repo's commit graph and run a real shell, backed by a FastAPI server.
 
+## How to install
+
+git-juggler is published on PyPI. The recommended way to install it is with
+[pipx](https://pipx.pypa.io), which puts the `git-juggler` command on your
+PATH in its own isolated environment, without touching your system Python:
+
+```
+pipx install git-juggler
+git-juggler <path-to-scan>   # http://127.0.0.1:8000
+```
+
+If you don't have pipx yet:
+
+**macOS**
+```
+brew install pipx
+pipx ensurepath
+```
+
+**Linux**
+```
+sudo apt install pipx   # Debian/Ubuntu
+sudo dnf install pipx   # Fedora
+pipx ensurepath
+```
+Many recent distros (like macOS with Homebrew) block a plain global
+`pip install` outside a virtual environment (PEP 668); pipx is the
+supported way around that.
+
+**Windows**
+```
+py -m pip install --user pipx
+py -m pipx ensurepath
+```
+
+Restart your terminal after `ensurepath` so the updated PATH takes effect.
+To upgrade later: `pipx upgrade git-juggler`.
+
 ## Dev mode
 
 ```
