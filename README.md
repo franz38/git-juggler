@@ -44,14 +44,13 @@ To upgrade later: `pipx upgrade git-juggler`.
 ## Dev mode
 
 ```
-cd backend
 python3 -m venv .venv
 .venv/bin/pip install -e .
 .venv/bin/git-juggler <path-to-scan> --reload   # http://127.0.0.1:8000
 ```
 
 ```
-cd frontend
+cd src/frontend
 npm install
 npm run dev                                     # http://localhost:5173 (proxies /api and /ws)
 ```
@@ -61,8 +60,8 @@ Open http://localhost:5173.
 ## Production (single port)
 
 ```
-cd frontend && npm install && npm run build
-cd ../backend && .venv/bin/git-juggler <path-to-scan>   # http://127.0.0.1:8000
+cd src/frontend && npm install && npm run build
+cd ../.. && .venv/bin/git-juggler <path-to-scan>   # http://127.0.0.1:8000
 ```
 
 ## Build a Python package
@@ -72,17 +71,17 @@ not committed; `scripts/build-package.sh` builds them and copies them into the
 backend package before creating the distributions.
 
 ```
-python3 -m venv backend/.venv
-backend/.venv/bin/pip install build
+python3 -m venv .venv
+.venv/bin/pip install build
 ./scripts/build-package.sh
 ```
 
-The wheel and source distribution are written to `backend/dist/`.
+The wheel and source distribution are written to `dist/`.
 
 Install the wheel locally with:
 
 ```
-pipx install backend/dist/git_juggler-0.1.0-py3-none-any.whl --force
+pipx install dist/git_juggler-0.1.0-py3-none-any.whl --force
 git-juggler <path-to-scan>   # http://127.0.0.1:8000
 ```
 

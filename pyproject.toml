@@ -20,13 +20,9 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 source = "vcs"
 
-[tool.hatch.version.raw-options]
-# pyproject.toml lives in backend/, one level below the actual git root.
-root = ".."
-
 [tool.hatch.build.targets.wheel]
-packages = ["git_juggler"]
-artifacts = ["git_juggler/frontend_dist/**"]
+packages = ["src/backend/git_juggler"]
+artifacts = ["src/backend/git_juggler/frontend_dist/**"]
 
 [tool.hatch.build.targets.sdist]
-artifacts = ["git_juggler/frontend_dist/**"]
+artifacts = ["src/backend/git_juggler/frontend_dist/**"]

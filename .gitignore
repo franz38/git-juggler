@@ -11,7 +11,7 @@ node_modules/
 dist/
 dist-ssr/
 .vite/
-backend/git_juggler/frontend_dist/
+src/backend/git_juggler/frontend_dist/
 
 # Logs / local env / secrets
 *.log

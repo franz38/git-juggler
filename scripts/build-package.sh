@@ -2,10 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FRONTEND_DIST="$ROOT_DIR/frontend/dist"
-PACKAGED_DIST="$ROOT_DIR/backend/git_juggler/frontend_dist"
+FRONTEND_DIST="$ROOT_DIR/src/frontend/dist"
+PACKAGED_DIST="$ROOT_DIR/src/backend/git_juggler/frontend_dist"
+PYTHON="$ROOT_DIR/.venv/bin/python"
 
-cd "$ROOT_DIR/frontend"
+if [ ! -x "$PYTHON" ]; then
+  PYTHON="python3"
+fi
+
+cd "$ROOT_DIR/src/frontend"
 npm ci
 npm run build
 
@@ -13,5 +18,5 @@ rm -rf "$PACKAGED_DIST"
 mkdir -p "$PACKAGED_DIST"
 cp -R "$FRONTEND_DIST"/. "$PACKAGED_DIST"/
 
-cd "$ROOT_DIR/backend"
-python -m build
+cd "$ROOT_DIR"
+"$PYTHON" -m build

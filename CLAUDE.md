@@ -5,14 +5,13 @@
 Dev mode (hot reload on both sides):
 
 ```
-cd backend
 python3 -m venv .venv
 .venv/bin/pip install -e .
 .venv/bin/git-juggler <path-to-scan> --reload   # http://127.0.0.1:8000
 ```
 
 ```
-cd frontend
+cd src/frontend
 npm install
 npm run dev                                     # http://localhost:5173 (proxies /api and /ws to :8000)
 ```
@@ -20,7 +19,7 @@ npm run dev                                     # http://localhost:5173 (proxies
 Open http://localhost:5173 — that's the app, hot-reloading both frontend and backend.
 
 - `<path-to-scan>` is the directory whose first-level children get scanned for git repos (e.g. `~/Documents/2026`).
-- If port 8000 is unavailable on this machine (it can be occupied by unrelated local processes), run the backend with a different `--port` and update `frontend/vite.config.ts`'s proxy target to match — but don't commit that port change, it's a local workaround, not a project default.
+- If port 8000 is unavailable on this machine (it can be occupied by unrelated local processes), run the backend with a different `--port` and update `src/frontend/vite.config.ts`'s proxy target to match — but don't commit that port change, it's a local workaround, not a project default.
 - Single-port production mode (backend serves the built frontend, no Vite) is documented in `README.md`.
 - Unless explicitly told otherwise, run both the backend and frontend from
   the primary checkout on the `main` branch — not from a
@@ -32,7 +31,7 @@ Open http://localhost:5173 — that's the app, hot-reloading both frontend and b
 ## Architecture guideline: git mutations go through the terminal only
 
 All UI-triggered git actions (e.g. right-click on a commit → Checkout) must be
-executed via the frontend terminal (`runInTerminal` in `frontend/src/state/store.ts`),
+executed via the frontend terminal (`runInTerminal` in `src/frontend/src/state/store.ts`),
 not via a dedicated backend API endpoint.
 
 - The backend only ever performs **read** operations on repos (GitPython,
