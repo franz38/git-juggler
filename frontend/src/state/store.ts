@@ -62,6 +62,7 @@ const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
 const inFlightDetailRequests = new Set<string>();
+const pendingGraphRefreshes = new Set<string>();
 
 function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo()): void {
   try {
@@ -196,6 +197,10 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "error", (e as Error).message);
   } finally {
     setRepoStates(name, "loading", false);
+    if (pendingGraphRefreshes.has(name)) {
+      pendingGraphRefreshes.delete(name);
+      void refreshRepoGraph(name);
+    }
   }
 }
 
@@ -210,7 +215,10 @@ async function loadRepoGraphIfNeeded(name: string): Promise<void> {
 // detection), since the initial load only happens once per repo otherwise.
 export async function refreshRepoGraph(repoId: string): Promise<void> {
   ensureRepoState(repoId);
-  if (repoStates[repoId].loading) return;
+  if (repoStates[repoId].loading) {
+    pendingGraphRefreshes.add(repoId);
+    return;
+  }
   await loadGraphInto(repoId);
 }
 
@@ -582,7 +590,7 @@ const [githubConfigError, setGitHubConfigError] = createSignal<string | null>(nu
 export { githubConfig, githubConfigError };
 
 const GITHUB_ACTIONS_POLL_MS = 10000;
-const GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS = [1000, 5000];
+const GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
 const githubActionsPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const githubActionsPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
 

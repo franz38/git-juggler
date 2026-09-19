@@ -13,6 +13,10 @@ from git import Repo
 from .schemas import GitHubActionsRunInfo
 
 
+GITHUB_RUNS_PER_PAGE = 100
+GITHUB_RUNS_MAX_PAGES = 10
+
+
 def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -106,8 +110,6 @@ def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
     if not isinstance(owner, str) or not owner or not isinstance(repo, str) or not repo:
         return []
 
-    query = urlencode({"per_page": "100"})
-    url = f"{api_base_url}/repos/{owner}/{repo}/actions/runs?{query}"
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "git-juggler",
@@ -119,20 +121,60 @@ def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    request = Request(url, headers=headers)
-    try:
-        with urlopen(request, timeout=10) as response:  # noqa: S310 - configured user URL, read-only local app integration
-            body = response.read().decode("utf-8")
-    except (HTTPError, URLError, TimeoutError, OSError):
-        return []
+    all_runs: list[dict] = []
+    for page in range(1, GITHUB_RUNS_MAX_PAGES + 1):
+        query = urlencode({"per_page": str(GITHUB_RUNS_PER_PAGE), "page": str(page)})
+        url = f"{api_base_url}/repos/{owner}/{repo}/actions/runs?{query}"
+        request = Request(url, headers=headers)
+        try:
+            with urlopen(request, timeout=10) as response:  # noqa: S310 - configured user URL, read-only local app integration
+                body = response.read().decode("utf-8")
+        except (HTTPError, URLError, TimeoutError, OSError):
+            return all_runs
 
-    try:
-        data = json.loads(body)
-    except json.JSONDecodeError:
-        return []
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            return all_runs
 
-    runs = data.get("workflow_runs") if isinstance(data, dict) else None
-    return [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
+        runs = data.get("workflow_runs") if isinstance(data, dict) else None
+        page_runs = [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
+        all_runs.extend(page_runs)
+        if len(page_runs) < GITHUB_RUNS_PER_PAGE:
+            break
+
+    return all_runs
+
+
+def _tag_targets(repo_path: Path) -> dict[str, str]:
+    try:
+        repo = Repo(repo_path)
+    except Exception:
+        return {}
+    targets: dict[str, str] = {}
+    for tag in repo.tags:
+        try:
+            targets[tag.name] = tag.commit.hexsha
+        except Exception:
+            continue
+    return targets
+
+
+def _matching_run_sha(run: dict, commit_hashes: set[str], tags_by_name: dict[str, str]) -> str | None:
+    sha = run.get("head_sha")
+    if isinstance(sha, str) and sha in commit_hashes:
+        return sha
+
+    # Tag-triggered workflows can be reported by tag name rather than by a
+    # branch name. Match those back to the local tag's target commit.
+    head_branch = run.get("head_branch")
+    if isinstance(head_branch, str):
+        tag_name = head_branch.removeprefix("refs/tags/")
+        tag_sha = tags_by_name.get(tag_name)
+        if tag_sha in commit_hashes:
+            return tag_sha
+
+    return None
 
 
 def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_config: dict | None) -> dict[str, list[GitHubActionsRunInfo]]:
@@ -145,9 +187,10 @@ def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_con
         return {}
 
     by_sha: dict[str, list[GitHubActionsRunInfo]] = {}
+    tags_by_name = _tag_targets(repo_path)
     for run in _fetch_workflow_runs(github_config, repo_config):
-        sha = run.get("head_sha")
-        if not isinstance(sha, str) or sha not in commit_hashes:
+        sha = _matching_run_sha(run, commit_hashes, tags_by_name)
+        if sha is None:
             continue
 
         created_at = run.get("created_at") if isinstance(run.get("created_at"), str) else None

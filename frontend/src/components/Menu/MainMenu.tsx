@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { For, Index, Show, createEffect, createSignal } from "solid-js";
 import type { GitHubConfig } from "../../api/types";
 import {
   addRepoPath,
@@ -165,33 +165,35 @@ export function MainMenu() {
 
               <div class="menu-subheading">Repo mappings</div>
               <div class="github-repo-mappings">
-                <For each={githubDraft().repos} fallback={<div class="menu-empty">No GitHub repos configured</div>}>
-                  {(repo, index) => (
+                <Show when={githubDraft().repos.length > 0} fallback={<div class="menu-empty">No GitHub repos configured</div>}>
+                  <Index each={githubDraft().repos}>
+                    {(repo, index) => (
                     <div class="github-repo-row">
                       <input
                         type="text"
                         placeholder="/absolute/path/to/repo"
-                        value={repo.repo_path}
-                        onInput={(e) => updateGitHubRepo(index(), "repo_path", e.currentTarget.value)}
+                        value={repo().repo_path}
+                        onInput={(e) => updateGitHubRepo(index, "repo_path", e.currentTarget.value)}
                       />
                       <input
                         type="text"
                         placeholder="owner"
-                        value={repo.owner}
-                        onInput={(e) => updateGitHubRepo(index(), "owner", e.currentTarget.value)}
+                        value={repo().owner}
+                        onInput={(e) => updateGitHubRepo(index, "owner", e.currentTarget.value)}
                       />
                       <input
                         type="text"
                         placeholder="repo"
-                        value={repo.repo}
-                        onInput={(e) => updateGitHubRepo(index(), "repo", e.currentTarget.value)}
+                        value={repo().repo}
+                        onInput={(e) => updateGitHubRepo(index, "repo", e.currentTarget.value)}
                       />
-                      <button type="button" class="menu-secondary-button" onClick={() => removeGitHubRepo(index())}>
+                      <button type="button" class="menu-secondary-button" onClick={() => removeGitHubRepo(index)}>
                         Remove
                       </button>
                     </div>
-                  )}
-                </For>
+                    )}
+                  </Index>
+                </Show>
               </div>
 
               <div class="menu-actions">
