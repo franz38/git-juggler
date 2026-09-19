@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { fetchCommitDetail, fetchConfig, fetchGitHubActionsRuns, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { CommitDetail, CommitSummary, FileChange, GitHubActionsRunInfo, GitHubConfig, RepoSummary } from "../api/types";
+import type { CommitDetail, CommitSummary, FileChange, GitHubActionsRunInfo, GitHubConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -140,7 +140,12 @@ export async function loadRepos(): Promise<void> {
 // keyed by full path, since that's stable across restarts regardless of how
 // the scan-root list gets edited.
 const [pinnedRepos, setPinnedRepos] = createSignal<Set<string>>(new Set());
-export { pinnedRepos };
+const [repoGroups, setRepoGroups] = createSignal<RepoGroupConfig[]>([]);
+export { pinnedRepos, repoGroups };
+
+function updateGroupsFromConfig(groups: RepoGroupConfig[]): void {
+  setRepoGroups(groups.map((group) => ({ ...group, repo_paths: [...group.repo_paths] })));
+}
 
 export async function toggleRepoPinned(path: string): Promise<void> {
   const next = new Set(pinnedRepos());
@@ -152,6 +157,84 @@ export async function toggleRepoPinned(path: string): Promise<void> {
   } catch {
     // Pin just won't stick this time; nowhere good to surface it from here.
   }
+}
+
+export async function setRepoPinned(path: string, pinned: boolean): Promise<void> {
+  const next = new Set(pinnedRepos());
+  if (pinned) next.add(path);
+  else next.delete(path);
+  try {
+    const data = await updateConfig({ pinned_repo_paths: [...next] });
+    setPinnedRepos(new Set(data.pinned_repo_paths));
+  } catch {
+    // Pin just won't stick this time; nowhere good to surface it from here.
+  }
+}
+
+async function saveRepoGroups(next: RepoGroupConfig[]): Promise<void> {
+  try {
+    const data = await updateConfig({ repo_groups: next });
+    updateGroupsFromConfig(data.repo_groups);
+  } catch {
+    // Group changes are UI organization only; ignore transient save failures.
+  }
+}
+
+export async function createRepoGroup(name: string, repoPath?: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const group: RepoGroupConfig = {
+    id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: trimmed,
+    repo_paths: repoPath ? [repoPath] : [],
+  };
+  await saveRepoGroups([...repoGroups(), group]);
+}
+
+export async function setRepoInGroup(groupId: string, repoPath: string, inGroup: boolean): Promise<void> {
+  const next = repoGroups().map((group) => {
+    if (group.id !== groupId) return group;
+    const repoPaths = group.repo_paths.filter((path) => path !== repoPath);
+    if (inGroup) repoPaths.push(repoPath);
+    return { ...group, repo_paths: repoPaths };
+  });
+  await saveRepoGroups(next);
+}
+
+export async function moveRepoGroup(fromId: string, toId: string): Promise<void> {
+  if (fromId === toId) return;
+  const next = [...repoGroups()];
+  const fromIndex = next.findIndex((group) => group.id === fromId);
+  const toIndex = next.findIndex((group) => group.id === toId);
+  if (fromIndex < 0 || toIndex < 0) return;
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  await saveRepoGroups(next);
+}
+
+export async function moveRepoGroupToIndex(fromId: string, toIndex: number): Promise<void> {
+  const next = [...repoGroups()];
+  const fromIndex = next.findIndex((group) => group.id === fromId);
+  if (fromIndex < 0) return;
+  const [moved] = next.splice(fromIndex, 1);
+  const adjustedIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+  next.splice(Math.max(0, Math.min(adjustedIndex, next.length)), 0, moved);
+  await saveRepoGroups(next);
+}
+
+export async function moveRepoInGroup(groupId: string, fromRepoPath: string, toRepoPath: string): Promise<void> {
+  if (fromRepoPath === toRepoPath) return;
+  const next = repoGroups().map((group) => {
+    if (group.id !== groupId) return group;
+    const repoPaths = [...group.repo_paths];
+    const fromIndex = repoPaths.indexOf(fromRepoPath);
+    const toIndex = repoPaths.indexOf(toRepoPath);
+    if (fromIndex < 0 || toIndex < 0) return group;
+    const [moved] = repoPaths.splice(fromIndex, 1);
+    repoPaths.splice(toIndex, 0, moved);
+    return { ...group, repo_paths: repoPaths };
+  });
+  await saveRepoGroups(next);
 }
 
 // --- Tabs ------------------------------------------------------------------
@@ -631,6 +714,7 @@ export async function loadConfig(): Promise<void> {
     const data = await fetchConfig();
     setRepoPaths(data.repo_paths);
     setPinnedRepos(new Set(data.pinned_repo_paths));
+    updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
     setGitHubConfig(data.github ?? defaultGitHubConfig);
     setRepoPathsError(null);

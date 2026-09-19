@@ -50,6 +50,42 @@ def save_pinned_repo_paths(paths: list[str]) -> None:
     _save_raw(data)
 
 
+def load_repo_groups() -> list[dict]:
+    raw = _load_raw().get("repo_groups", [])
+    if not isinstance(raw, list):
+        return []
+
+    groups: list[dict] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        group_id = item.get("id")
+        name = item.get("name")
+        repo_paths = item.get("repo_paths", [])
+        if not isinstance(group_id, str) or not group_id or group_id in seen:
+            continue
+        if not isinstance(name, str) or not name.strip():
+            continue
+        if not isinstance(repo_paths, list):
+            repo_paths = []
+        seen.add(group_id)
+        groups.append(
+            {
+                "id": group_id,
+                "name": name.strip(),
+                "repo_paths": list(dict.fromkeys(p for p in repo_paths if isinstance(p, str))),
+            }
+        )
+    return groups
+
+
+def save_repo_groups(groups: list[dict]) -> None:
+    data = _load_raw()
+    data["repo_groups"] = groups
+    _save_raw(data)
+
+
 def load_excluded_paths() -> list[str]:
     """Paths ignored when detecting a repo's uncommitted changes. Defaults to
     [".claude"] whenever the key is absent -- not just on first run like

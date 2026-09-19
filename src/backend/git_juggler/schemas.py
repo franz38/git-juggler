@@ -22,9 +22,16 @@ class GitHubConfig(BaseModel):
     repos: list[GitHubRepoConfig] = Field(default_factory=list)
 
 
+class RepoGroupConfig(BaseModel):
+    id: str
+    name: str
+    repo_paths: list[str] = Field(default_factory=list)
+
+
 class ConfigResponse(BaseModel):
     repo_paths: list[str]
     pinned_repo_paths: list[str]
+    repo_groups: list[RepoGroupConfig] = Field(default_factory=list)
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
     github: GitHubConfig | None = None
 
@@ -32,6 +39,7 @@ class ConfigResponse(BaseModel):
 class ConfigUpdateRequest(BaseModel):
     repo_paths: list[str] | None = None
     pinned_repo_paths: list[str] | None = None
+    repo_groups: list[RepoGroupConfig] | None = None
     excluded_paths: list[str] | None = None
     github: GitHubConfig | None = None
 

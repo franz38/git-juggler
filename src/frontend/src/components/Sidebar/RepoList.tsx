@@ -1,25 +1,74 @@
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { RepoSummary } from "../../api/types";
 import {
   activeRepo,
+  createRepoGroup,
+  fetchRepo,
   loadConfig,
   loadRepos,
+  moveRepoGroupToIndex,
+  moveRepoInGroup,
   openRepoContextMenu,
   openRepoTab,
   pinTab,
   pinnedRepos,
+  repoGroups,
   repos,
-  toggleRepoPinned,
+  setRepoInGroup,
+  setRepoPinned,
 } from "../../state/store";
 
-function RepoRow(props: { repo: RepoSummary }) {
+interface BookmarkMenuState {
+  repo: RepoSummary;
+  x: number;
+  y: number;
+}
+
+interface BulkMenuState {
+  x: number;
+  y: number;
+}
+
+function BookmarkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M4 2.5C4 1.7 4.7 1 5.5 1h5c.8 0 1.5.7 1.5 1.5V15l-4-2.4L4 15V2.5Z" />
+    </svg>
+  );
+}
+
+function RepoRow(props: {
+  repo: RepoSummary;
+  groupId?: string;
+  selected: boolean;
+  onSelectedChange: (repoPath: string, selected: boolean) => void;
+  onBookmarkClick: (repo: RepoSummary, x: number, y: number) => void;
+  onRepoDragStart?: (repoPath: string) => void;
+  onRepoDrop?: (repoPath: string) => void;
+  disableRepoDrag?: boolean;
+}) {
   const isPinned = () => pinnedRepos().has(props.repo.path);
 
   return (
     <div
       class="repo-item"
+      draggable={Boolean(props.groupId) && !props.disableRepoDrag}
       title={props.repo.path}
       classList={{ active: activeRepo() === props.repo.id }}
+      onDragStart={(e) => {
+        if (!props.groupId || props.disableRepoDrag) return;
+        e.dataTransfer?.setData("text/plain", props.repo.path);
+        props.onRepoDragStart?.(props.repo.path);
+      }}
+      onDragOver={(e) => {
+        if (!props.groupId || props.disableRepoDrag) return;
+        e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (!props.groupId || props.disableRepoDrag) return;
+        e.preventDefault();
+        props.onRepoDrop?.(props.repo.path);
+      }}
       onClick={() => openRepoTab(props.repo.id, props.repo.name)}
       onDblClick={() => {
         openRepoTab(props.repo.id, props.repo.name);
@@ -30,24 +79,161 @@ function RepoRow(props: { repo: RepoSummary }) {
         openRepoContextMenu(e.clientX, e.clientY, props.repo.id, props.repo.name);
       }}
     >
-      <span
-        class="repo-pin"
+      <button
+        type="button"
+        class="repo-bookmark"
         classList={{ pinned: isPinned() }}
-        title={isPinned() ? "Unpin" : "Pin"}
+        title="Organize repo"
         onClick={(e) => {
           e.stopPropagation();
-          void toggleRepoPinned(props.repo.path);
+          const rect = e.currentTarget.getBoundingClientRect();
+          props.onBookmarkClick(props.repo, rect.left, rect.bottom + 4);
         }}
       >
-        {isPinned() ? "★" : "☆"}
-      </span>
+        <BookmarkIcon />
+      </button>
       <span class="repo-names">
         <span class="repo-name">{props.repo.name}</span>
         <Show when={props.repo.current_branch}>
           <span class="repo-branch">{props.repo.current_branch}</span>
         </Show>
       </span>
+      <input
+        type="checkbox"
+        class="repo-select"
+        checked={props.selected}
+        title="Select repo"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          e.stopPropagation();
+          props.onSelectedChange(props.repo.path, e.currentTarget.checked);
+        }}
+      />
     </div>
+  );
+}
+
+function GroupCheckbox(props: { checked: boolean; indeterminate: boolean; onChange: (checked: boolean) => void }) {
+  let input: HTMLInputElement | undefined;
+
+  createEffect(() => {
+    if (input) input.indeterminate = props.indeterminate;
+  });
+
+  return (
+    <input
+      ref={input}
+      type="checkbox"
+      class="repo-group-select"
+      checked={props.checked}
+      title="Select group repos"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => props.onChange(e.currentTarget.checked)}
+    />
+  );
+}
+
+function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) {
+  const isPinned = () => pinnedRepos().has(props.state.repo.path);
+
+  async function createGroupForRepo(): Promise<void> {
+    const name = window.prompt("New group name");
+    if (!name) return;
+    await createRepoGroup(name, props.state.repo.path);
+    props.onClose();
+  }
+
+  return (
+    <div class="repo-bookmark-overlay" onClick={props.onClose}>
+      <div
+        class="repo-bookmark-menu"
+        style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          class="repo-bookmark-menu-item"
+          onClick={() => {
+            void setRepoPinned(props.state.repo.path, !isPinned());
+          }}
+        >
+          <span>{isPinned() ? "✓" : ""}</span>
+          <span>Pin</span>
+        </button>
+        <Show when={repoGroups().length > 0}>
+          <div class="repo-bookmark-menu-separator" />
+          <For each={repoGroups()}>
+            {(group) => {
+              const inGroup = () => group.repo_paths.includes(props.state.repo.path);
+              return (
+                <button
+                  type="button"
+                  class="repo-bookmark-menu-item"
+                  onClick={() => {
+                    void setRepoInGroup(group.id, props.state.repo.path, !inGroup());
+                  }}
+                >
+                  <span>{inGroup() ? "✓" : ""}</span>
+                  <span>{group.name}</span>
+                </button>
+              );
+            }}
+          </For>
+        </Show>
+        <div class="repo-bookmark-menu-separator" />
+        <button type="button" class="repo-bookmark-menu-item" onClick={() => void createGroupForRepo()}>
+          <span>+</span>
+          <span>Create new group</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BulkMenu(props: { state: BulkMenuState; selectedCount: number; onFetch: () => void; onClose: () => void }) {
+  return (
+    <div class="repo-bookmark-overlay" onClick={props.onClose}>
+      <div class="repo-bookmark-menu" style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }} onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          class="repo-bookmark-menu-item"
+          disabled={props.selectedCount === 0}
+          onClick={() => {
+            props.onFetch();
+            props.onClose();
+          }}
+        >
+          <span>⇣</span>
+          <span>Fetch</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GroupDropZone(props: { index: number; active: boolean; highlighted: boolean; onHover: (index: number | null) => void; onDropAt: (index: number) => void }) {
+  return (
+    <div
+      class="repo-group-drop-zone"
+      classList={{ active: props.active, highlighted: props.highlighted }}
+      onDragEnter={(e) => {
+        if (!props.active) return;
+        e.preventDefault();
+        props.onHover(props.index);
+      }}
+      onDragOver={(e) => {
+        if (!props.active) return;
+        e.preventDefault();
+      }}
+      onDragLeave={() => {
+        if (props.highlighted) props.onHover(null);
+      }}
+      onDrop={(e) => {
+        if (!props.active) return;
+        e.preventDefault();
+        props.onDropAt(props.index);
+      }}
+    />
   );
 }
 
@@ -58,12 +244,77 @@ export function RepoList() {
   });
 
   const [query, setQuery] = createSignal("");
+  const [bookmarkMenu, setBookmarkMenu] = createSignal<BookmarkMenuState | null>(null);
+  const [bulkMenu, setBulkMenu] = createSignal<BulkMenuState | null>(null);
+  const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
+  const [draggedGroupId, setDraggedGroupId] = createSignal<string | null>(null);
+  const [highlightedGroupDropIndex, setHighlightedGroupDropIndex] = createSignal<number | null>(null);
+  const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
   const filtered = createMemo(() => {
     const q = query().trim().toLowerCase();
     return q ? repos().filter((r) => r.name.toLowerCase().includes(q)) : repos();
   });
+  const repoByPath = createMemo(() => new Map(repos().map((repo) => [repo.path, repo])));
   const pinned = createMemo(() => filtered().filter((r) => pinnedRepos().has(r.path)));
   const unpinned = createMemo(() => filtered().filter((r) => !pinnedRepos().has(r.path)));
+  const filteredGroups = createMemo(() => {
+    const hasQuery = query().trim().length > 0;
+    const filteredPaths = new Set(filtered().map((repo) => repo.path));
+    const byPath = repoByPath();
+    return repoGroups()
+      .map((group) => ({
+        ...group,
+        repos: group.repo_paths
+          .map((path) => byPath.get(path))
+          .filter((repo): repo is RepoSummary => repo !== undefined)
+          .filter((repo) => filteredPaths.has(repo.path)),
+      }))
+      .filter((group) => !hasQuery || group.repos.length > 0);
+  });
+
+  function openBookmarkMenu(repo: RepoSummary, x: number, y: number): void {
+    setBookmarkMenu({ repo, x, y });
+  }
+
+  function setRepoSelected(repoPath: string, selected: boolean): void {
+    const next = new Set(selectedRepoPaths());
+    if (selected) next.add(repoPath);
+    else next.delete(repoPath);
+    setSelectedRepoPaths(next);
+  }
+
+  function setGroupSelected(repoPaths: string[], selected: boolean): void {
+    const next = new Set(selectedRepoPaths());
+    for (const repoPath of repoPaths) {
+      if (selected) next.add(repoPath);
+      else next.delete(repoPath);
+    }
+    setSelectedRepoPaths(next);
+  }
+
+  function selectedCountFor(repoPaths: string[]): number {
+    const selected = selectedRepoPaths();
+    return repoPaths.filter((path) => selected.has(path)).length;
+  }
+
+  function openBulkMenu(x: number, y: number): void {
+    setBulkMenu({ x, y });
+  }
+
+  function fetchSelectedRepos(): void {
+    const byPath = repoByPath();
+    for (const repoPath of selectedRepoPaths()) {
+      const repo = byPath.get(repoPath);
+      if (repo) fetchRepo(repo.id, repo.name);
+    }
+  }
+
+  function dropGroupAt(index: number): void {
+    const fromId = draggedGroupId();
+    setDraggedGroupId(null);
+    setHighlightedGroupDropIndex(null);
+    if (fromId) void moveRepoGroupToIndex(fromId, index);
+  }
 
   return (
     <div class="repo-list">
@@ -74,15 +325,97 @@ export function RepoList() {
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
         />
+        <button
+          type="button"
+          class="repo-bulk-button"
+          title="Bulk operation"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            openBulkMenu(rect.left, rect.bottom + 4);
+          }}
+        >
+          ⋯
+        </button>
       </div>
       <Show when={pinned().length > 0}>
         <h2>Pinned</h2>
-        <For each={pinned()}>{(repo) => <RepoRow repo={repo} />}</For>
+        <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}</For>
+      </Show>
+      <For each={filteredGroups()}>
+        {(group, index) => {
+          const groupRepoPaths = () => group.repos.map((repo) => repo.path);
+          const groupSelectedCount = () => selectedCountFor(groupRepoPaths());
+          return (
+            <>
+            <GroupDropZone
+              index={index()}
+              active={draggedGroupId() !== null}
+              highlighted={highlightedGroupDropIndex() === index()}
+              onHover={setHighlightedGroupDropIndex}
+              onDropAt={dropGroupAt}
+            />
+            <section class="repo-group-section">
+            <h2
+              draggable
+              class="repo-group-heading"
+              onDragStart={(e) => {
+                if (e.dataTransfer) {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("application/x-git-juggler-group", group.id);
+                }
+                e.dataTransfer?.setData("text/plain", group.id);
+                setDraggedGroupId(group.id);
+              }}
+              onDragEnd={() => {
+                setDraggedGroupId(null);
+                setHighlightedGroupDropIndex(null);
+              }}
+            >
+              <span>{group.name}</span>
+              <GroupCheckbox
+                checked={groupRepoPaths().length > 0 && groupSelectedCount() === groupRepoPaths().length}
+                indeterminate={groupSelectedCount() > 0 && groupSelectedCount() < groupRepoPaths().length}
+                onChange={(checked) => setGroupSelected(groupRepoPaths(), checked)}
+              />
+            </h2>
+            <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
+              {(repo) => (
+                <RepoRow
+                  repo={repo}
+                  groupId={group.id}
+                  selected={selectedRepoPaths().has(repo.path)}
+                  onSelectedChange={setRepoSelected}
+                  disableRepoDrag={draggedGroupId() !== null}
+                  onBookmarkClick={openBookmarkMenu}
+                  onRepoDragStart={setDraggedRepoPath}
+                  onRepoDrop={(toRepoPath) => {
+                    const fromRepoPath = draggedRepoPath();
+                    setDraggedRepoPath(null);
+                    if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
+                  }}
+                />
+              )}
+            </For>
+            </section>
+            </>
+          );
+        }}
+      </For>
+      <Show when={filteredGroups().length > 0}>
+        <GroupDropZone
+          index={filteredGroups().length}
+          active={draggedGroupId() !== null}
+          highlighted={highlightedGroupDropIndex() === filteredGroups().length}
+          onHover={setHighlightedGroupDropIndex}
+          onDropAt={dropGroupAt}
+        />
       </Show>
       <h2>Repositories</h2>
       <For each={unpinned()} fallback={<div class="repo-empty">No git repos found</div>}>
-        {(repo) => <RepoRow repo={repo} />}
+        {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}
       </For>
+      <Show when={bookmarkMenu()}>{(state) => <BookmarkMenu state={state()} onClose={() => setBookmarkMenu(null)} />}</Show>
+      <Show when={bulkMenu()}>{(state) => <BulkMenu state={state()} selectedCount={selectedRepoPaths().size} onFetch={fetchSelectedRepos} onClose={() => setBulkMenu(null)} />}</Show>
     </div>
   );
 }
