@@ -21,7 +21,9 @@ import {
   loadActiveTabGraph,
   menuOpen,
   pollRepoStatus,
+  setSidebarWidth,
   setTerminalHeight,
+  sidebarWidth,
   tabs,
   terminalHeight,
   terminalOpen,
@@ -79,6 +81,21 @@ function App() {
     window.addEventListener("mouseup", onUp);
   };
 
+  const startSidebarResize = (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth();
+    const onMove = (ev: MouseEvent) => {
+      setSidebarWidth(startWidth + (ev.clientX - startX));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
   return (
     <div class="app">
       <MainMenu />
@@ -89,9 +106,10 @@ function App() {
       <DeleteTagModal />
       <RepoContextMenu />
       <TagContextMenu />
-      <aside class="sidebar">
+      <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
         <RepoList />
       </aside>
+      <div class="sidebar-resize-handle" onMouseDown={startSidebarResize} />
       <main class="main">
         <Show when={tabs().length > 0}>
           <div class="main-header">

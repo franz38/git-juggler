@@ -99,6 +99,34 @@ export { repos, tabs, activeRepo };
 
 // --- Repos sidebar -------------------------------------------------------
 
+const SIDEBAR_WIDTH_KEY = "git-juggler:sidebarWidth";
+export const SIDEBAR_DEFAULT_WIDTH = 250;
+export const SIDEBAR_MIN_WIDTH = 120;
+export const SIDEBAR_MAX_WIDTH = 400;
+
+function loadSidebarWidth(): number {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n)) : SIDEBAR_DEFAULT_WIDTH;
+  } catch {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+}
+
+const [sidebarWidth, setSidebarWidthSignal] = createSignal(loadSidebarWidth());
+export { sidebarWidth };
+
+export function setSidebarWidth(width: number): void {
+  const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+  setSidebarWidthSignal(clamped);
+  try {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+  } catch {
+    // Not critical — the size just won't survive a reload.
+  }
+}
+
 export async function loadRepos(): Promise<void> {
   try {
     setRepos(await fetchRepos());
@@ -673,7 +701,7 @@ export async function removeRepoPath(path: string): Promise<void> {
 // whichever repo's terminal is relevant, without owning the WebSocket.
 
 const TERMINAL_HEIGHT_KEY = "git-juggler:terminalHeight";
-export const TERMINAL_MIN_HEIGHT = 160;
+export const TERMINAL_MIN_HEIGHT = 26;
 
 function loadTerminalHeight(): number {
   try {

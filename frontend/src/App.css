@@ -395,12 +395,25 @@
 }
 
 .sidebar {
-  width: 220px;
+  width: 250px;
   flex: 0 0 auto;
   background: var(--panel-bg);
   border-right: 1px solid var(--border);
   overflow-y: auto;
   user-select: none;
+}
+
+.sidebar-resize-handle {
+  flex: 0 0 5px;
+  margin-left: -3px;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 .repo-search {
@@ -1299,11 +1312,13 @@
 }
 
 .terminal-header {
-  padding: 6px 16px;
+  height: 26px;
+  padding: 0 16px;
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   user-select: none;
 }
