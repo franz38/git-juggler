@@ -1,6 +1,8 @@
 import { For, Show, createEffect, onCleanup, onMount } from "solid-js";
 import "./App.css";
 import { GraphPanel } from "./components/Graph/GraphPanel";
+import { DeleteBranchModal } from "./components/Branches/DeleteBranchModal";
+import { BranchContextMenu } from "./components/ContextMenu/BranchContextMenu";
 import { CommitContextMenu } from "./components/ContextMenu/CommitContextMenu";
 import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
@@ -78,8 +80,10 @@ function App() {
   return (
     <div class="app">
       <MainMenu />
+      <BranchContextMenu />
       <CommitContextMenu />
       <CreateTagModal />
+      <DeleteBranchModal />
       <RepoContextMenu />
       <aside class="sidebar">
         <RepoList />

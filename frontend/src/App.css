@@ -221,6 +221,38 @@
   color: var(--text-h);
 }
 
+.branch-delete-modal {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  padding: 20px 24px;
+}
+
+.branch-delete-modal h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.modal-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.menu-primary-button.danger {
+  border-color: #ff5630;
+  color: #ffb4a8;
+}
+
 .menu-subheading {
   margin: 16px 0 8px;
   font-size: 12px;
@@ -1079,6 +1111,10 @@
   border-radius: 999px;
   border: 1px solid;
   white-space: nowrap;
+}
+
+.branch-badge.remote {
+  border-style: dashed;
 }
 
 .badge-icon {

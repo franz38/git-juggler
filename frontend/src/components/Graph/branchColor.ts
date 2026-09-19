@@ -25,15 +25,21 @@ function hashString(input: string): number {
   return hash;
 }
 
+function colorKeyForBranch(name: string): string {
+  const slash = name.indexOf("/");
+  return slash > 0 && slash < name.length - 1 ? name.slice(slash + 1) : name;
+}
+
 export function colorForBranch(name: string): string {
+  const colorKey = colorKeyForBranch(name);
   if (branchColorMode() === "sequential") {
-    const existing = sequentialColorByBranch.get(name);
+    const existing = sequentialColorByBranch.get(colorKey);
     if (existing) return existing;
     const color = BRANCH_PALETTE[sequentialColorByBranch.size % BRANCH_PALETTE.length];
-    sequentialColorByBranch.set(name, color);
+    sequentialColorByBranch.set(colorKey, color);
     return color;
   }
 
-  const index = hashString(name) % BRANCH_PALETTE.length;
+  const index = hashString(colorKey) % BRANCH_PALETTE.length;
   return BRANCH_PALETTE[index];
 }

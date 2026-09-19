@@ -7,6 +7,7 @@ import {
   expandedHashes,
   githubActionsRuns,
   matchingHashes,
+  openBranchContextMenu,
   openContextMenu,
   reportRowHeight,
   toggleExpand,
@@ -25,6 +26,11 @@ export function CommitRow(props: { commit: CommitSummary }) {
   const openRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     openContextMenu(e.clientX, e.clientY, props.commit.hash);
+  };
+  const openBranchMenu = (name: string, remote: boolean) => (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openBranchContextMenu(e.clientX, e.clientY, name, remote);
   };
 
   // The graph SVG stacks its dots using each row's real rendered height
@@ -51,7 +57,8 @@ export function CommitRow(props: { commit: CommitSummary }) {
         onClick={() => toggleExpand(props.commit.hash)}
       >
         <span class="commit-refs">
-          <For each={props.commit.refs.branches}>{(b) => <BranchBadge name={b} />}</For>
+          <For each={props.commit.refs.branches}>{(b) => <BranchBadge name={b} onContextMenu={openBranchMenu(b, false)} />}</For>
+          <For each={props.commit.refs.remote_branches}>{(b) => <BranchBadge name={b} remote onContextMenu={openBranchMenu(b, true)} />}</For>
           <For each={props.commit.refs.tags}>{(t) => <TagBadge name={t} />}</For>
           <For each={props.commit.refs.stashes}>{(s) => <StashBadge name={s} />}</For>
           <Show when={actionsRuns().length > 0}>

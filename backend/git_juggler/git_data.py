@@ -123,6 +123,7 @@ def get_graph(
 ) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange], list[str]]:
     repo = Repo(repo_path)
     heads = list(repo.heads)
+    remote_refs = [ref for remote in repo.remotes for ref in remote.refs]
     tags = list(repo.tags)
     current_branch = get_current_branch(repo)
     checked_out_branches = get_worktree_branches(repo)
@@ -146,6 +147,12 @@ def get_graph(
     for h in heads:
         branches_by_commit.setdefault(h.commit.hexsha, []).append(h.name)
 
+    remote_branches_by_commit: dict[str, list[str]] = {}
+    for ref in remote_refs:
+        if ref.remote_head == "HEAD":
+            continue
+        remote_branches_by_commit.setdefault(ref.commit.hexsha, []).append(ref.name)
+
     stash_infos = _stash_infos(repo)
     stashes_by_commit: dict[str, list[str]] = {}
     for stash in stash_infos:
@@ -155,7 +162,8 @@ def get_graph(
     # Walk history reachable from branches and tags, then explicitly add stash
     # commits as side nodes. We still avoid `--all` so remote-tracking branches
     # do not silently expand the local graph.
-    raw_commits = list(repo.iter_commits(branches=True, tags=True, topo_order=True, reverse=True))
+    revs = [h.name for h in heads] + [t.name for t in tags] + [ref.name for ref in remote_refs if ref.remote_head != "HEAD"]
+    raw_commits = list(repo.iter_commits(revs, topo_order=True, reverse=True)) if revs else []
     commits_by_sha = {c.hexsha: c for c in raw_commits}
     stash_commits = []
     for stash in stash_infos:
@@ -195,6 +203,15 @@ def get_graph(
             parents = parents_map.get(sha, [])
             sha = parents[0] if parents else None
 
+    for ref in sorted(remote_refs, key=lambda ref: -ref.commit.committed_date):
+        if ref.remote_head == "HEAD":
+            continue
+        sha: str | None = ref.commit.hexsha
+        while sha is not None and sha not in owner and sha in commits_by_sha:
+            owner[sha] = ref.name
+            parents = parents_map.get(sha, [])
+            sha = parents[0] if parents else None
+
     for stash in stash_infos:
         owner[stash.sha] = stash.ref
 
@@ -226,6 +243,7 @@ def get_graph(
                 branch=owner.get(sha, "unknown"),
                 refs=RefsInfo(
                     branches=branches_by_commit.get(sha, []),
+                    remote_branches=remote_branches_by_commit.get(sha, []),
                     tags=tags_by_commit.get(sha, []),
                     stashes=stashes_by_commit.get(sha, []),
                 ),

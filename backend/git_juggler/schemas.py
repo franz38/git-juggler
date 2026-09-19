@@ -41,6 +41,7 @@ class PersonInfo(BaseModel):
 
 class RefsInfo(BaseModel):
     branches: list[str] = []
+    remote_branches: list[str] = []
     tags: list[str] = []
     stashes: list[str] = []
 

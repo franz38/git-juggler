@@ -36,6 +36,7 @@ export interface PersonInfo {
 
 export interface RefsInfo {
   branches: string[];
+  remote_branches: string[];
   tags: string[];
   stashes: string[];
 }

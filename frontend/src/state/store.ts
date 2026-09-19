@@ -881,6 +881,40 @@ export function closeContextMenu(): void {
   setContextMenu(null);
 }
 
+// --- Branch context menu / delete modal -----------------------------------
+
+export interface BranchContextMenuState {
+  x: number;
+  y: number;
+  name: string;
+  remote: boolean;
+}
+
+export interface DeleteBranchModalState {
+  name: string;
+  remote: boolean;
+}
+
+const [branchContextMenu, setBranchContextMenu] = createSignal<BranchContextMenuState | null>(null);
+const [deleteBranchModal, setDeleteBranchModal] = createSignal<DeleteBranchModalState | null>(null);
+export { branchContextMenu, deleteBranchModal };
+
+export function openBranchContextMenu(x: number, y: number, name: string, remote: boolean): void {
+  setBranchContextMenu({ x, y, name, remote });
+}
+
+export function closeBranchContextMenu(): void {
+  setBranchContextMenu(null);
+}
+
+export function openDeleteBranchModal(target: DeleteBranchModalState): void {
+  setDeleteBranchModal(target);
+}
+
+export function closeDeleteBranchModal(): void {
+  setDeleteBranchModal(null);
+}
+
 // --- Repo context menu ---------------------------------------------------
 
 export interface RepoContextMenuState {
