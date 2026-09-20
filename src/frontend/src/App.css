@@ -564,10 +564,11 @@
   fill: currentColor;
 }
 
-.repo-group-heading {
+.repo-list .repo-group-heading {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 8px 16px;
   cursor: grab;
   overflow: hidden;
   box-sizing: border-box;
