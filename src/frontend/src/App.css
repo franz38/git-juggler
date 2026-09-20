@@ -569,7 +569,6 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  cursor: grab;
   overflow: hidden;
   box-sizing: border-box;
   transition: height 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
@@ -582,9 +581,18 @@
 .repo-group-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  margin: -8px 0;
+  padding: 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: grab;
+}
+
+.repo-group-name:active {
+  cursor: grabbing;
 }
 
 .repo-group-collapse {
@@ -624,10 +632,6 @@
 
 .repo-group-select {
   margin: 0;
-}
-
-.repo-group-heading:active {
-  cursor: grabbing;
 }
 
 .repo-group-heading.dragging {

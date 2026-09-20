@@ -413,18 +413,8 @@ export function RepoList() {
               >
               <h2
                 ref={(el) => groupHeadingElements.set(group.id, el)}
-                draggable={true}
                 class="repo-group-heading"
                 classList={{ dragging: draggedGroupId() === group.id }}
-                onDragStart={(e) => {
-                  setDraggedGroupId(group.id);
-                  if (e.dataTransfer) {
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("application/x-git-juggler-group", group.id);
-                  }
-                  e.dataTransfer?.setData("text/plain", group.id);
-                  suppressDragImage(e);
-                }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -436,9 +426,23 @@ export function RepoList() {
                   e.stopPropagation();
                   clearGroupDrag();
                 }}
-                onDragEnd={clearGroupDrag}
               >
-                <span class="repo-group-name">{group.name}</span>
+                <span
+                  class="repo-group-name"
+                  draggable={true}
+                  onDragStart={(e) => {
+                    setDraggedGroupId(group.id);
+                    if (e.dataTransfer) {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("application/x-git-juggler-group", group.id);
+                    }
+                    e.dataTransfer?.setData("text/plain", group.id);
+                    suppressDragImage(e);
+                  }}
+                  onDragEnd={clearGroupDrag}
+                >
+                  {group.name}
+                </span>
                 <button
                   type="button"
                   class="repo-group-collapse"
