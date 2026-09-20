@@ -1,6 +1,5 @@
 import { For, Show, createSignal } from "solid-js";
 import { flipTranslate } from "../../lib/flip";
-import { suppressDragImage } from "../../lib/dragImage";
 import { activateTab, activeRepo, closeTab, moveTab, openRepoContextMenu, pinTab, repoCurrentBranch, tabs } from "../../state/store";
 
 export function TabsBar() {
@@ -97,7 +96,6 @@ export function TabsBar() {
               if (e.dataTransfer) {
                 e.dataTransfer.effectAllowed = "move";
               }
-              suppressDragImage(e);
             }}
             onDragOver={(e) => {
               e.preventDefault();

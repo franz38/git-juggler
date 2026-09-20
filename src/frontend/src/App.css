@@ -634,6 +634,14 @@
   opacity: 0.45;
 }
 
+.repo-group-section {
+  transition: background-color 150ms ease;
+}
+
+.repo-group-section.dragging {
+  background: rgba(0, 0, 0, 0.15);
+}
+
 .repo-bookmark-overlay {
   position: fixed;
   inset: 0;

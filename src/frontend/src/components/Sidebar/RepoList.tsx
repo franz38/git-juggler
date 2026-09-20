@@ -407,7 +407,7 @@ export function RepoList() {
             const groupRepoPaths = () => group.repos.map((repo) => repo.path);
             const groupSelectedCount = () => selectedCountFor(groupRepoPaths());
             return (
-              <section class="repo-group-section">
+              <section class="repo-group-section" classList={{ dragging: draggedGroupId() === group.id }}>
               <h2
                 ref={(el) => groupHeadingElements.set(group.id, el)}
                 draggable={true}
