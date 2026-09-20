@@ -635,6 +635,7 @@
 }
 
 .repo-group-section {
+  padding-top: 4px;
   padding-bottom: 8px;
   transition: background-color 150ms ease;
 }
