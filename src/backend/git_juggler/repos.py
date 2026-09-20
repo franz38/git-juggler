@@ -31,6 +31,13 @@ def resolve_repo_path(roots: list[Path], repo_id: str) -> Path | None:
     return None
 
 
+def _repository_id(repo_path: Path, repo: Repo) -> str:
+    common_git_dir = Path(repo.git.rev_parse("--git-common-dir"))
+    if not common_git_dir.is_absolute():
+        common_git_dir = repo_path / common_git_dir
+    return str(common_git_dir.resolve())
+
+
 def list_repos(roots: list[Path]) -> list[RepoSummary]:
     """Scan the immediate children of each root for git repos. No recursion."""
     repos: list[RepoSummary] = []
@@ -46,14 +53,18 @@ def list_repos(roots: list[Path]) -> list[RepoSummary]:
                 if not (path / ".git").exists():
                     continue
                 try:
-                    current_branch = get_current_branch(Repo(path))
+                    repo = Repo(path)
+                    current_branch = get_current_branch(repo)
+                    repository_id = _repository_id(path, repo)
                 except Exception:
                     current_branch = None
+                    repository_id = str((path / ".git").resolve())
                 repos.append(
                     RepoSummary(
                         id=f"{key}::{entry.name}",
                         name=entry.name,
                         path=str(path.resolve()),
+                        repository_id=repository_id,
                         current_branch=current_branch,
                     )
                 )

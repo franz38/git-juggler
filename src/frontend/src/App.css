@@ -445,6 +445,166 @@
   padding: 10px 16px 4px;
 }
 
+.agent-activity-panel {
+  margin: 10px 10px 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(76, 154, 255, 0.06);
+}
+
+.agent-activity-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-scan-time {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.agent-discovery-row {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.agent-refresh-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.agent-refresh-row button {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 24px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #0d1117;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 9px;
+  cursor: pointer;
+}
+
+.agent-refresh-row button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.agent-poll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.agent-poll-toggle input {
+  accent-color: var(--accent);
+}
+
+.agent-error {
+  margin-top: 8px;
+  color: #ffb4b4;
+  font-size: 11px;
+}
+
+.agent-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.agent-summary,
+.agent-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.agent-worktree-card {
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+}
+
+.agent-scan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-scan-title {
+  color: var(--text-h);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-command {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-session-directory {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-worktree-title {
+  overflow: hidden;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-worktree-meta {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-evidence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.agent-evidence-pill {
+  padding: 1px 5px;
+  border: 1px solid rgba(76, 154, 255, 0.35);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 9px;
+}
+
 .repo-search input {
   flex: 1;
   min-width: 0;
@@ -523,6 +683,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.repo-name-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.repo-agent-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(76, 154, 255, 0.18);
 }
 
 .repo-branch {
@@ -827,6 +1003,10 @@
   font-size: 12px;
   min-width: 14px;
   text-align: center;
+}
+
+.agent-active-marker {
+  pointer-events: none;
 }
 
 .filter-button {

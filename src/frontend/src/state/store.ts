@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import { fetchAgentActivity, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
+import type { AgentActivityResponse, AgentWorktreeActivity, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -142,6 +142,86 @@ export async function loadRepos(): Promise<void> {
 const [pinnedRepos, setPinnedRepos] = createSignal<Set<string>>(new Set());
 const [repoGroups, setRepoGroups] = createSignal<RepoGroupConfig[]>([]);
 export { pinnedRepos, repoGroups };
+
+const AGENTS_ENABLED_KEY = "git-juggler:agentsEnabled";
+
+function loadAgentsEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(AGENTS_ENABLED_KEY);
+    return raw === null ? false : raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+const [agentsEnabled, setAgentsEnabledSignal] = createSignal(loadAgentsEnabled());
+export { agentsEnabled };
+
+const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
+const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
+const [agentActivityError, setAgentActivityError] = createSignal<string | null>(null);
+const [agentActivityPolling, setAgentActivityPolling] = createSignal(true);
+export { agentActivity, agentActivityLoading, agentActivityError, agentActivityPolling };
+
+// When disabled, no agent data is fetched (refreshAgentActivity below
+// no-ops) or shown (AgentActivityPanel isn't rendered at all) anywhere.
+export function setAgentsEnabled(enabled: boolean): void {
+  setAgentsEnabledSignal(enabled);
+  try {
+    localStorage.setItem(AGENTS_ENABLED_KEY, String(enabled));
+  } catch {
+    // Not critical — the setting just won't survive a reload.
+  }
+  if (!enabled) {
+    setAgentActivity(null);
+    setAgentActivityError(null);
+  }
+}
+
+export const agentActivityByWorktreePath = createMemo<Map<string, AgentWorktreeActivity>>(() => {
+  const byPath = new Map<string, AgentWorktreeActivity>();
+  for (const scan of agentActivity()?.scans ?? []) {
+    for (const activity of scan.worktrees) {
+      const existing = byPath.get(activity.worktree_path);
+      if (!existing || activity.last_activity > existing.last_activity) {
+        byPath.set(activity.worktree_path, activity);
+      }
+    }
+  }
+  return byPath;
+});
+
+export const agentActivityByRepositoryId = createMemo<Map<string, AgentWorktreeActivity[]>>(() => {
+  const byRepository = new Map<string, AgentWorktreeActivity[]>();
+  for (const scan of agentActivity()?.scans ?? []) {
+    for (const activity of scan.worktrees) {
+      const items = byRepository.get(activity.repository_id) ?? [];
+      items.push(activity);
+      byRepository.set(activity.repository_id, items);
+    }
+  }
+  for (const items of byRepository.values()) {
+    items.sort((a, b) => b.last_activity - a.last_activity);
+  }
+  return byRepository;
+});
+
+export function setAgentActivityPollingEnabled(enabled: boolean): void {
+  setAgentActivityPolling(enabled);
+}
+
+export async function refreshAgentActivity(): Promise<void> {
+  if (!agentsEnabled() || agentActivityLoading()) return;
+  setAgentActivityLoading(true);
+  setAgentActivityError(null);
+  try {
+    setAgentActivity(await fetchAgentActivity());
+  } catch (e) {
+    setAgentActivityError((e as Error).message);
+  } finally {
+    setAgentActivityLoading(false);
+  }
+}
 
 function updateGroupsFromConfig(groups: RepoGroupConfig[]): void {
   setRepoGroups(groups.map((group) => ({ ...group, repo_paths: [...group.repo_paths] })));

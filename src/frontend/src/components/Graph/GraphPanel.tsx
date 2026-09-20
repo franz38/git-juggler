@@ -1,7 +1,9 @@
 import { For, createMemo } from "solid-js";
+import type { AgentWorktreeActivity } from "../../api/types";
 import {
   COLLAPSED_ROW_HEIGHT,
   activeRepo,
+  agentActivityByRepositoryId,
   checkedOutBranches,
   ciRuns,
   currentBranch,
@@ -12,6 +14,7 @@ import {
   openContextMenu,
   pushingTargetCommits,
   pushingRepos,
+  repos,
   rowLayout,
   toggleExpand,
   uncommittedRowHeight,
@@ -28,6 +31,7 @@ const GHOST_ROW_HEIGHT = COLLAPSED_ROW_HEIGHT;
 const GHOST_RADIUS = 5;
 const DIRTY_COLOR = "#8993A4";
 const CI_ACTIVE_COLOR = "#4c9aff";
+const AGENT_ACTIVE_COLOR = "#b57cff";
 
 interface Edge {
   key: string;
@@ -56,6 +60,25 @@ function horizontalFirstPath(x1: number, y1: number, x2: number, y2: number): st
   return `M ${x1},${y1} L ${x2 - sign * radius},${y1} Q ${x2},${y1} ${x2},${y1 + radius} L ${x2},${y2}`;
 }
 
+function formatAgentTooltip(activities: AgentWorktreeActivity[] | undefined): string {
+  if (!activities?.length) return "Agent activity";
+  const processCount = activities.reduce((sum, activity) => sum + activity.process_ids.length, 0);
+  return [
+    `Agent activity: ${processCount} process(es)`,
+    ...activities.map((activity) => {
+      const evidenceTypes = [...new Set(activity.evidence.map((evidence) => evidence.type))].join(", ") || "none";
+      return [
+        `Worktree: ${activity.worktree_path}`,
+        `Branch: ${activity.branch ?? "detached"}`,
+        `Commit: ${activity.commit.slice(0, 7)}`,
+        `PIDs: ${activity.process_ids.join(", ") || "none"}`,
+        `Score: ${activity.activity_score}`,
+        `Evidence: ${evidenceTypes}`,
+      ].join("\n");
+    }),
+  ].join("\n\n");
+}
+
 export function GraphPanel() {
   const chronological = createMemo(() => filteredCommits());
   const lanes = createMemo(() => computeColumns(chronological(), currentBranch(), checkedOutBranches()));
@@ -66,6 +89,19 @@ export function GraphPanel() {
       if (runs.some((run) => run.status === "running")) hashes.add(hash);
     }
     return hashes;
+  });
+  const agentActivitiesByHash = createMemo(() => {
+    const repoId = activeRepo();
+    const repo = repoId ? repos().find((item) => item.id === repoId) : undefined;
+    const byHash = new Map<string, AgentWorktreeActivity[]>();
+    if (!repo) return byHash;
+    for (const activity of agentActivityByRepositoryId().get(repo.repository_id) ?? []) {
+      if (!commitByHash().has(activity.commit)) continue;
+      const items = byHash.get(activity.commit) ?? [];
+      items.push(activity);
+      byHash.set(activity.commit, items);
+    }
+    return byHash;
   });
 
   const isFetching = createMemo(() => {
@@ -247,8 +283,10 @@ export function GraphPanel() {
         <For each={rowLayout().order}>
           {(c) => {
             const isCheckedOut = () => headCommit() === c.hash;
+            const agentActivities = () => agentActivitiesByHash().get(c.hash);
             return (
               <g>
+                {agentActivities()?.length && <title>{formatAgentTooltip(agentActivities())}</title>}
                 <circle
                   cx={xFor(c.hash)}
                   cy={yFor(c.hash)}
@@ -272,6 +310,13 @@ export function GraphPanel() {
                   <circle class="ci-active-dot" cx={xFor(c.hash) + DOT_RADIUS + 4} cy={yFor(c.hash)} r="2" fill={CI_ACTIVE_COLOR}>
                     <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                   </circle>
+                )}
+                {agentActivities()?.length && (
+                  <g class="agent-active-marker">
+                    <circle cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 7} fill="none" stroke={AGENT_ACTIVE_COLOR} stroke-width="2" stroke-dasharray="4 3">
+                      <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="1.4s" repeatCount="indefinite" />
+                    </circle>
+                  </g>
                 )}
                 {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={TAG_COLOR} />}
               </g>

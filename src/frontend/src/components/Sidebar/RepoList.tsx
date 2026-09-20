@@ -4,6 +4,9 @@ import { flipTranslate } from "../../lib/flip";
 import { suppressDragImage } from "../../lib/dragImage";
 import {
   activeRepo,
+  agentActivityByRepositoryId,
+  agentActivityByWorktreePath,
+  agentsEnabled,
   createRepoGroup,
   fetchRepo,
   loadConfig,
@@ -19,6 +22,7 @@ import {
   setRepoInGroup,
   setRepoPinned,
 } from "../../state/store";
+import { AgentActivityPanel } from "../Agents/AgentActivityPanel";
 
 interface BookmarkMenuState {
   repo: RepoSummary;
@@ -58,6 +62,7 @@ function RepoRow(props: {
   disableRepoDrag?: boolean;
 }) {
   const isPinned = () => pinnedRepos().has(props.repo.path);
+  const agentActivity = () => agentActivityByWorktreePath().get(props.repo.path) ?? agentActivityByRepositoryId().get(props.repo.repository_id)?.[0];
 
   return (
     <div
@@ -104,7 +109,12 @@ function RepoRow(props: {
         <BookmarkIcon />
       </button>
       <span class="repo-names">
-        <span class="repo-name">{props.repo.name}</span>
+        <span class="repo-name-line">
+          <span class="repo-name">{props.repo.name}</span>
+          <Show when={agentActivity()}>
+            {(activity) => <span class="repo-agent-dot" title={`Agent activity: ${activity().process_ids.length} process(es)`} />}
+          </Show>
+        </span>
         <Show when={props.repo.current_branch}>
           <span class="repo-branch">{props.repo.current_branch}</span>
         </Show>
@@ -367,6 +377,9 @@ export function RepoList() {
 
   return (
     <div class="repo-list">
+      <Show when={agentsEnabled()}>
+        <AgentActivityPanel />
+      </Show>
       <div class="repo-search">
         <input
           type="text"

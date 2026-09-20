@@ -7,6 +7,7 @@ class RepoSummary(BaseModel):
     id: str
     name: str
     path: str
+    repository_id: str
     current_branch: str | None = None
 
 
@@ -135,3 +136,58 @@ class CiRunInfo(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     duration_ms: int | None = None
+
+
+class AgentProcessInfo(BaseModel):
+    pid: int
+    parent_pid: int | None = None
+    executable: str | None = None
+    command_line: str | None = None
+    arguments: list[str] | None = None
+    open_files: list[str] | None = None
+    cwd: str | None = None
+
+
+class AgentActivityEvidence(BaseModel):
+    type: str
+    pid: int | None = None
+    cwd: str | None = None
+    path: str | None = None
+    executable: str | None = None
+    command: str | None = None
+    process_role: str | None = None
+    tool: str | None = None
+    score: int = 0
+
+
+class AgentWorktreeActivityResponse(BaseModel):
+    repository_id: str
+    worktree_path: str
+    branch: str | None = None
+    commit: str
+    process_ids: list[int]
+    first_seen: int
+    last_seen: int
+    last_activity: int
+    evidence: list[AgentActivityEvidence] = Field(default_factory=list)
+    activity_score: int = 0
+
+
+class AgentRepositoryScanResponse(BaseModel):
+    agent_pid: int
+    session_directory: str | None = None
+    processes: list[AgentProcessInfo]
+    worktrees: list[AgentWorktreeActivityResponse]
+    scanned_at: int
+
+
+class AgentProcessCandidateResponse(BaseModel):
+    pid: int
+    command_line: str
+    matched_pattern: str
+
+
+class AgentActivityResponse(BaseModel):
+    agents: list[AgentProcessCandidateResponse]
+    scans: list[AgentRepositoryScanResponse]
+    scanned_at: int

@@ -8,17 +8,21 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from .agent_tracking import AgentRepositoryTracker
+from .agent_tracking.agent_process_discovery import AgentProcessDiscovery
+from .agent_tracking.agent_repository_tracker import AgentRepositoryScan
 from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .repos import list_repos, resolve_repo_path
-from .schemas import CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
+from .schemas import AgentActivityResponse, AgentRepositoryScanResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
 from .terminal import run_terminal_session
 
 
 def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     app = FastAPI(title="git-juggler")
     app.state.root_path = root_path
+    app.state.agent_trackers = {}
     config.ensure_seeded(root_path)
 
     # Only needed for local dev, when the Vite dev server (a different origin)
@@ -121,6 +125,54 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         path = _resolve_repo_path(repo_id)
         commits, _, _, _, _, _, _, _ = get_graph(path)
         return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
+
+    def _agent_scan_response(scan: AgentRepositoryScan) -> AgentRepositoryScanResponse:
+        return AgentRepositoryScanResponse(
+            agent_pid=scan.agent_pid,
+            session_directory=scan.session_directory,
+            processes=[process.__dict__ for process in scan.processes],
+            worktrees=[
+                {
+                    "repository_id": activity.repository_id,
+                    "worktree_path": activity.worktree_path,
+                    "branch": activity.branch,
+                    "commit": activity.commit,
+                    "process_ids": activity.process_ids,
+                    "first_seen": activity.first_seen,
+                    "last_seen": activity.last_seen,
+                    "last_activity": activity.last_activity,
+                    "evidence": [evidence.__dict__ for evidence in activity.evidence],
+                    "activity_score": activity.activity_score,
+                }
+                for activity in scan.worktrees
+            ],
+            scanned_at=scan.scanned_at,
+        )
+
+    def _tracker_for_agent(agent_pid: int) -> AgentRepositoryTracker:
+        trackers: dict[int, AgentRepositoryTracker] = app.state.agent_trackers
+        tracker = trackers.get(agent_pid)
+        if tracker is None:
+            tracker = AgentRepositoryTracker()
+            trackers[agent_pid] = tracker
+        return tracker
+
+    @app.get("/api/agents/{agent_pid}/worktrees", response_model=AgentRepositoryScanResponse)
+    def api_agent_worktrees(agent_pid: int) -> AgentRepositoryScanResponse:
+        if agent_pid <= 0:
+            raise HTTPException(status_code=400, detail="agent pid must be positive")
+        return _agent_scan_response(_tracker_for_agent(agent_pid).scan(agent_pid))
+
+    @app.get("/api/agents/activity", response_model=AgentActivityResponse)
+    def api_agent_activity() -> AgentActivityResponse:
+        agents = AgentProcessDiscovery().discover()
+        scans = [_agent_scan_response(_tracker_for_agent(agent.pid).scan(agent.pid)) for agent in agents]
+        scanned_at = max((scan.scanned_at for scan in scans), default=0)
+        return AgentActivityResponse(
+            agents=[agent.__dict__ for agent in agents],
+            scans=scans,
+            scanned_at=scanned_at,
+        )
 
     @app.websocket("/ws/terminal")
     async def ws_terminal(websocket: WebSocket) -> None:

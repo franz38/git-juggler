@@ -2,6 +2,7 @@ export interface RepoSummary {
   id: string;
   name: string;
   path: string;
+  repository_id: string;
   current_branch: string | null;
 }
 
@@ -134,4 +135,59 @@ export interface CiRunInfo {
   created_at: string | null;
   updated_at: string | null;
   duration_ms: number | null;
+}
+
+export interface AgentProcessInfo {
+  pid: number;
+  parent_pid: number | null;
+  executable: string | null;
+  command_line: string | null;
+  arguments: string[] | null;
+  open_files: string[] | null;
+  cwd: string | null;
+}
+
+export interface AgentActivityEvidence {
+  type: "process-cwd" | "git-process" | "child-process" | string;
+  pid: number | null;
+  cwd: string | null;
+  path: string | null;
+  executable: string | null;
+  command: string | null;
+  process_role: "root" | "direct-child" | "descendant" | string | null;
+  tool: string | null;
+  score: number;
+}
+
+export interface AgentWorktreeActivity {
+  repository_id: string;
+  worktree_path: string;
+  branch: string | null;
+  commit: string;
+  process_ids: number[];
+  first_seen: number;
+  last_seen: number;
+  last_activity: number;
+  evidence: AgentActivityEvidence[];
+  activity_score: number;
+}
+
+export interface AgentRepositoryScan {
+  agent_pid: number;
+  session_directory: string | null;
+  processes: AgentProcessInfo[];
+  worktrees: AgentWorktreeActivity[];
+  scanned_at: number;
+}
+
+export interface AgentProcessCandidate {
+  pid: number;
+  command_line: string;
+  matched_pattern: string;
+}
+
+export interface AgentActivityResponse {
+  agents: AgentProcessCandidate[];
+  scans: AgentRepositoryScan[];
+  scanned_at: number;
 }

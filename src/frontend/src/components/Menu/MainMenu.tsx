@@ -2,6 +2,7 @@ import { For, Index, Show, createEffect, createSignal } from "solid-js";
 import type { GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
   addRepoPath,
+  agentsEnabled,
   branchColorMode,
   closeMenu,
   excludedPaths,
@@ -17,13 +18,14 @@ import {
   saveExcludedPaths,
   saveGitHubConfig,
   saveJenkinsConfig,
+  setAgentsEnabled,
   setBranchColorMode,
   setTheme,
   theme,
 } from "../../state/store";
 import type { BranchColorMode, Theme } from "../../state/store";
 
-type Section = "repos" | "github" | "jenkins" | "appearance";
+type Section = "repos" | "github" | "jenkins" | "appearance" | "agents";
 
 const emptyGitHubConfig: GitHubConfig = {
   enabled: true,
@@ -183,6 +185,13 @@ export function MainMenu() {
               onClick={() => setActiveSection("jenkins")}
             >
               Jenkins
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "agents" }}
+              onClick={() => setActiveSection("agents")}
+            >
+              Agents
             </div>
           </div>
           <div class="menu-content">
@@ -427,6 +436,25 @@ export function MainMenu() {
               <Show when={jenkinsConfigError()}>
                 <div class="menu-error">{jenkinsConfigError()}</div>
               </Show>
+            </Show>
+            <Show when={activeSection() === "agents"}>
+              <h3>Agents</h3>
+              <p class="menu-hint">
+                Detects local coding-agent processes (Claude Code, opencode) and the worktrees they're active in, shown as badges in
+                the sidebar and commit graph.
+              </p>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable agent activity detection</span>
+                  <span class="menu-hint">When disabled, no agent data is fetched or shown anywhere in the app.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={agentsEnabled()}
+                  onChange={(e) => setAgentsEnabled(e.currentTarget.checked)}
+                />
+              </label>
             </Show>
             <Show when={activeSection() === "appearance"}>
               <h3>Appearance</h3>
