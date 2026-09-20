@@ -1,7 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { RepoSummary } from "../../api/types";
 import { flipTranslate } from "../../lib/flip";
-import { suppressDragImage } from "../../lib/dragImage";
 import {
   activeRepo,
   agentActivityByRepositoryId,
@@ -57,34 +56,44 @@ function RepoRow(props: {
   selected: boolean;
   onSelectedChange: (repoPath: string, selected: boolean) => void;
   onBookmarkClick: (repo: RepoSummary, x: number, y: number) => void;
-  onRepoDragStart?: (repoPath: string) => void;
-  onRepoDrop?: (repoPath: string) => void;
   disableRepoDrag?: boolean;
+  dragging?: boolean;
+  onRepoRef?: (el: HTMLDivElement) => void;
+  onRepoDragStart?: () => void;
+  onRepoDragOver?: (event: DragEvent) => void;
+  onRepoDrop?: () => void;
+  onRepoDragEnd?: () => void;
 }) {
   const isPinned = () => pinnedRepos().has(props.repo.path);
   const agentActivity = () => agentActivityByWorktreePath().get(props.repo.path) ?? agentActivityByRepositoryId().get(props.repo.repository_id)?.[0];
 
   return (
     <div
+      ref={(el) => props.onRepoRef?.(el)}
       class="repo-item"
       draggable={Boolean(props.groupId) && !props.disableRepoDrag}
       title={props.repo.path}
-      classList={{ active: activeRepo() === props.repo.id }}
+      classList={{ active: activeRepo() === props.repo.id, dragging: Boolean(props.dragging) }}
       onDragStart={(e) => {
         if (!props.groupId || props.disableRepoDrag) return;
         e.dataTransfer?.setData("text/plain", props.repo.path);
-        props.onRepoDragStart?.(props.repo.path);
-        suppressDragImage(e);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+        props.onRepoDragStart?.();
       }}
       onDragOver={(e) => {
         if (!props.groupId || props.disableRepoDrag) return;
         e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+        props.onRepoDragOver?.(e);
       }}
       onDrop={(e) => {
         if (!props.groupId || props.disableRepoDrag) return;
         e.preventDefault();
-        props.onRepoDrop?.(props.repo.path);
+        e.stopPropagation();
+        props.onRepoDrop?.();
       }}
+      onDragEnd={() => props.onRepoDragEnd?.()}
       onClick={() => openRepoTab(props.repo.id, props.repo.name)}
       onDblClick={() => {
         openRepoTab(props.repo.id, props.repo.name);
@@ -244,12 +253,15 @@ export function RepoList() {
   const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
   const [draggedGroupId, setDraggedGroupId] = createSignal<string | null>(null);
   const groupHeadingElements = new Map<string, HTMLElement>();
-  const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
+  const [draggedRepo, setDraggedRepo] = createSignal<{ groupId: string; repoPath: string } | null>(null);
+  const repoElements = new Map<string, HTMLElement>();
   const [collapsedGroupIds, setCollapsedGroupIds] = createSignal<Set<string>>(new Set());
-  // moveRepoGroup round-trips through the backend before the local state
-  // (and thus the DOM order) actually updates, so guard against overlapping
-  // swap requests from rapid-fire dragover events while one is in flight.
+  // moveRepoGroup/moveRepoInGroup round-trip through the backend before the
+  // local state (and thus the DOM order) actually updates, so guard against
+  // overlapping swap requests from rapid-fire dragover events while one is
+  // in flight.
   let groupSwapPending = false;
+  let repoSwapPending = false;
 
   function toggleGroupCollapsed(groupId: string): void {
     const next = new Set(collapsedGroupIds());
@@ -375,6 +387,58 @@ export function RepoList() {
     }
   };
 
+  const repoKey = (groupId: string, repoPath: string) => `${groupId}::${repoPath}`;
+
+  const clearRepoDrag = () => setDraggedRepo(null);
+
+  // Mirrors animateGroupSwap, scoped to one group's repo list.
+  const animateRepoSwap = (draggedEl: HTMLElement, neighborEl: HTMLElement, groupId: string, fromPath: string, toPath: string) => {
+    const beforeDragged = draggedEl.getBoundingClientRect();
+    const beforeNeighbor = neighborEl.getBoundingClientRect();
+    repoSwapPending = true;
+    void moveRepoInGroup(groupId, fromPath, toPath).finally(() => {
+      repoSwapPending = false;
+      requestAnimationFrame(() => {
+        flipTranslate(draggedEl, 0, beforeDragged.top - draggedEl.getBoundingClientRect().top);
+        flipTranslate(neighborEl, 0, beforeNeighbor.top - neighborEl.getBoundingClientRect().top);
+      });
+    });
+  };
+
+  // Mirrors maybeSwapGroup, scoped to one group's repo list.
+  const maybeSwapRepo = (event: DragEvent, groupId: string, orderedPaths: string[]) => {
+    if (repoSwapPending) return;
+    const dragged = draggedRepo();
+    if (!dragged || dragged.groupId !== groupId) return;
+    const draggedIndex = orderedPaths.indexOf(dragged.repoPath);
+    if (draggedIndex === -1) return;
+    const draggedEl = repoElements.get(repoKey(groupId, dragged.repoPath));
+    if (!draggedEl) return;
+
+    const nextPath = orderedPaths[draggedIndex + 1];
+    if (nextPath) {
+      const el = repoElements.get(repoKey(groupId, nextPath));
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (event.clientY > rect.top + rect.height / 2) {
+          animateRepoSwap(draggedEl, el, groupId, dragged.repoPath, nextPath);
+          return;
+        }
+      }
+    }
+
+    const prevPath = orderedPaths[draggedIndex - 1];
+    if (prevPath) {
+      const el = repoElements.get(repoKey(groupId, prevPath));
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (event.clientY < rect.top + rect.height / 2) {
+          animateRepoSwap(draggedEl, el, groupId, dragged.repoPath, prevPath);
+        }
+      }
+    }
+  };
+
   return (
     <div class="repo-list">
       <Show when={agentsEnabled()}>
@@ -422,7 +486,7 @@ export function RepoList() {
             return (
               <section
                 class="repo-group-section"
-                classList={{ dragging: draggedGroupId() === group.id, collapsed: collapsedGroupIds().has(group.id) }}
+                classList={{ collapsed: collapsedGroupIds().has(group.id) }}
               >
               <h2
                 ref={(el) => groupHeadingElements.set(group.id, el)}
@@ -450,7 +514,6 @@ export function RepoList() {
                       e.dataTransfer.setData("application/x-git-juggler-group", group.id);
                     }
                     e.dataTransfer?.setData("text/plain", group.id);
-                    suppressDragImage(e);
                   }}
                   onDragEnd={clearGroupDrag}
                 >
@@ -475,24 +538,37 @@ export function RepoList() {
                 />
               </h2>
               <Show when={!collapsedGroupIds().has(group.id)}>
-                <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
-                  {(repo) => (
-                    <RepoRow
-                      repo={repo}
-                      groupId={group.id}
-                      selected={selectedRepoPaths().has(repo.path)}
-                      onSelectedChange={setRepoSelected}
-                      disableRepoDrag={draggedGroupId() !== null}
-                      onBookmarkClick={openBookmarkMenu}
-                      onRepoDragStart={setDraggedRepoPath}
-                      onRepoDrop={(toRepoPath) => {
-                        const fromRepoPath = draggedRepoPath();
-                        setDraggedRepoPath(null);
-                        if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
-                      }}
-                    />
-                  )}
-                </For>
+                <div
+                  class="repo-group-repos"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+                    maybeSwapRepo(e, group.id, groupRepoPaths());
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    clearRepoDrag();
+                  }}
+                >
+                  <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
+                    {(repo) => (
+                      <RepoRow
+                        repo={repo}
+                        groupId={group.id}
+                        selected={selectedRepoPaths().has(repo.path)}
+                        onSelectedChange={setRepoSelected}
+                        disableRepoDrag={draggedGroupId() !== null}
+                        onBookmarkClick={openBookmarkMenu}
+                        dragging={draggedRepo()?.groupId === group.id && draggedRepo()?.repoPath === repo.path}
+                        onRepoRef={(el) => repoElements.set(repoKey(group.id, repo.path), el)}
+                        onRepoDragStart={() => setDraggedRepo({ groupId: group.id, repoPath: repo.path })}
+                        onRepoDragOver={(e) => maybeSwapRepo(e, group.id, groupRepoPaths())}
+                        onRepoDrop={clearRepoDrag}
+                        onRepoDragEnd={clearRepoDrag}
+                      />
+                    )}
+                  </For>
+                </div>
               </Show>
               </section>
             );

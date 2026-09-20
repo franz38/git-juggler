@@ -669,6 +669,18 @@
   color: var(--text-h);
 }
 
+.repo-item[draggable="true"] {
+  cursor: grab;
+}
+
+.repo-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.repo-item.dragging {
+  opacity: 0.45;
+}
+
 .repo-names {
   display: flex;
   flex-direction: column;
@@ -822,10 +834,6 @@
 
 .repo-group-section.collapsed {
   padding-bottom: 0;
-}
-
-.repo-group-section.dragging {
-  background: rgba(0, 0, 0, 0.15);
 }
 
 .repo-bookmark-overlay {
