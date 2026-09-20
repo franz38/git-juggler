@@ -10,6 +10,7 @@ import {
   headCommit,
   isDirty,
   openContextMenu,
+  pushingTargetCommits,
   pushingRepos,
   rowLayout,
   toggleExpand,
@@ -105,6 +106,35 @@ export function GraphPanel() {
     const head = headCommit();
     if (!head) return { commits: new Set(), edges: new Set() };
     const upstream = upstreamCommit();
+    const targetCommit = activeRepo() ? pushingTargetCommits()[activeRepo()!] : undefined;
+    if (targetCommit) {
+      const byHash = commitByHash();
+      const collectAncestors = (start: string): Set<string> => {
+        const seen = new Set<string>();
+        const stack = [start];
+        while (stack.length > 0) {
+          const hash = stack.pop()!;
+          if (seen.has(hash)) continue;
+          seen.add(hash);
+          for (const parent of byHash.get(hash)?.parents ?? []) stack.push(parent);
+        }
+        return seen;
+      };
+
+      const commits = collectAncestors(targetCommit);
+      if (upstream) {
+        for (const hash of collectAncestors(upstream)) commits.delete(hash);
+      }
+
+      const edges = new Set<string>();
+      for (const hash of commits) {
+        const commit = byHash.get(hash);
+        for (const parent of commit?.parents ?? []) {
+          if (commits.has(parent) || parent === upstream) edges.add(`${hash}-${parent}`);
+        }
+      }
+      return { commits: commits.size > 0 ? commits : new Set([targetCommit]), edges };
+    }
     if (!upstream || head === upstream) return { commits: new Set([head]), edges: new Set() };
     const byHash = commitByHash();
     const commits = new Set<string>();

@@ -1120,7 +1120,8 @@ const PUSH_MAX_DURATION_MS = 30000;
 
 const [fetchingRepos, setFetchingRepos] = createSignal<Set<string>>(new Set());
 const [pushingRepos, setPushingRepos] = createSignal<Set<string>>(new Set());
-export { fetchingRepos, pushingRepos };
+const [pushingTargetCommits, setPushingTargetCommits] = createSignal<Record<string, string>>({});
+export { fetchingRepos, pushingRepos, pushingTargetCommits };
 
 const fetchQuietTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const fetchMaxTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1171,13 +1172,21 @@ export function stopPush(repoId: string): void {
     next.delete(repoId);
     setPushingRepos(next);
   }
+  if (pushingTargetCommits()[repoId]) {
+    const next = { ...pushingTargetCommits() };
+    delete next[repoId];
+    setPushingTargetCommits(next);
+  }
   void refreshRepoGraph(repoId);
 }
 
-export function startPush(repoId: string): void {
+export function startPush(repoId: string, targetCommit?: string): void {
   const next = new Set(pushingRepos());
   next.add(repoId);
   setPushingRepos(next);
+  if (targetCommit) {
+    setPushingTargetCommits({ ...pushingTargetCommits(), [repoId]: targetCommit });
+  }
   clearPushTimers(repoId);
   pushMaxTimers.set(
     repoId,

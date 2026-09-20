@@ -4,9 +4,12 @@ import {
   closeContextMenu,
   commits,
   contextMenu,
+  headCommit,
   openCreateTagModal,
   runInTerminal,
   scheduleGraphRefresh,
+  startPush,
+  upstreamCommit,
 } from "../../state/store";
 
 function shellQuote(value: string): string {
@@ -37,6 +40,33 @@ export function CommitContextMenu() {
   });
   const stashRef = createMemo(() => selectedCommit()?.refs.stashes[0]);
   const hashType = createMemo(() => (stashRef() ? "stash" : "commit"));
+  const unpushedCommits = createMemo(() => {
+    const head = headCommit();
+    const upstream = upstreamCommit();
+    if (!head || !upstream) return new Set<string>();
+
+    const parentsByHash = new Map(commits().map((commit) => [commit.hash, commit.parents]));
+    const collectAncestors = (start: string): Set<string> => {
+      const seen = new Set<string>();
+      const stack = [start];
+      while (stack.length > 0) {
+        const hash = stack.pop()!;
+        if (seen.has(hash)) continue;
+        seen.add(hash);
+        for (const parent of parentsByHash.get(hash) ?? []) stack.push(parent);
+      }
+      return seen;
+    };
+
+    const upstreamAncestors = collectAncestors(upstream);
+    const localOnly = collectAncestors(head);
+    for (const hash of upstreamAncestors) localOnly.delete(hash);
+    return localOnly;
+  });
+  const canPushUpToHere = createMemo(() => {
+    const commit = selectedCommit();
+    return Boolean(commit && !stashRef() && unpushedCommits().has(commit.hash));
+  });
 
   const handleCheckout = () => {
     const menu = contextMenu();
@@ -55,6 +85,18 @@ export function CommitContextMenu() {
     const commit = selectedCommit();
     if (!commit) return;
     openCreateTagModal({ hash: commit.hash, shortHash: commit.short_hash, subject: commit.subject });
+    closeContextMenu();
+  };
+
+  const handlePushUpToHere = () => {
+    const menu = contextMenu();
+    const repo = activeRepo();
+    if (!menu || !repo || !canPushUpToHere()) return;
+    startPush(repo, menu.hash);
+    runInTerminal(
+      repo,
+      `upstream=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}) && remote=\${upstream%%/*} && branch=\${upstream#*/} && git push "$remote" ${menu.hash}:"refs/heads/$branch"`,
+    );
     closeContextMenu();
   };
 
@@ -90,6 +132,11 @@ export function CommitContextMenu() {
                   <div class="context-menu-item" onClick={handleCreateTag}>
                     Create tag
                   </div>
+                  <Show when={canPushUpToHere()}>
+                    <div class="context-menu-item" onClick={handlePushUpToHere}>
+                      Push all up to here
+                    </div>
+                  </Show>
                 </>
               }
             >
