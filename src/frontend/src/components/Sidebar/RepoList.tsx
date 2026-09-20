@@ -6,7 +6,7 @@ import {
   fetchRepo,
   loadConfig,
   loadRepos,
-  moveRepoGroupToIndex,
+  moveRepoGroup,
   moveRepoInGroup,
   openRepoContextMenu,
   openRepoTab,
@@ -230,9 +230,6 @@ export function RepoList() {
   const [bulkMenu, setBulkMenu] = createSignal<BulkMenuState | null>(null);
   const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
   const [draggedGroupId, setDraggedGroupId] = createSignal<string | null>(null);
-  const [groupInsertionIndex, setGroupInsertionIndex] = createSignal<number | null>(null);
-  const [collapsingGroupGhost, setCollapsingGroupGhost] = createSignal<{ name: string; afterId: string | null; beforeId: string | null; height: number } | null>(null);
-  const [groupGapHeight, setGroupGapHeight] = createSignal(40);
   const groupHeadingElements = new Map<string, HTMLElement>();
   const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
   const [collapsedGroupIds, setCollapsedGroupIds] = createSignal<Set<string>>(new Set());
@@ -306,66 +303,41 @@ export function RepoList() {
     return draggedGroupId() || event.dataTransfer?.getData("application/x-git-juggler-group") || event.dataTransfer?.getData("text/plain") || null;
   };
 
-  const clearGroupDrag = () => {
-    setDraggedGroupId(null);
-    setGroupInsertionIndex(null);
-  };
+  const clearGroupDrag = () => setDraggedGroupId(null);
 
-  const visibleGroupInsertionIndex = () => {
-    const index = groupInsertionIndex();
-    const draggedId = draggedGroupId();
-    if (index === null || !draggedId) return null;
-    const draggedIndex = filteredGroups().findIndex((group) => group.id === draggedId);
-    if (draggedIndex === -1 || index === draggedIndex || index === draggedIndex + 1) return null;
-    return index;
-  };
-
-  const computeGroupInsertionIndex = (event: DragEvent): number => {
+  // Swaps the dragged group one step at a time with whichever neighbor the
+  // cursor has crossed past the (vertical) midpoint of -- mirrors TabsBar's
+  // maybeSwap, adapted from clientX/left to clientY/top. The list reorders
+  // live as you drag; no gap/ghost placeholder needed.
+  const maybeSwapGroup = (event: DragEvent) => {
     const draggedId = draggedGroupIdFrom(event);
-    const currentGroups = filteredGroups();
-    const visibleGap = visibleGroupInsertionIndex();
-    for (let index = 0; index < currentGroups.length; index++) {
-      const group = currentGroups[index];
-      if (group.id === draggedId) continue;
-      const element = groupHeadingElements.get(group.id);
-      if (!element) continue;
-      const rect = element.getBoundingClientRect();
-      const adjustedTop = visibleGap !== null && index >= visibleGap ? rect.top - groupGapHeight() : rect.top;
-      if (event.clientY < adjustedTop + rect.height / 2) return index;
-    }
-    return currentGroups.length;
-  };
-
-  const commitGroupDrop = (event: DragEvent) => {
-    const draggedId = draggedGroupIdFrom(event);
-    const index = groupInsertionIndex();
+    if (!draggedId) return;
     const currentGroups = filteredGroups();
     const draggedIndex = currentGroups.findIndex((group) => group.id === draggedId);
-    if (draggedId && index !== null && draggedIndex !== -1 && currentGroups.length > 0 && visibleGroupInsertionIndex() !== null) {
-      const draggedGroup = currentGroups[draggedIndex];
-      setCollapsingGroupGhost({
-        name: draggedGroup.name,
-        afterId: currentGroups[draggedIndex - 1]?.id ?? null,
-        beforeId: currentGroups[draggedIndex + 1]?.id ?? null,
-        height: groupGapHeight(),
-      });
-      void moveRepoGroupToIndex(draggedId, index);
-      clearGroupDrag();
-      window.setTimeout(() => setCollapsingGroupGhost(null), 120);
-      return;
-    }
-    clearGroupDrag();
-  };
+    if (draggedIndex === -1) return;
 
-  const groupGap = () => <div class="repo-group-drop-gap" style={{ height: `${groupGapHeight()}px` }} />;
-  const groupGhost = () => {
-    const item = collapsingGroupGhost();
-    if (!item) return null;
-    return (
-      <div class="repo-group-heading repo-group-collapse-ghost" style={{ height: `${item.height}px` }}>
-        <span>{item.name}</span>
-      </div>
-    );
+    const nextGroup = currentGroups[draggedIndex + 1];
+    if (nextGroup) {
+      const el = groupHeadingElements.get(nextGroup.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (event.clientY > rect.top + rect.height / 2) {
+          void moveRepoGroup(draggedId, nextGroup.id);
+          return;
+        }
+      }
+    }
+
+    const prevGroup = currentGroups[draggedIndex - 1];
+    if (prevGroup) {
+      const el = groupHeadingElements.get(prevGroup.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (event.clientY < rect.top + rect.height / 2) {
+          void moveRepoGroup(draggedId, prevGroup.id);
+        }
+      }
+    }
   };
 
   return (
@@ -398,21 +370,18 @@ export function RepoList() {
         onDragOver={(e) => {
           e.preventDefault();
           if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-          if (draggedGroupIdFrom(e)) setGroupInsertionIndex(computeGroupInsertionIndex(e));
+          maybeSwapGroup(e);
         }}
         onDrop={(e) => {
           e.preventDefault();
-          commitGroupDrop(e);
+          clearGroupDrag();
         }}
       >
-        <Show when={collapsingGroupGhost()?.beforeId === filteredGroups()[0]?.id && collapsingGroupGhost()?.afterId === null}>{groupGhost()}</Show>
         <For each={filteredGroups()}>
-          {(group, index) => {
+          {(group) => {
             const groupRepoPaths = () => group.repos.map((repo) => repo.path);
             const groupSelectedCount = () => selectedCountFor(groupRepoPaths());
             return (
-              <>
-              <Show when={visibleGroupInsertionIndex() === index()}>{groupGap()}</Show>
               <section class="repo-group-section">
               <h2
                 ref={(el) => groupHeadingElements.set(group.id, el)}
@@ -421,9 +390,6 @@ export function RepoList() {
                 classList={{ dragging: draggedGroupId() === group.id }}
                 onDragStart={(e) => {
                   setDraggedGroupId(group.id);
-                  setGroupInsertionIndex(null);
-                  const section = (e.currentTarget as HTMLElement).closest(".repo-group-section");
-                  setGroupGapHeight((section ?? (e.currentTarget as HTMLElement)).getBoundingClientRect().height);
                   if (e.dataTransfer) {
                     e.dataTransfer.effectAllowed = "move";
                     e.dataTransfer.setData("application/x-git-juggler-group", group.id);
@@ -434,12 +400,12 @@ export function RepoList() {
                   e.preventDefault();
                   e.stopPropagation();
                   if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-                  if (draggedGroupIdFrom(e)) setGroupInsertionIndex(computeGroupInsertionIndex(e));
+                  maybeSwapGroup(e);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  commitGroupDrop(e);
+                  clearGroupDrag();
                 }}
                 onDragEnd={clearGroupDrag}
               >
@@ -483,12 +449,9 @@ export function RepoList() {
                 </For>
               </Show>
               </section>
-              <Show when={collapsingGroupGhost()?.afterId === group.id}>{groupGhost()}</Show>
-              </>
             );
           }}
         </For>
-        <Show when={visibleGroupInsertionIndex() === filteredGroups().length}>{groupGap()}</Show>
       </div>
       <h2>Repositories</h2>
       <For each={unpinned()} fallback={<div class="repo-empty">No git repos found</div>}>
