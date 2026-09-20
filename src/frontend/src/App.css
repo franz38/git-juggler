@@ -635,7 +635,12 @@
 }
 
 .repo-group-section {
+  padding-bottom: 8px;
   transition: background-color 150ms ease;
+}
+
+.repo-group-section.collapsed {
+  padding-bottom: 0;
 }
 
 .repo-group-section.dragging {
