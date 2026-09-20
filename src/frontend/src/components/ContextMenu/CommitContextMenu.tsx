@@ -1,9 +1,11 @@
 import { Show, createMemo } from "solid-js";
+import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
 import {
   activeRepo,
   closeContextMenu,
   commits,
   contextMenu,
+  currentBranch,
   headCommit,
   openCreateTagModal,
   runInTerminal,
@@ -34,6 +36,8 @@ function copyText(value: string): void {
 }
 
 export function CommitContextMenu() {
+  let panelRef: HTMLDivElement | undefined;
+
   const selectedCommit = createMemo(() => {
     const menu = contextMenu();
     if (!menu) return undefined;
@@ -67,6 +71,15 @@ export function CommitContextMenu() {
   const canPushUpToHere = createMemo(() => {
     const commit = selectedCommit();
     return Boolean(commit && !stashRef() && unpushedCommits().has(commit.hash));
+  });
+  // The tip branch of the right-clicked commit, when it's a local branch
+  // other than the one currently checked out -- "merge into current branch"
+  // only makes sense for a commit that actually represents another branch.
+  const mergeableBranch = createMemo(() => {
+    const commit = selectedCommit();
+    if (!commit || stashRef()) return undefined;
+    const current = currentBranch();
+    return commit.refs.branches.find((name) => name !== current);
   });
 
   const handleCheckout = () => {
@@ -102,6 +115,15 @@ export function CommitContextMenu() {
     closeContextMenu();
   };
 
+  const handleMerge = () => {
+    const repo = activeRepo();
+    const branch = mergeableBranch();
+    if (!repo || !branch) return;
+    runInTerminal(repo, `git merge ${shellQuote(branch)}`);
+    scheduleGraphRefresh(repo);
+    closeContextMenu();
+  };
+
   const runStashCommand = (action: "apply" | "pop" | "drop") => {
     const repo = activeRepo();
     const ref = stashRef();
@@ -120,10 +142,10 @@ export function CommitContextMenu() {
 
   return (
     <Show when={contextMenu()}>
-      {(menu) => (
-        <>
-          <div class="context-menu-overlay" onClick={closeContextMenu} onContextMenu={(e) => e.preventDefault()} />
-          <div class="context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
+      {(menu) => {
+        dismissOnOutsideClick(() => panelRef, closeContextMenu);
+        return (
+          <div class="context-menu" ref={panelRef} style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
             <Show
               when={stashRef()}
               fallback={
@@ -137,6 +159,11 @@ export function CommitContextMenu() {
                   <Show when={canPushUpToHere()}>
                     <div class="context-menu-item" onClick={handlePushUpToHere}>
                       Push all up to here
+                    </div>
+                  </Show>
+                  <Show when={mergeableBranch()}>
+                    <div class="context-menu-item" onClick={handleMerge}>
+                      Merge into current branch
                     </div>
                   </Show>
                 </>
@@ -156,8 +183,8 @@ export function CommitContextMenu() {
               Copy {hashType()} hash
             </div>
           </div>
-        </>
-      )}
+        );
+      }}
     </Show>
   );
 }

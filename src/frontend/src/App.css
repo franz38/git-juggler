@@ -1708,12 +1708,6 @@
   padding: 4px 8px;
 }
 
-.context-menu-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-}
-
 .context-menu {
   position: fixed;
   z-index: 111;
