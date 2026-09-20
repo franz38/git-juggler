@@ -11,11 +11,12 @@ from . import config
 from .agent_tracking import AgentRepositoryTracker
 from .agent_tracking.agent_process_discovery import AgentProcessDiscovery
 from .agent_tracking.agent_repository_tracker import AgentRepositoryScan
+from .browse import browse_directory
 from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .repos import list_repos, resolve_repo_path
-from .schemas import AgentActivityResponse, AgentRepositoryScanResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
+from .schemas import AgentActivityResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
 from .terminal import run_terminal_session
 
 
@@ -43,6 +44,10 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos", response_model=list[RepoSummary])
     def api_list_repos() -> list[RepoSummary]:
         return list_repos(config.load_repo_paths())
+
+    @app.get("/api/browse", response_model=BrowseDirectoryResponse)
+    def api_browse(path: str | None = None) -> BrowseDirectoryResponse:
+        return browse_directory(path)
 
     def _current_config() -> ConfigResponse:
         return ConfigResponse(

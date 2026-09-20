@@ -30,6 +30,17 @@ export interface RepoGroupConfig {
   repo_paths: string[];
 }
 
+export interface BrowseEntry {
+  name: string;
+  path: string;
+}
+
+export interface BrowseDirectoryResponse {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+}
+
 export interface GitHubRepoConfig {
   repo_path: string;
   owner: string;

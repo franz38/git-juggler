@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { fetchAgentActivity, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { AgentActivityResponse, AgentWorktreeActivity, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import { browseDirectory, fetchAgentActivity, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
+import type { AgentActivityResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -102,7 +102,7 @@ export { repos, tabs, activeRepo };
 
 const SIDEBAR_WIDTH_KEY = "git-juggler:sidebarWidth";
 export const SIDEBAR_DEFAULT_WIDTH = 250;
-export const SIDEBAR_MIN_WIDTH = 120;
+export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 400;
 
 function loadSidebarWidth(): number {
@@ -134,6 +134,135 @@ export async function loadRepos(): Promise<void> {
   } catch {
     // The sidebar just stays empty; nowhere good to surface this yet.
   }
+}
+
+// --- Directory browser -----------------------------------------------------
+// A read-only folder picker (backed by GET /api/browse) for filling in a
+// repo search path without typing an absolute path by hand.
+
+export interface DirectoryBrowserState {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+  loading: boolean;
+  error: string | null;
+  onSelect: (path: string) => void;
+}
+
+const [directoryBrowser, setDirectoryBrowser] = createSignal<DirectoryBrowserState | null>(null);
+export { directoryBrowser };
+
+async function loadBrowseDirectory(path: string | undefined, onSelect: (path: string) => void): Promise<void> {
+  setDirectoryBrowser((current) =>
+    current ? { ...current, loading: true, error: null } : { path: path ?? "", parent: null, entries: [], loading: true, error: null, onSelect },
+  );
+  try {
+    const data = await browseDirectory(path);
+    setDirectoryBrowser({ path: data.path, parent: data.parent, entries: data.entries, loading: false, error: null, onSelect });
+  } catch (e) {
+    setDirectoryBrowser((current) => (current ? { ...current, loading: false, error: (e as Error).message } : current));
+  }
+}
+
+export function openDirectoryBrowser(onSelect: (path: string) => void): void {
+  void loadBrowseDirectory(undefined, onSelect);
+}
+
+export function navigateDirectoryBrowser(path: string): void {
+  const state = directoryBrowser();
+  if (!state) return;
+  void loadBrowseDirectory(path, state.onSelect);
+}
+
+export function closeDirectoryBrowser(): void {
+  setDirectoryBrowser(null);
+}
+
+export function selectDirectoryBrowserPath(): void {
+  const state = directoryBrowser();
+  if (!state) return;
+  state.onSelect(state.path);
+  setDirectoryBrowser(null);
+}
+
+// --- Key bindings ----------------------------------------------------------
+
+export interface KeyBinding {
+  key: string;
+  mod: boolean; // Cmd on mac, Ctrl elsewhere -- treated as one interchangeable modifier
+  shift: boolean;
+  alt: boolean;
+}
+
+export type KeyBindingAction = "nextTab" | "prevTab" | "toggleMenu";
+
+export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
+  { id: "nextTab", label: "Next tab" },
+  { id: "prevTab", label: "Previous tab" },
+  { id: "toggleMenu", label: "Open/close main menu" },
+];
+
+const DEFAULT_KEY_BINDINGS: Record<KeyBindingAction, KeyBinding> = {
+  nextTab: { key: "ArrowRight", mod: true, shift: true, alt: false },
+  prevTab: { key: "ArrowLeft", mod: true, shift: true, alt: false },
+  toggleMenu: { key: "p", mod: true, shift: false, alt: false },
+};
+
+const KEY_BINDINGS_KEY = "git-juggler:keyBindings";
+
+function loadKeyBindings(): Record<KeyBindingAction, KeyBinding> {
+  try {
+    const raw = localStorage.getItem(KEY_BINDINGS_KEY);
+    if (!raw) return { ...DEFAULT_KEY_BINDINGS };
+    const parsed = JSON.parse(raw) as Partial<Record<KeyBindingAction, KeyBinding>>;
+    return { ...DEFAULT_KEY_BINDINGS, ...parsed };
+  } catch {
+    return { ...DEFAULT_KEY_BINDINGS };
+  }
+}
+
+const [keyBindings, setKeyBindingsSignal] = createSignal(loadKeyBindings());
+export { keyBindings };
+
+export function setKeyBinding(action: KeyBindingAction, binding: KeyBinding): void {
+  const next = { ...keyBindings(), [action]: binding };
+  setKeyBindingsSignal(next);
+  try {
+    localStorage.setItem(KEY_BINDINGS_KEY, JSON.stringify(next));
+  } catch {
+    // Not critical — the binding just won't survive a reload.
+  }
+}
+
+export function resetKeyBinding(action: KeyBindingAction): void {
+  setKeyBinding(action, DEFAULT_KEY_BINDINGS[action]);
+}
+
+export function matchesKeyBinding(e: KeyboardEvent, binding: KeyBinding): boolean {
+  return (
+    e.key.toLowerCase() === binding.key.toLowerCase() &&
+    (e.metaKey || e.ctrlKey) === binding.mod &&
+    e.shiftKey === binding.shift &&
+    e.altKey === binding.alt
+  );
+}
+
+const KEY_DISPLAY_NAMES: Record<string, string> = {
+  " ": "Space",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+};
+
+export function formatKeyBinding(binding: KeyBinding): string {
+  const parts: string[] = [];
+  if (binding.mod) parts.push("Cmd/Ctrl");
+  if (binding.shift) parts.push("Shift");
+  if (binding.alt) parts.push("Alt");
+  const keyName = KEY_DISPLAY_NAMES[binding.key] ?? (binding.key.length === 1 ? binding.key.toUpperCase() : binding.key);
+  parts.push(keyName);
+  return parts.join("+");
 }
 
 // Pinned repos are persisted server-side (~/.config/git-juggler/config.json)

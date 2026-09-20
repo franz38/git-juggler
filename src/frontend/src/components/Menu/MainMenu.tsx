@@ -1,31 +1,39 @@
-import { For, Index, Show, createEffect, createSignal } from "solid-js";
+import { For, Index, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
+  KEY_BINDING_ACTIONS,
   addRepoPath,
   agentsEnabled,
   branchColorMode,
   closeMenu,
   excludedPaths,
   excludedPathsError,
+  formatKeyBinding,
   githubConfig,
   githubConfigError,
   jenkinsConfig,
   jenkinsConfigError,
+  keyBindings,
   menuOpen,
+  openDirectoryBrowser,
   removeRepoPath,
   repoPaths,
   repoPathsError,
+  resetKeyBinding,
   saveExcludedPaths,
   saveGitHubConfig,
   saveJenkinsConfig,
   setAgentsEnabled,
   setBranchColorMode,
+  setKeyBinding,
   setTheme,
   theme,
 } from "../../state/store";
-import type { BranchColorMode, Theme } from "../../state/store";
+import type { BranchColorMode, KeyBindingAction, Theme } from "../../state/store";
 
-type Section = "repos" | "github" | "jenkins" | "appearance" | "agents";
+type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings";
+
+const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings"];
 
 const emptyGitHubConfig: GitHubConfig = {
   enabled: true,
@@ -49,6 +57,47 @@ export function MainMenu() {
   const [newPath, setNewPath] = createSignal("");
   const [githubDraft, setGitHubDraft] = createSignal<GitHubConfig>(emptyGitHubConfig);
   const [jenkinsDraft, setJenkinsDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
+  const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
+
+  // Captures the next real keypress (ignoring bare modifier taps) and binds
+  // it to `action`; Escape cancels without changing anything. Runs in the
+  // capture phase and stops propagation so it never also triggers the app's
+  // own global shortcuts or the section switcher below while recording.
+  const startRecording = (action: KeyBindingAction) => {
+    setRecordingAction(action);
+    const handleCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Shift" || e.key === "Control" || e.key === "Meta" || e.key === "Alt") return;
+      window.removeEventListener("keydown", handleCapture, true);
+      setRecordingAction(null);
+      if (e.key === "Escape") return;
+      setKeyBinding(action, { key: e.key, mod: e.metaKey || e.ctrlKey, shift: e.shiftKey, alt: e.altKey });
+    };
+    window.addEventListener("keydown", handleCapture, true);
+  };
+
+  // Up/Down cycle through sections while the menu is open, skipped while
+  // typing in a field or while recording a new key binding above (which
+  // needs to see raw arrow keys itself).
+  onMount(() => {
+    const handleMenuKeydown = (e: KeyboardEvent) => {
+      if (!menuOpen() || recordingAction()) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const idx = SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(SECTION_ORDER[Math.min(idx + 1, SECTION_ORDER.length - 1)]);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(SECTION_ORDER[Math.max(idx - 1, 0)]);
+      }
+    };
+    window.addEventListener("keydown", handleMenuKeydown);
+    onCleanup(() => window.removeEventListener("keydown", handleMenuKeydown));
+  });
 
   createEffect(() => {
     const config = githubConfig();
@@ -193,6 +242,13 @@ export function MainMenu() {
             >
               Agents
             </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "keybindings" }}
+              onClick={() => setActiveSection("keybindings")}
+            >
+              Key bindings
+            </div>
           </div>
           <div class="menu-content">
             <Show when={activeSection() === "repos"}>
@@ -220,7 +276,16 @@ export function MainMenu() {
                     if (e.key === "Enter") handleAdd();
                   }}
                 />
-                <button onClick={handleAdd}>Add</button>
+                <button
+                  type="button"
+                  class="menu-secondary-button"
+                  onClick={() => openDirectoryBrowser((path) => setNewPath(path))}
+                >
+                  Explore
+                </button>
+                <button type="button" class="menu-add-button" onClick={handleAdd}>
+                  Add
+                </button>
               </div>
               <Show when={repoPathsError()}>
                 <div class="menu-error">{repoPathsError()}</div>
@@ -488,6 +553,40 @@ export function MainMenu() {
                     )}
                   </For>
                 </div>
+              </div>
+            </Show>
+            <Show when={activeSection() === "keybindings"}>
+              <h3>Key bindings</h3>
+              <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>
+              <div class="menu-path-list">
+                <For each={KEY_BINDING_ACTIONS}>
+                  {(action) => (
+                    <div class="menu-path-row">
+                      <span class="menu-path-text">{action.label}</span>
+                      <span class="keybinding-value">
+                        {recordingAction() === action.id ? "Press a key…" : formatKeyBinding(keyBindings()[action.id])}
+                      </span>
+                      <div class="keybinding-actions">
+                        <button
+                          type="button"
+                          class="menu-secondary-button"
+                          disabled={recordingAction() !== null}
+                          onClick={() => startRecording(action.id)}
+                        >
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          class="menu-secondary-button"
+                          disabled={recordingAction() !== null}
+                          onClick={() => resetKeyBinding(action.id)}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </div>

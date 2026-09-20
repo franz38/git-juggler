@@ -1,4 +1,4 @@
-import type { AgentActivityResponse, AgentRepositoryScan, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
+import type { AgentActivityResponse, AgentRepositoryScan, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
 
 const API_BASE = "/api";
 
@@ -12,6 +12,11 @@ async function getJson<T>(url: string): Promise<T> {
 
 export function fetchRepos(): Promise<RepoSummary[]> {
   return getJson(`${API_BASE}/repos`);
+}
+
+export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return getJson(`${API_BASE}/browse${query}`);
 }
 
 export function fetchGraph(repoId: string): Promise<GraphResponse> {

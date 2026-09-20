@@ -119,6 +119,19 @@
   padding: 6px 0;
 }
 
+.keybinding-value {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.keybinding-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .menu-add-path {
   display: flex;
   gap: 8px;
@@ -141,7 +154,7 @@
   border-color: var(--accent);
 }
 
-.menu-add-path button {
+.menu-add-path .menu-add-button {
   background: var(--accent);
   color: #0d1117;
   border: none;
@@ -149,6 +162,13 @@
   padding: 0 14px;
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-add-path .menu-secondary-button {
+  padding: 0 14px;
+  border-radius: 4px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -240,6 +260,38 @@
 .create-tag-dialog h3 {
   margin: 0 0 6px;
   font-size: 15px;
+  color: var(--text-h);
+}
+
+.directory-browser-path {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.directory-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  margin: 12px 0;
+}
+
+.directory-browser-entry {
+  padding: 6px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.directory-browser-entry:hover {
+  background: var(--hover-bg);
   color: var(--text-h);
 }
 
@@ -418,6 +470,7 @@
 
 .sidebar {
   width: 250px;
+  min-width: 200px;
   flex: 0 0 auto;
   background: var(--panel-bg);
   border-right: 1px solid var(--border);

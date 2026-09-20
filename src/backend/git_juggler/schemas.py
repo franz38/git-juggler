@@ -63,6 +63,17 @@ class ConfigUpdateRequest(BaseModel):
     jenkins: JenkinsConfig | None = None
 
 
+class BrowseEntry(BaseModel):
+    name: str
+    path: str
+
+
+class BrowseDirectoryResponse(BaseModel):
+    path: str
+    parent: str | None
+    entries: list[BrowseEntry]
+
+
 class PersonInfo(BaseModel):
     name: str
     email: str

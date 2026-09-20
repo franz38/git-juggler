@@ -8,6 +8,7 @@ import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
 import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
+import { DirectoryBrowserModal } from "./components/Menu/DirectoryBrowserModal";
 import { MainMenu } from "./components/Menu/MainMenu";
 import { RepoList } from "./components/Sidebar/RepoList";
 import { SearchBox } from "./components/Search/SearchBox";
@@ -18,7 +19,9 @@ import {
   activeRepo,
   activateAdjacentTab,
   closeMenu,
+  keyBindings,
   loadActiveTabGraph,
+  matchesKeyBinding,
   menuOpen,
   pollRepoStatus,
   setSidebarWidth,
@@ -49,13 +52,14 @@ function App() {
   onMount(() => {
     loadActiveTabGraph();
     const handleKeydown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "ArrowRight") {
+      const bindings = keyBindings();
+      if (matchesKeyBinding(e, bindings.nextTab)) {
         e.preventDefault();
         activateAdjacentTab(1);
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "ArrowLeft") {
+      } else if (matchesKeyBinding(e, bindings.prevTab)) {
         e.preventDefault();
         activateAdjacentTab(-1);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+      } else if (matchesKeyBinding(e, bindings.toggleMenu)) {
         e.preventDefault();
         toggleMenu();
       } else if (e.key === "Escape" && menuOpen()) {
@@ -104,6 +108,7 @@ function App() {
       <CreateTagModal />
       <DeleteBranchModal />
       <DeleteTagModal />
+      <DirectoryBrowserModal />
       <RepoContextMenu />
       <TagContextMenu />
       <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
