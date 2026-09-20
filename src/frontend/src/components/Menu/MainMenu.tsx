@@ -1,5 +1,5 @@
 import { For, Index, Show, createEffect, createSignal } from "solid-js";
-import type { GitHubConfig } from "../../api/types";
+import type { GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
   addRepoPath,
   branchColorMode,
@@ -8,19 +8,22 @@ import {
   excludedPathsError,
   githubConfig,
   githubConfigError,
+  jenkinsConfig,
+  jenkinsConfigError,
   menuOpen,
   removeRepoPath,
   repoPaths,
   repoPathsError,
   saveExcludedPaths,
   saveGitHubConfig,
+  saveJenkinsConfig,
   setBranchColorMode,
   setTheme,
   theme,
 } from "../../state/store";
 import type { BranchColorMode, Theme } from "../../state/store";
 
-type Section = "repos" | "github" | "appearance";
+type Section = "repos" | "github" | "jenkins" | "appearance";
 
 const emptyGitHubConfig: GitHubConfig = {
   enabled: true,
@@ -30,14 +33,29 @@ const emptyGitHubConfig: GitHubConfig = {
   repos: [],
 };
 
+const emptyJenkinsConfig: JenkinsConfig = {
+  enabled: true,
+  base_url: "",
+  username: "",
+  api_token_env: "JENKINS_API_TOKEN",
+  build_limit: 50,
+  jobs: [],
+};
+
 export function MainMenu() {
   const [activeSection, setActiveSection] = createSignal<Section>("repos");
   const [newPath, setNewPath] = createSignal("");
   const [githubDraft, setGitHubDraft] = createSignal<GitHubConfig>(emptyGitHubConfig);
+  const [jenkinsDraft, setJenkinsDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
 
   createEffect(() => {
     const config = githubConfig();
     setGitHubDraft({ ...config, repos: config.repos.map((repo) => ({ ...repo })) });
+  });
+
+  createEffect(() => {
+    const config = jenkinsConfig();
+    setJenkinsDraft({ ...config, jobs: config.jobs.map((job) => ({ ...job })) });
   });
 
   const [excludedPathsDraft, setExcludedPathsDraft] = createSignal("");
@@ -95,6 +113,44 @@ export function MainMenu() {
     });
   };
 
+  const updateJenkinsDraft = <K extends keyof JenkinsConfig>(key: K, value: JenkinsConfig[K]) => {
+    setJenkinsDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateJenkinsJob = (index: number, key: "repo_path" | "job_url", value: string) => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: current.jobs.map((job, i) => (i === index ? { ...job, [key]: value } : job)),
+    }));
+  };
+
+  const addJenkinsJob = () => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: [...current.jobs, { repo_path: "", job_url: "" }],
+    }));
+  };
+
+  const removeJenkinsJob = (index: number) => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: current.jobs.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSaveJenkins = () => {
+    void saveJenkinsConfig({
+      ...jenkinsDraft(),
+      base_url: jenkinsDraft().base_url.trim(),
+      username: jenkinsDraft().username.trim(),
+      api_token_env: jenkinsDraft().api_token_env.trim() || "JENKINS_API_TOKEN",
+      build_limit: Math.max(1, Math.min(Number(jenkinsDraft().build_limit) || 50, 500)),
+      jobs: jenkinsDraft().jobs
+        .map((job) => ({ repo_path: job.repo_path.trim(), job_url: job.job_url.trim() }))
+        .filter((job) => job.repo_path && job.job_url),
+    });
+  };
+
   return (
     <Show when={menuOpen()}>
       <div class="menu-overlay" onClick={closeMenu}>
@@ -120,6 +176,13 @@ export function MainMenu() {
               onClick={() => setActiveSection("github")}
             >
               GitHub Actions
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "jenkins" }}
+              onClick={() => setActiveSection("jenkins")}
+            >
+              Jenkins
             </div>
           </div>
           <div class="menu-content">
@@ -263,6 +326,106 @@ export function MainMenu() {
 
               <Show when={githubConfigError()}>
                 <div class="menu-error">{githubConfigError()}</div>
+              </Show>
+            </Show>
+            <Show when={activeSection() === "jenkins"}>
+              <h3>Jenkins</h3>
+              <p class="menu-hint">Jenkins builds are matched to commits from configured job URLs.</p>
+
+              <div class="menu-notice">
+                Jenkins API token is not stored by git-juggler. Set <span class="mono">{jenkinsDraft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the backend.
+              </div>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable Jenkins integration</span>
+                  <span class="menu-hint">When disabled, Jenkins build status is not requested or shown.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={jenkinsDraft().enabled}
+                  onChange={(e) => updateJenkinsDraft("enabled", e.currentTarget.checked)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Jenkins base URL</span>
+                <input
+                  type="text"
+                  placeholder="https://jenkins.example.com"
+                  value={jenkinsDraft().base_url}
+                  onInput={(e) => updateJenkinsDraft("base_url", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Username</span>
+                <input
+                  type="text"
+                  value={jenkinsDraft().username}
+                  onInput={(e) => updateJenkinsDraft("username", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Token env var</span>
+                <input
+                  type="text"
+                  value={jenkinsDraft().api_token_env}
+                  onInput={(e) => updateJenkinsDraft("api_token_env", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Build limit per job</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={jenkinsDraft().build_limit}
+                  onInput={(e) => updateJenkinsDraft("build_limit", Number(e.currentTarget.value))}
+                />
+              </label>
+
+              <div class="menu-subheading">Job mappings</div>
+              <p class="menu-hint">Map each local repo to one or more Jenkins job URLs.</p>
+              <div class="github-repo-mappings">
+                <Show when={jenkinsDraft().jobs.length > 0} fallback={<div class="menu-empty">No Jenkins jobs configured</div>}>
+                  <Index each={jenkinsDraft().jobs}>
+                    {(job, index) => (
+                      <div class="github-repo-row">
+                        <input
+                          type="text"
+                          placeholder="/absolute/path/to/repo"
+                          value={job().repo_path}
+                          onInput={(e) => updateJenkinsJob(index, "repo_path", e.currentTarget.value)}
+                        />
+                        <input
+                          type="text"
+                          placeholder="https://jenkins.example.com/job/my-pipeline/job/main"
+                          value={job().job_url}
+                          onInput={(e) => updateJenkinsJob(index, "job_url", e.currentTarget.value)}
+                        />
+                        <button type="button" class="menu-secondary-button" onClick={() => removeJenkinsJob(index)}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </Index>
+                </Show>
+              </div>
+
+              <div class="menu-actions">
+                <button type="button" class="menu-secondary-button" onClick={addJenkinsJob}>
+                  Add job
+                </button>
+                <button type="button" class="menu-primary-button" onClick={handleSaveJenkins}>
+                  Save Jenkins settings
+                </button>
+              </div>
+
+              <Show when={jenkinsConfigError()}>
+                <div class="menu-error">{jenkinsConfigError()}</div>
               </Show>
             </Show>
             <Show when={activeSection() === "appearance"}>

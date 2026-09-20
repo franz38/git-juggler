@@ -11,6 +11,7 @@ export interface ConfigResponse {
   repo_groups: RepoGroupConfig[];
   excluded_paths: string[];
   github: GitHubConfig | null;
+  jenkins: JenkinsConfig | null;
 }
 
 export interface ConfigUpdateRequest {
@@ -19,6 +20,7 @@ export interface ConfigUpdateRequest {
   repo_groups?: RepoGroupConfig[];
   excluded_paths?: string[];
   github?: GitHubConfig | null;
+  jenkins?: JenkinsConfig | null;
 }
 
 export interface RepoGroupConfig {
@@ -39,6 +41,20 @@ export interface GitHubConfig {
   api_base_url: string;
   token_env: string;
   repos: GitHubRepoConfig[];
+}
+
+export interface JenkinsJobConfig {
+  repo_path: string;
+  job_url: string;
+}
+
+export interface JenkinsConfig {
+  enabled: boolean;
+  base_url: string;
+  username: string;
+  api_token_env: string;
+  build_limit: number;
+  jobs: JenkinsJobConfig[];
 }
 
 export interface PersonInfo {
@@ -103,13 +119,15 @@ export interface CommitDetail {
   files: FileChange[];
 }
 
-export type GitHubActionsRunStatus = "success" | "failure" | "running" | "cancelled" | "skipped" | "action_required" | "neutral" | "unknown";
+export type CiRunProvider = "github_actions" | "jenkins";
 
-export interface GitHubActionsRunInfo {
-  status: GitHubActionsRunStatus;
-  workflow_name: string;
-  run_number: number;
-  run_id: number;
+export type CiRunStatus = "success" | "failure" | "running" | "cancelled" | "skipped" | "action_required" | "neutral" | "unstable" | "aborted" | "unknown";
+
+export interface CiRunInfo {
+  provider: CiRunProvider;
+  status: CiRunStatus;
+  name: string;
+  number: number;
   url: string;
   branch: string | null;
   event: string | null;

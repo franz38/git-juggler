@@ -7,6 +7,7 @@ import {
   headCommit,
   openCreateTagModal,
   runInTerminal,
+  scheduleCiRefreshAfterPush,
   scheduleGraphRefresh,
   startPush,
   upstreamCommit,
@@ -97,6 +98,7 @@ export function CommitContextMenu() {
       repo,
       `upstream=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}) && remote=\${upstream%%/*} && branch=\${upstream#*/} && git push "$remote" ${menu.hash}:"refs/heads/$branch"`,
     );
+    scheduleCiRefreshAfterPush(repo);
     closeContextMenu();
   };
 

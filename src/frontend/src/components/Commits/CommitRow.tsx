@@ -3,9 +3,9 @@ import type { CommitSummary } from "../../api/types";
 import { formatDate } from "../../lib/formatDate";
 import {
   COLLAPSED_ROW_HEIGHT,
+  ciRuns,
   commitDetails,
   expandedHashes,
-  githubActionsRuns,
   matchingHashes,
   openBranchContextMenu,
   openContextMenu,
@@ -14,7 +14,7 @@ import {
   toggleExpand,
 } from "../../state/store";
 import { BranchBadge } from "../Badges/BranchBadge";
-import { GitHubActionsBadge } from "../Badges/GitHubActionsBadge";
+import { CiRunBadge } from "../Badges/CiRunBadge";
 import { StashBadge } from "../Badges/StashBadge";
 import { TagBadge } from "../Badges/TagBadge";
 import { CommitDetailView } from "./CommitDetail";
@@ -23,7 +23,7 @@ export function CommitRow(props: { commit: CommitSummary }) {
   let rowRef: HTMLDivElement | undefined;
   const isExpanded = () => expandedHashes().has(props.commit.hash);
   const isMatch = () => matchingHashes().has(props.commit.hash);
-  const actionsRuns = () => githubActionsRuns()[props.commit.hash] ?? [];
+  const runs = () => ciRuns()[props.commit.hash] ?? [];
   const openRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     openContextMenu(e.clientX, e.clientY, props.commit.hash);
@@ -67,8 +67,8 @@ export function CommitRow(props: { commit: CommitSummary }) {
           <For each={props.commit.refs.remote_branches}>{(b) => <BranchBadge name={b} remote onContextMenu={openBranchMenu(b, true)} />}</For>
           <For each={props.commit.refs.tags}>{(t) => <TagBadge name={t} onContextMenu={openTagMenu(t)} />}</For>
           <For each={props.commit.refs.stashes}>{(s) => <StashBadge name={s} />}</For>
-          <Show when={actionsRuns().length > 0}>
-            <GitHubActionsBadge runs={actionsRuns()} />
+          <Show when={runs().length > 0}>
+            <CiRunBadge runs={runs()} />
           </Show>
         </span>
         <span class="commit-subject">{props.commit.subject}</span>

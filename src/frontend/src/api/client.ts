@@ -1,4 +1,4 @@
-import type { CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
+import type { CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
 
 const API_BASE = "/api";
 
@@ -26,8 +26,8 @@ export function fetchCommitDetail(repoId: string, hash: string): Promise<CommitD
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}`);
 }
 
-export function fetchGitHubActionsRuns(repoId: string): Promise<Record<string, GitHubActionsRunInfo[]>> {
-  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/github/actions`);
+export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>> {
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/runs`);
 }
 
 export function fetchConfig(): Promise<ConfigResponse> {

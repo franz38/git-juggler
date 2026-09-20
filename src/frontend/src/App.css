@@ -1307,7 +1307,7 @@
   flex: 0 0 auto;
 }
 
-.github-actions-badge {
+.ci-run-badge {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1322,7 +1322,7 @@
   cursor: pointer;
 }
 
-.github-actions-icon {
+.ci-run-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1330,12 +1330,17 @@
   height: 14px;
 }
 
-.github-actions-status {
+.ci-provider-text {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ci-run-status {
   font-weight: 800;
   line-height: 1;
 }
 
-.github-actions-tooltip {
+.ci-run-tooltip {
   display: none;
   position: absolute;
   top: calc(100% + 8px);
@@ -1352,19 +1357,19 @@
   white-space: normal;
 }
 
-.github-actions-badge:hover .github-actions-tooltip {
+.ci-run-badge:hover .ci-run-tooltip {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.github-actions-summary {
+.ci-run-summary {
   color: var(--text-h);
   font-size: 11px;
   font-weight: 600;
 }
 
-.github-actions-run {
+.ci-run-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1372,12 +1377,12 @@
   color: var(--text-dim);
 }
 
-.github-actions-run + .github-actions-run {
+.ci-run-item + .ci-run-item {
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
 
-.github-actions-run-title {
+.ci-run-title {
   color: var(--text-h);
   font-weight: 600;
 }

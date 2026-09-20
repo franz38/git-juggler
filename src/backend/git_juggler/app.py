@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
-from .github_actions import get_github_actions_runs
 from .repos import list_repos, resolve_repo_path
-from .schemas import CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary
+from .schemas import CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
 from .terminal import run_terminal_session
 
 
@@ -47,6 +47,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             repo_groups=config.load_repo_groups(),
             excluded_paths=config.load_excluded_paths(),
             github=config.load_github_config(),
+            jenkins=config.load_jenkins_config(),
         )
 
     @app.get("/api/config", response_model=ConfigResponse)
@@ -82,6 +83,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         if body.github is not None:
             config.save_github_config(body.github.model_dump())
 
+        if body.jenkins is not None:
+            config.save_jenkins_config(body.jenkins.model_dump())
+
         return _current_config()
 
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
@@ -112,14 +116,11 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
             raise HTTPException(status_code=404, detail="commit not found") from exc
 
-    @app.get("/api/repos/{repo_id}/github/actions", response_model=dict[str, list[GitHubActionsRunInfo]])
-    def api_github_actions(repo_id: str) -> dict[str, list[GitHubActionsRunInfo]]:
-        github_config = config.load_github_config() or {}
-        if github_config.get("enabled") is False:
-            return {}
+    @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
+    def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:
         path = _resolve_repo_path(repo_id)
         commits, _, _, _, _, _, _, _ = get_graph(path)
-        return get_github_actions_runs(path, {c.hash for c in commits}, github_config)
+        return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
 
     @app.websocket("/ws/terminal")
     async def ws_terminal(websocket: WebSocket) -> None:

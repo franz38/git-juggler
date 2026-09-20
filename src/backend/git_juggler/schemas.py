@@ -24,6 +24,20 @@ class GitHubConfig(BaseModel):
     repos: list[GitHubRepoConfig] = Field(default_factory=list)
 
 
+class JenkinsJobConfig(BaseModel):
+    repo_path: str
+    job_url: str
+
+
+class JenkinsConfig(BaseModel):
+    enabled: bool = True
+    base_url: str = ""
+    username: str = ""
+    api_token_env: str = "JENKINS_API_TOKEN"
+    build_limit: int = 50
+    jobs: list[JenkinsJobConfig] = Field(default_factory=list)
+
+
 class RepoGroupConfig(BaseModel):
     id: str
     name: str
@@ -36,6 +50,7 @@ class ConfigResponse(BaseModel):
     repo_groups: list[RepoGroupConfig] = Field(default_factory=list)
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
     github: GitHubConfig | None = None
+    jenkins: JenkinsConfig | None = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -44,6 +59,7 @@ class ConfigUpdateRequest(BaseModel):
     repo_groups: list[RepoGroupConfig] | None = None
     excluded_paths: list[str] | None = None
     github: GitHubConfig | None = None
+    jenkins: JenkinsConfig | None = None
 
 
 class PersonInfo(BaseModel):
@@ -108,11 +124,11 @@ class CommitDetail(BaseModel):
     files: list[FileChange]
 
 
-class GitHubActionsRunInfo(BaseModel):
+class CiRunInfo(BaseModel):
+    provider: str
     status: str
-    workflow_name: str
-    run_number: int
-    run_id: int
+    name: str
+    number: int
     url: str
     branch: str | None = None
     event: str | None = None

@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from git import Repo
 
-from .schemas import GitHubActionsRunInfo
+from .schemas import CiRunInfo
 
 
 GITHUB_RUNS_PER_PAGE = 100
@@ -177,7 +177,7 @@ def _matching_run_sha(run: dict, commit_hashes: set[str], tags_by_name: dict[str
     return None
 
 
-def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_config: dict | None) -> dict[str, list[GitHubActionsRunInfo]]:
+def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_config: dict | None) -> dict[str, list[CiRunInfo]]:
     if not commit_hashes:
         return {}
 
@@ -188,7 +188,7 @@ def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_con
     if repo_config is None:
         return {}
 
-    by_sha: dict[str, list[GitHubActionsRunInfo]] = {}
+    by_sha: dict[str, list[CiRunInfo]] = {}
     tags_by_name = _tag_targets(repo_path)
     for run in _fetch_workflow_runs(github_config, repo_config):
         sha = _matching_run_sha(run, commit_hashes, tags_by_name)
@@ -197,11 +197,11 @@ def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_con
 
         created_at = run.get("created_at") if isinstance(run.get("created_at"), str) else None
         updated_at = run.get("updated_at") if isinstance(run.get("updated_at"), str) else None
-        info = GitHubActionsRunInfo(
+        info = CiRunInfo(
+            provider="github_actions",
             status=_normalize_status(run.get("status"), run.get("conclusion")),
-            workflow_name=str(run.get("name") or run.get("display_title") or "GitHub Actions"),
-            run_number=int(run.get("run_number") or 0),
-            run_id=int(run.get("id") or 0),
+            name=str(run.get("name") or run.get("display_title") or "GitHub Actions"),
+            number=int(run.get("run_number") or 0),
             url=str(run.get("html_url") or ""),
             branch=run.get("head_branch") if isinstance(run.get("head_branch"), str) else None,
             event=run.get("event") if isinstance(run.get("event"), str) else None,

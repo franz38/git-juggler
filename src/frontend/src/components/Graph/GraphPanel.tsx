@@ -3,10 +3,10 @@ import {
   COLLAPSED_ROW_HEIGHT,
   activeRepo,
   checkedOutBranches,
+  ciRuns,
   currentBranch,
   fetchingRepos,
   filteredCommits,
-  githubActionsRuns,
   headCommit,
   isDirty,
   openContextMenu,
@@ -62,7 +62,7 @@ export function GraphPanel() {
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
   const runningActionsByHash = createMemo(() => {
     const hashes = new Set<string>();
-    for (const [hash, runs] of Object.entries(githubActionsRuns())) {
+    for (const [hash, runs] of Object.entries(ciRuns())) {
       if (runs.some((run) => run.status === "running")) hashes.add(hash);
     }
     return hashes;

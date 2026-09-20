@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { fetchCommitDetail, fetchConfig, fetchGitHubActionsRuns, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { CommitDetail, CommitSummary, FileChange, GitHubActionsRunInfo, GitHubConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import { fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
+import type { CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -31,9 +31,9 @@ interface RepoState {
   uncommittedExpanded: boolean;
   expanded: Set<string>;
   details: Record<string, CommitDetail>;
-  githubActionsRuns: Record<string, GitHubActionsRunInfo[]>;
-  githubActionsLoading: boolean;
-  githubActionsError: string | null;
+  ciRuns: Record<string, CiRunInfo[]>;
+  ciLoading: boolean;
+  ciError: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -254,9 +254,9 @@ function ensureRepoState(name: string): void {
       uncommittedExpanded: false,
       expanded: new Set(),
       details: {},
-      githubActionsRuns: {},
-      githubActionsLoading: false,
-      githubActionsError: null,
+      ciRuns: {},
+      ciLoading: false,
+      ciError: null,
       loading: false,
       error: null,
     });
@@ -275,7 +275,7 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
     setRepoStates(name, "isDirty", data.is_dirty);
     setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
-    void loadGitHubActionsInto(name);
+    void loadCiRunsInto(name);
   } catch (e) {
     setRepoStates(name, "error", (e as Error).message);
   } finally {
@@ -540,9 +540,9 @@ export const commitDetails = createMemo<Record<string, CommitDetail>>(() => {
   return name ? repoStates[name]?.details ?? {} : {};
 });
 
-export const githubActionsRuns = createMemo<Record<string, GitHubActionsRunInfo[]>>(() => {
+export const ciRuns = createMemo<Record<string, CiRunInfo[]>>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.githubActionsRuns ?? {} : {};
+  return name ? repoStates[name]?.ciRuns ?? {} : {};
 });
 
 export const graphLoading = createMemo<boolean>(() => {
@@ -674,54 +674,81 @@ const defaultGitHubConfig: GitHubConfig = {
   repos: [],
 };
 
+const defaultJenkinsConfig: JenkinsConfig = {
+  enabled: true,
+  base_url: "",
+  username: "",
+  api_token_env: "JENKINS_API_TOKEN",
+  build_limit: 50,
+  jobs: [],
+};
+
 const [githubConfig, setGitHubConfig] = createSignal<GitHubConfig>(defaultGitHubConfig);
 const [githubConfigError, setGitHubConfigError] = createSignal<string | null>(null);
 export { githubConfig, githubConfigError };
 
-const GITHUB_ACTIONS_POLL_MS = 10000;
-const GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
-const githubActionsPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const githubActionsPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+const [jenkinsConfig, setJenkinsConfig] = createSignal<JenkinsConfig>(defaultJenkinsConfig);
+const [jenkinsConfigError, setJenkinsConfigError] = createSignal<string | null>(null);
+export { jenkinsConfig, jenkinsConfigError };
 
-function hasRunningGitHubActions(runsByHash: Record<string, GitHubActionsRunInfo[]>): boolean {
+const CI_POLL_MS = 10000;
+const CI_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
+const ciPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const ciPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+
+function hasRunningCiRuns(runsByHash: Record<string, CiRunInfo[]>): boolean {
   return Object.values(runsByHash).some((runs) => runs.some((run) => run.status === "running"));
 }
 
-function clearGitHubActionsPoll(repoId: string): void {
-  const timer = githubActionsPollTimers.get(repoId);
+function clearCiPoll(repoId: string): void {
+  const timer = ciPollTimers.get(repoId);
   if (timer) clearTimeout(timer);
-  githubActionsPollTimers.delete(repoId);
+  ciPollTimers.delete(repoId);
 }
 
-function scheduleGitHubActionsPollIfNeeded(repoId: string, runsByHash: Record<string, GitHubActionsRunInfo[]>): void {
-  clearGitHubActionsPoll(repoId);
-  if (!hasRunningGitHubActions(runsByHash)) return;
-  githubActionsPollTimers.set(
+function scheduleCiPollIfNeeded(repoId: string, runsByHash: Record<string, CiRunInfo[]>): void {
+  clearCiPoll(repoId);
+  if (!hasRunningCiRuns(runsByHash)) return;
+  ciPollTimers.set(
     repoId,
     setTimeout(() => {
-      githubActionsPollTimers.delete(repoId);
-      void loadGitHubActionsInto(repoId);
-    }, GITHUB_ACTIONS_POLL_MS),
+      ciPollTimers.delete(repoId);
+      void loadCiRunsInto(repoId);
+    }, CI_POLL_MS),
   );
 }
 
-function clearGitHubActionsPushRefresh(repoId: string): void {
-  const timers = githubActionsPushRefreshTimers.get(repoId) ?? [];
+function clearCiPushRefresh(repoId: string): void {
+  const timers = ciPushRefreshTimers.get(repoId) ?? [];
   for (const timer of timers) clearTimeout(timer);
-  githubActionsPushRefreshTimers.delete(repoId);
+  ciPushRefreshTimers.delete(repoId);
 }
 
 function applyGitHubConfig(config: GitHubConfig | null): void {
   const nextConfig = config ?? defaultGitHubConfig;
   setGitHubConfig(nextConfig);
-  if (nextConfig.enabled) return;
+  if (nextConfig.enabled || jenkinsConfig().enabled) return;
 
   for (const repoId of Object.keys(repoStates)) {
-    clearGitHubActionsPoll(repoId);
-    clearGitHubActionsPushRefresh(repoId);
-    setRepoStates(repoId, "githubActionsRuns", {});
-    setRepoStates(repoId, "githubActionsLoading", false);
-    setRepoStates(repoId, "githubActionsError", null);
+    clearCiPoll(repoId);
+    clearCiPushRefresh(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
+  }
+}
+
+function applyJenkinsConfig(config: JenkinsConfig | null): void {
+  const nextConfig = config ?? defaultJenkinsConfig;
+  setJenkinsConfig(nextConfig);
+  if (nextConfig.enabled || githubConfig().enabled) return;
+
+  for (const repoId of Object.keys(repoStates)) {
+    clearCiPoll(repoId);
+    clearCiPushRefresh(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
   }
 }
 
@@ -733,54 +760,56 @@ export async function loadConfig(): Promise<void> {
     updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
     applyGitHubConfig(data.github);
+    applyJenkinsConfig(data.jenkins);
     setRepoPathsError(null);
     setExcludedPathsError(null);
     setGitHubConfigError(null);
+    setJenkinsConfigError(null);
   } catch (e) {
     setRepoPathsError((e as Error).message);
   }
 }
 
-async function loadGitHubActionsInto(repoId: string): Promise<void> {
+async function loadCiRunsInto(repoId: string): Promise<void> {
   ensureRepoState(repoId);
-  if (!githubConfig().enabled) {
-    clearGitHubActionsPoll(repoId);
-    setRepoStates(repoId, "githubActionsRuns", {});
-    setRepoStates(repoId, "githubActionsLoading", false);
-    setRepoStates(repoId, "githubActionsError", null);
+  if (!githubConfig().enabled && !jenkinsConfig().enabled) {
+    clearCiPoll(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
     return;
   }
-  if (repoStates[repoId].githubActionsLoading) return;
-  setRepoStates(repoId, "githubActionsLoading", true);
-  setRepoStates(repoId, "githubActionsError", null);
+  if (repoStates[repoId].ciLoading) return;
+  setRepoStates(repoId, "ciLoading", true);
+  setRepoStates(repoId, "ciError", null);
   try {
-    const runs = await fetchGitHubActionsRuns(repoId);
-    setRepoStates(repoId, "githubActionsRuns", runs);
-    scheduleGitHubActionsPollIfNeeded(repoId, runs);
+    const runs = await fetchCiRuns(repoId);
+    setRepoStates(repoId, "ciRuns", runs);
+    scheduleCiPollIfNeeded(repoId, runs);
   } catch (e) {
-    setRepoStates(repoId, "githubActionsError", (e as Error).message);
-    clearGitHubActionsPoll(repoId);
+    setRepoStates(repoId, "ciError", (e as Error).message);
+    clearCiPoll(repoId);
   } finally {
-    setRepoStates(repoId, "githubActionsLoading", false);
+    setRepoStates(repoId, "ciLoading", false);
   }
 }
 
-export function scheduleGitHubActionsRefreshAfterPush(repoId: string): void {
+export function scheduleCiRefreshAfterPush(repoId: string): void {
   scheduleGraphRefresh(repoId);
-  if (!githubConfig().enabled) return;
-  clearGitHubActionsPushRefresh(repoId);
+  if (!githubConfig().enabled && !jenkinsConfig().enabled) return;
+  clearCiPushRefresh(repoId);
   const timers: ReturnType<typeof setTimeout>[] = [];
-  for (const delay of GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS) {
+  for (const delay of CI_PUSH_REFRESH_DELAYS_MS) {
     const timer = setTimeout(() => {
-      const current = githubActionsPushRefreshTimers.get(repoId) ?? [];
+      const current = ciPushRefreshTimers.get(repoId) ?? [];
       const remaining = current.filter((item) => item !== timer);
-      if (remaining.length > 0) githubActionsPushRefreshTimers.set(repoId, remaining);
-      else githubActionsPushRefreshTimers.delete(repoId);
-      void loadGitHubActionsInto(repoId);
+      if (remaining.length > 0) ciPushRefreshTimers.set(repoId, remaining);
+      else ciPushRefreshTimers.delete(repoId);
+      void loadCiRunsInto(repoId);
     }, delay);
     timers.push(timer);
   }
-  githubActionsPushRefreshTimers.set(repoId, timers);
+  ciPushRefreshTimers.set(repoId, timers);
 }
 
 export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {
@@ -789,9 +818,21 @@ export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {
     applyGitHubConfig(data.github);
     setGitHubConfigError(null);
     const current = activeRepo();
-    if (current && (data.github ?? defaultGitHubConfig).enabled) void loadGitHubActionsInto(current);
+    if (current && ((data.github ?? defaultGitHubConfig).enabled || jenkinsConfig().enabled)) void loadCiRunsInto(current);
   } catch (e) {
     setGitHubConfigError((e as Error).message);
+  }
+}
+
+export async function saveJenkinsConfig(next: JenkinsConfig): Promise<void> {
+  try {
+    const data = await updateConfig({ jenkins: next });
+    applyJenkinsConfig(data.jenkins);
+    setJenkinsConfigError(null);
+    const current = activeRepo();
+    if (current && ((data.jenkins ?? defaultJenkinsConfig).enabled || githubConfig().enabled)) void loadCiRunsInto(current);
+  } catch (e) {
+    setJenkinsConfigError((e as Error).message);
   }
 }
 

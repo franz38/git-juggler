@@ -10,8 +10,8 @@ import {
   noteTerminalOutput,
   registerTerminalSender,
   scheduleCheckoutRefresh,
+  scheduleCiRefreshAfterPush,
   scheduleCommitRefresh,
-  scheduleGitHubActionsRefreshAfterPush,
   scheduleGraphRefresh,
   startFetch,
   startPush,
@@ -81,7 +81,7 @@ export function TerminalPanel(props: { repo: string | null }) {
           if (GRAPH_MUTATION_COMMAND_RE.test(lineBuffer)) scheduleGraphRefresh(repo);
           if (PUSH_COMMAND_RE.test(lineBuffer)) {
             startPush(repo);
-            scheduleGitHubActionsRefreshAfterPush(repo);
+            scheduleCiRefreshAfterPush(repo);
           }
           lineBuffer = "";
         } else if (ch === "\x7f" || ch === "\b") {
