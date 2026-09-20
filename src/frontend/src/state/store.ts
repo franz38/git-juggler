@@ -667,6 +667,8 @@ const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(
 export { excludedPaths, excludedPathsError };
 
 const defaultGitHubConfig: GitHubConfig = {
+  enabled: true,
+  auto_detect: true,
   api_base_url: "https://api.github.com",
   token_env: "GITHUB_TOKEN",
   repos: [],
@@ -709,6 +711,20 @@ function clearGitHubActionsPushRefresh(repoId: string): void {
   githubActionsPushRefreshTimers.delete(repoId);
 }
 
+function applyGitHubConfig(config: GitHubConfig | null): void {
+  const nextConfig = config ?? defaultGitHubConfig;
+  setGitHubConfig(nextConfig);
+  if (nextConfig.enabled) return;
+
+  for (const repoId of Object.keys(repoStates)) {
+    clearGitHubActionsPoll(repoId);
+    clearGitHubActionsPushRefresh(repoId);
+    setRepoStates(repoId, "githubActionsRuns", {});
+    setRepoStates(repoId, "githubActionsLoading", false);
+    setRepoStates(repoId, "githubActionsError", null);
+  }
+}
+
 export async function loadConfig(): Promise<void> {
   try {
     const data = await fetchConfig();
@@ -716,7 +732,7 @@ export async function loadConfig(): Promise<void> {
     setPinnedRepos(new Set(data.pinned_repo_paths));
     updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
-    setGitHubConfig(data.github ?? defaultGitHubConfig);
+    applyGitHubConfig(data.github);
     setRepoPathsError(null);
     setExcludedPathsError(null);
     setGitHubConfigError(null);
@@ -727,6 +743,13 @@ export async function loadConfig(): Promise<void> {
 
 async function loadGitHubActionsInto(repoId: string): Promise<void> {
   ensureRepoState(repoId);
+  if (!githubConfig().enabled) {
+    clearGitHubActionsPoll(repoId);
+    setRepoStates(repoId, "githubActionsRuns", {});
+    setRepoStates(repoId, "githubActionsLoading", false);
+    setRepoStates(repoId, "githubActionsError", null);
+    return;
+  }
   if (repoStates[repoId].githubActionsLoading) return;
   setRepoStates(repoId, "githubActionsLoading", true);
   setRepoStates(repoId, "githubActionsError", null);
@@ -744,6 +767,7 @@ async function loadGitHubActionsInto(repoId: string): Promise<void> {
 
 export function scheduleGitHubActionsRefreshAfterPush(repoId: string): void {
   scheduleGraphRefresh(repoId);
+  if (!githubConfig().enabled) return;
   clearGitHubActionsPushRefresh(repoId);
   const timers: ReturnType<typeof setTimeout>[] = [];
   for (const delay of GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS) {
@@ -762,10 +786,10 @@ export function scheduleGitHubActionsRefreshAfterPush(repoId: string): void {
 export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {
   try {
     const data = await updateConfig({ github: next });
-    setGitHubConfig(data.github ?? defaultGitHubConfig);
+    applyGitHubConfig(data.github);
     setGitHubConfigError(null);
     const current = activeRepo();
-    if (current) void loadGitHubActionsInto(current);
+    if (current && (data.github ?? defaultGitHubConfig).enabled) void loadGitHubActionsInto(current);
   } catch (e) {
     setGitHubConfigError((e as Error).message);
   }

@@ -194,6 +194,28 @@
   min-height: 44px;
 }
 
+.menu-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.menu-switch-row input {
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.menu-switch-row .menu-hint {
+  display: block;
+  margin: 3px 0 0;
+}
+
 .menu-field input:focus,
 .menu-field textarea:focus,
 .github-repo-row input:focus {
@@ -545,12 +567,47 @@
 .repo-group-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   cursor: grab;
   overflow: hidden;
   box-sizing: border-box;
-  transition: height 120ms ease, padding 120ms ease, opacity 120ms ease;
+  transition: height 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
+}
+
+.repo-group-heading:hover {
+  background: var(--hover-bg);
+}
+
+.repo-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-group-collapse {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.repo-group-collapse:hover {
+  color: var(--text-h);
+}
+
+.repo-group-collapse svg {
+  transition: transform 120ms ease;
+}
+
+.repo-group-collapse.collapsed svg {
+  transform: rotate(-90deg);
 }
 
 .repo-select,

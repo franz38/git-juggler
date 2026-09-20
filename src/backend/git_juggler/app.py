@@ -114,9 +114,12 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/api/repos/{repo_id}/github/actions", response_model=dict[str, list[GitHubActionsRunInfo]])
     def api_github_actions(repo_id: str) -> dict[str, list[GitHubActionsRunInfo]]:
+        github_config = config.load_github_config() or {}
+        if github_config.get("enabled") is False:
+            return {}
         path = _resolve_repo_path(repo_id)
         commits, _, _, _, _, _, _, _ = get_graph(path)
-        return get_github_actions_runs(path, {c.hash for c in commits}, config.load_github_config())
+        return get_github_actions_runs(path, {c.hash for c in commits}, github_config)
 
     @app.websocket("/ws/terminal")
     async def ws_terminal(websocket: WebSocket) -> None:

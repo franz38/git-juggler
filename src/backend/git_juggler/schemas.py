@@ -17,6 +17,8 @@ class GitHubRepoConfig(BaseModel):
 
 
 class GitHubConfig(BaseModel):
+    enabled: bool = True
+    auto_detect: bool = True
     api_base_url: str = "https://api.github.com"
     token_env: str = "GITHUB_TOKEN"
     repos: list[GitHubRepoConfig] = Field(default_factory=list)

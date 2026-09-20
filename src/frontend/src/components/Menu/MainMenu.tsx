@@ -23,6 +23,8 @@ import type { BranchColorMode, Theme } from "../../state/store";
 type Section = "repos" | "github" | "appearance";
 
 const emptyGitHubConfig: GitHubConfig = {
+  enabled: true,
+  auto_detect: true,
   api_base_url: "https://api.github.com",
   token_env: "GITHUB_TOKEN",
   repos: [],
@@ -168,11 +170,23 @@ export function MainMenu() {
             </Show>
             <Show when={activeSection() === "github"}>
               <h3>GitHub Actions</h3>
-              <p class="menu-hint">Map local repos to GitHub repos to show workflow run status on matching commits.</p>
+              <p class="menu-hint">Workflow status is detected from each repo's origin remote by default.</p>
 
               <div class="menu-notice">
                 GitHub token is not stored by git-juggler. Set <span class="mono">{githubDraft().token_env || "GITHUB_TOKEN"}</span> before starting the backend.
               </div>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable GitHub Actions integration</span>
+                  <span class="menu-hint">When disabled, workflow status is not requested or shown.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={githubDraft().enabled}
+                  onChange={(e) => updateGitHubDraft("enabled", e.currentTarget.checked)}
+                />
+              </label>
 
               <label class="menu-field">
                 <span>API base URL</span>
@@ -192,9 +206,22 @@ export function MainMenu() {
                 />
               </label>
 
-              <div class="menu-subheading">Repo mappings</div>
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Automatic GitHub Actions detection</span>
+                  <span class="menu-hint">Infer owner and repo from each local repo's origin remote.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={githubDraft().auto_detect}
+                  onChange={(e) => updateGitHubDraft("auto_detect", e.currentTarget.checked)}
+                />
+              </label>
+
+              <div class="menu-subheading">Advanced repo overrides</div>
+              <p class="menu-hint">Only add mappings when origin cannot be used or should map to a different GitHub repo.</p>
               <div class="github-repo-mappings">
-                <Show when={githubDraft().repos.length > 0} fallback={<div class="menu-empty">No GitHub repos configured</div>}>
+                <Show when={githubDraft().repos.length > 0} fallback={<div class="menu-empty">No overrides configured</div>}>
                   <Index each={githubDraft().repos}>
                     {(repo, index) => (
                     <div class="github-repo-row">
@@ -227,7 +254,7 @@ export function MainMenu() {
 
               <div class="menu-actions">
                 <button type="button" class="menu-secondary-button" onClick={addGitHubRepo}>
-                  Add mapping
+                  Add override
                 </button>
                 <button type="button" class="menu-primary-button" onClick={handleSaveGitHub}>
                   Save GitHub settings

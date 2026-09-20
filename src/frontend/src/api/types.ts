@@ -34,6 +34,8 @@ export interface GitHubRepoConfig {
 }
 
 export interface GitHubConfig {
+  enabled: boolean;
+  auto_detect: boolean;
   api_base_url: string;
   token_env: string;
   repos: GitHubRepoConfig[];

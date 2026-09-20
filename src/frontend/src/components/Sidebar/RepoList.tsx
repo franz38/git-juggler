@@ -37,6 +37,14 @@ function BookmarkIcon() {
   );
 }
 
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+      <path d="M2.5 4.5 L6 8 L9.5 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
+}
+
 function RepoRow(props: {
   repo: RepoSummary;
   groupId?: string;
@@ -227,6 +235,14 @@ export function RepoList() {
   const [groupGapHeight, setGroupGapHeight] = createSignal(40);
   const groupHeadingElements = new Map<string, HTMLElement>();
   const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
+  const [collapsedGroupIds, setCollapsedGroupIds] = createSignal<Set<string>>(new Set());
+
+  function toggleGroupCollapsed(groupId: string): void {
+    const next = new Set(collapsedGroupIds());
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    setCollapsedGroupIds(next);
+  }
   const filtered = createMemo(() => {
     const q = query().trim().toLowerCase();
     return q ? repos().filter((r) => r.name.toLowerCase().includes(q)) : repos();
@@ -427,31 +443,45 @@ export function RepoList() {
                 }}
                 onDragEnd={clearGroupDrag}
               >
-                <span>{group.name}</span>
+                <span class="repo-group-name">{group.name}</span>
+                <button
+                  type="button"
+                  class="repo-group-collapse"
+                  classList={{ collapsed: collapsedGroupIds().has(group.id) }}
+                  title={collapsedGroupIds().has(group.id) ? "Expand group" : "Collapse group"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleGroupCollapsed(group.id);
+                  }}
+                >
+                  <ChevronIcon />
+                </button>
                 <GroupCheckbox
                   checked={groupRepoPaths().length > 0 && groupSelectedCount() === groupRepoPaths().length}
                   indeterminate={groupSelectedCount() > 0 && groupSelectedCount() < groupRepoPaths().length}
                   onChange={(checked) => setGroupSelected(groupRepoPaths(), checked)}
                 />
               </h2>
-              <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
-                {(repo) => (
-                  <RepoRow
-                    repo={repo}
-                    groupId={group.id}
-                    selected={selectedRepoPaths().has(repo.path)}
-                    onSelectedChange={setRepoSelected}
-                    disableRepoDrag={draggedGroupId() !== null}
-                    onBookmarkClick={openBookmarkMenu}
-                    onRepoDragStart={setDraggedRepoPath}
-                    onRepoDrop={(toRepoPath) => {
-                      const fromRepoPath = draggedRepoPath();
-                      setDraggedRepoPath(null);
-                      if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
-                    }}
-                  />
-                )}
-              </For>
+              <Show when={!collapsedGroupIds().has(group.id)}>
+                <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
+                  {(repo) => (
+                    <RepoRow
+                      repo={repo}
+                      groupId={group.id}
+                      selected={selectedRepoPaths().has(repo.path)}
+                      onSelectedChange={setRepoSelected}
+                      disableRepoDrag={draggedGroupId() !== null}
+                      onBookmarkClick={openBookmarkMenu}
+                      onRepoDragStart={setDraggedRepoPath}
+                      onRepoDrop={(toRepoPath) => {
+                        const fromRepoPath = draggedRepoPath();
+                        setDraggedRepoPath(null);
+                        if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
+                      }}
+                    />
+                  )}
+                </For>
+              </Show>
               </section>
               <Show when={collapsingGroupGhost()?.afterId === group.id}>{groupGhost()}</Show>
               </>

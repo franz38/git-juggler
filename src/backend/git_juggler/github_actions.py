@@ -182,7 +182,9 @@ def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_con
         return {}
 
     github_config = github_config or {}
-    repo_config = _matching_repo_config(github_config, repo_path) or _inferred_repo_config(repo_path)
+    repo_config = _matching_repo_config(github_config, repo_path)
+    if repo_config is None and github_config.get("auto_detect", True):
+        repo_config = _inferred_repo_config(repo_path)
     if repo_config is None:
         return {}
 
