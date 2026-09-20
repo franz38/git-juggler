@@ -211,32 +211,6 @@ function BulkMenu(props: { state: BulkMenuState; selectedCount: number; onFetch:
   );
 }
 
-function GroupDropZone(props: { index: number; active: boolean; highlighted: boolean; onHover: (index: number | null) => void; onDropAt: (index: number) => void }) {
-  return (
-    <div
-      class="repo-group-drop-zone"
-      classList={{ active: props.active, highlighted: props.highlighted }}
-      onDragEnter={(e) => {
-        if (!props.active) return;
-        e.preventDefault();
-        props.onHover(props.index);
-      }}
-      onDragOver={(e) => {
-        if (!props.active) return;
-        e.preventDefault();
-      }}
-      onDragLeave={() => {
-        if (props.highlighted) props.onHover(null);
-      }}
-      onDrop={(e) => {
-        if (!props.active) return;
-        e.preventDefault();
-        props.onDropAt(props.index);
-      }}
-    />
-  );
-}
-
 export function RepoList() {
   onMount(() => {
     void loadRepos();
@@ -248,7 +222,10 @@ export function RepoList() {
   const [bulkMenu, setBulkMenu] = createSignal<BulkMenuState | null>(null);
   const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
   const [draggedGroupId, setDraggedGroupId] = createSignal<string | null>(null);
-  const [highlightedGroupDropIndex, setHighlightedGroupDropIndex] = createSignal<number | null>(null);
+  const [groupInsertionIndex, setGroupInsertionIndex] = createSignal<number | null>(null);
+  const [collapsingGroupGhost, setCollapsingGroupGhost] = createSignal<{ name: string; afterId: string | null; beforeId: string | null; height: number } | null>(null);
+  const [groupGapHeight, setGroupGapHeight] = createSignal(40);
+  const groupHeadingElements = new Map<string, HTMLElement>();
   const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
   const filtered = createMemo(() => {
     const q = query().trim().toLowerCase();
@@ -309,12 +286,71 @@ export function RepoList() {
     }
   }
 
-  function dropGroupAt(index: number): void {
-    const fromId = draggedGroupId();
+  const draggedGroupIdFrom = (event: DragEvent): string | null => {
+    return draggedGroupId() || event.dataTransfer?.getData("application/x-git-juggler-group") || event.dataTransfer?.getData("text/plain") || null;
+  };
+
+  const clearGroupDrag = () => {
     setDraggedGroupId(null);
-    setHighlightedGroupDropIndex(null);
-    if (fromId) void moveRepoGroupToIndex(fromId, index);
-  }
+    setGroupInsertionIndex(null);
+  };
+
+  const visibleGroupInsertionIndex = () => {
+    const index = groupInsertionIndex();
+    const draggedId = draggedGroupId();
+    if (index === null || !draggedId) return null;
+    const draggedIndex = filteredGroups().findIndex((group) => group.id === draggedId);
+    if (draggedIndex === -1 || index === draggedIndex || index === draggedIndex + 1) return null;
+    return index;
+  };
+
+  const computeGroupInsertionIndex = (event: DragEvent): number => {
+    const draggedId = draggedGroupIdFrom(event);
+    const currentGroups = filteredGroups();
+    const visibleGap = visibleGroupInsertionIndex();
+    for (let index = 0; index < currentGroups.length; index++) {
+      const group = currentGroups[index];
+      if (group.id === draggedId) continue;
+      const element = groupHeadingElements.get(group.id);
+      if (!element) continue;
+      const rect = element.getBoundingClientRect();
+      const adjustedTop = visibleGap !== null && index >= visibleGap ? rect.top - groupGapHeight() : rect.top;
+      if (event.clientY < adjustedTop + rect.height / 2) return index;
+    }
+    return currentGroups.length;
+  };
+
+  const commitGroupDrop = (event: DragEvent) => {
+    const draggedId = draggedGroupIdFrom(event);
+    const index = groupInsertionIndex();
+    const currentGroups = filteredGroups();
+    const draggedIndex = currentGroups.findIndex((group) => group.id === draggedId);
+    if (draggedId && index !== null && draggedIndex !== -1 && currentGroups.length > 0 && visibleGroupInsertionIndex() !== null) {
+      const draggedGroup = currentGroups[draggedIndex];
+      setCollapsingGroupGhost({
+        name: draggedGroup.name,
+        afterId: currentGroups[draggedIndex - 1]?.id ?? null,
+        beforeId: currentGroups[draggedIndex + 1]?.id ?? null,
+        height: groupGapHeight(),
+      });
+      void moveRepoGroupToIndex(draggedId, index);
+      clearGroupDrag();
+      window.setTimeout(() => setCollapsingGroupGhost(null), 120);
+      return;
+    }
+    clearGroupDrag();
+  };
+
+  const groupGap = () => <div class="repo-group-drop-gap" style={{ height: `${groupGapHeight()}px` }} />;
+  const groupGhost = () => {
+    const item = collapsingGroupGhost();
+    if (!item) return null;
+    return (
+      <div class="repo-group-heading repo-group-collapse-ghost" style={{ height: `${item.height}px` }}>
+        <span>{item.name}</span>
+      </div>
+    );
+  };
 
   return (
     <div class="repo-list">
@@ -341,75 +377,88 @@ export function RepoList() {
         <h2>Pinned</h2>
         <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}</For>
       </Show>
-      <For each={filteredGroups()}>
-        {(group, index) => {
-          const groupRepoPaths = () => group.repos.map((repo) => repo.path);
-          const groupSelectedCount = () => selectedCountFor(groupRepoPaths());
-          return (
-            <>
-            <GroupDropZone
-              index={index()}
-              active={draggedGroupId() !== null}
-              highlighted={highlightedGroupDropIndex() === index()}
-              onHover={setHighlightedGroupDropIndex}
-              onDropAt={dropGroupAt}
-            />
-            <section class="repo-group-section">
-            <h2
-              draggable={true}
-              class="repo-group-heading"
-              onDragStart={(e) => {
-                if (e.dataTransfer) {
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("application/x-git-juggler-group", group.id);
-                }
-                e.dataTransfer?.setData("text/plain", group.id);
-                setDraggedGroupId(group.id);
-              }}
-              onDragEnd={() => {
-                setDraggedGroupId(null);
-                setHighlightedGroupDropIndex(null);
-              }}
-            >
-              <span>{group.name}</span>
-              <GroupCheckbox
-                checked={groupRepoPaths().length > 0 && groupSelectedCount() === groupRepoPaths().length}
-                indeterminate={groupSelectedCount() > 0 && groupSelectedCount() < groupRepoPaths().length}
-                onChange={(checked) => setGroupSelected(groupRepoPaths(), checked)}
-              />
-            </h2>
-            <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
-              {(repo) => (
-                <RepoRow
-                  repo={repo}
-                  groupId={group.id}
-                  selected={selectedRepoPaths().has(repo.path)}
-                  onSelectedChange={setRepoSelected}
-                  disableRepoDrag={draggedGroupId() !== null}
-                  onBookmarkClick={openBookmarkMenu}
-                  onRepoDragStart={setDraggedRepoPath}
-                  onRepoDrop={(toRepoPath) => {
-                    const fromRepoPath = draggedRepoPath();
-                    setDraggedRepoPath(null);
-                    if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
-                  }}
-                />
-              )}
-            </For>
-            </section>
-            </>
-          );
+      <div
+        class="repo-group-list"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+          if (draggedGroupIdFrom(e)) setGroupInsertionIndex(computeGroupInsertionIndex(e));
         }}
-      </For>
-      <Show when={filteredGroups().length > 0}>
-        <GroupDropZone
-          index={filteredGroups().length}
-          active={draggedGroupId() !== null}
-          highlighted={highlightedGroupDropIndex() === filteredGroups().length}
-          onHover={setHighlightedGroupDropIndex}
-          onDropAt={dropGroupAt}
-        />
-      </Show>
+        onDrop={(e) => {
+          e.preventDefault();
+          commitGroupDrop(e);
+        }}
+      >
+        <Show when={collapsingGroupGhost()?.beforeId === filteredGroups()[0]?.id && collapsingGroupGhost()?.afterId === null}>{groupGhost()}</Show>
+        <For each={filteredGroups()}>
+          {(group, index) => {
+            const groupRepoPaths = () => group.repos.map((repo) => repo.path);
+            const groupSelectedCount = () => selectedCountFor(groupRepoPaths());
+            return (
+              <>
+              <Show when={visibleGroupInsertionIndex() === index()}>{groupGap()}</Show>
+              <section class="repo-group-section">
+              <h2
+                ref={(el) => groupHeadingElements.set(group.id, el)}
+                draggable={true}
+                class="repo-group-heading"
+                classList={{ dragging: draggedGroupId() === group.id }}
+                onDragStart={(e) => {
+                  setDraggedGroupId(group.id);
+                  setGroupInsertionIndex(null);
+                  setGroupGapHeight((e.currentTarget as HTMLElement).getBoundingClientRect().height);
+                  if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("application/x-git-juggler-group", group.id);
+                  }
+                  e.dataTransfer?.setData("text/plain", group.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+                  if (draggedGroupIdFrom(e)) setGroupInsertionIndex(computeGroupInsertionIndex(e));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  commitGroupDrop(e);
+                }}
+                onDragEnd={clearGroupDrag}
+              >
+                <span>{group.name}</span>
+                <GroupCheckbox
+                  checked={groupRepoPaths().length > 0 && groupSelectedCount() === groupRepoPaths().length}
+                  indeterminate={groupSelectedCount() > 0 && groupSelectedCount() < groupRepoPaths().length}
+                  onChange={(checked) => setGroupSelected(groupRepoPaths(), checked)}
+                />
+              </h2>
+              <For each={group.repos} fallback={<div class="repo-empty">No repos in group</div>}>
+                {(repo) => (
+                  <RepoRow
+                    repo={repo}
+                    groupId={group.id}
+                    selected={selectedRepoPaths().has(repo.path)}
+                    onSelectedChange={setRepoSelected}
+                    disableRepoDrag={draggedGroupId() !== null}
+                    onBookmarkClick={openBookmarkMenu}
+                    onRepoDragStart={setDraggedRepoPath}
+                    onRepoDrop={(toRepoPath) => {
+                      const fromRepoPath = draggedRepoPath();
+                      setDraggedRepoPath(null);
+                      if (fromRepoPath) void moveRepoInGroup(group.id, fromRepoPath, toRepoPath);
+                    }}
+                  />
+                )}
+              </For>
+              </section>
+              <Show when={collapsingGroupGhost()?.afterId === group.id}>{groupGhost()}</Show>
+              </>
+            );
+          }}
+        </For>
+        <Show when={visibleGroupInsertionIndex() === filteredGroups().length}>{groupGap()}</Show>
+      </div>
       <h2>Repositories</h2>
       <For each={unpinned()} fallback={<div class="repo-empty">No git repos found</div>}>
         {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}

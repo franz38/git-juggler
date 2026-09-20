@@ -548,6 +548,9 @@
   justify-content: space-between;
   gap: 8px;
   cursor: grab;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: height 120ms ease, padding 120ms ease, opacity 120ms ease;
 }
 
 .repo-select,
@@ -569,23 +572,33 @@
   cursor: grabbing;
 }
 
-.repo-group-drop-zone {
-  height: 4px;
-  margin: 0 16px;
+.repo-group-heading.dragging {
+  opacity: 0.45;
+}
+
+@keyframes repo-group-ghost-collapse {
+  to {
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+}
+
+.repo-group-collapse-ghost {
+  flex: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.45;
+  animation: repo-group-ghost-collapse 120ms ease forwards;
+}
+
+.repo-group-drop-gap {
+  flex: 0 0 auto;
+  margin: 2px 16px;
   border-radius: 999px;
-}
-
-.repo-group-drop-zone.active {
-  height: 10px;
-  margin-top: 2px;
-  margin-bottom: 2px;
-  border: 1px dashed rgba(88, 166, 255, 0.45);
-  background: rgba(88, 166, 255, 0.08);
-}
-
-.repo-group-drop-zone.highlighted {
   background: var(--accent);
   box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+  transition: height 140ms ease, opacity 140ms ease;
 }
 
 .repo-bookmark-overlay {
