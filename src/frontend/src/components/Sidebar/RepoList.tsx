@@ -356,7 +356,7 @@ export function RepoList() {
             />
             <section class="repo-group-section">
             <h2
-              draggable
+              draggable={true}
               class="repo-group-heading"
               onDragStart={(e) => {
                 if (e.dataTransfer) {
