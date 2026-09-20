@@ -1,4 +1,6 @@
 import { For, Show, createSignal } from "solid-js";
+import { flipTranslate } from "../../lib/flip";
+import { suppressDragImage } from "../../lib/dragImage";
 import { activateTab, activeRepo, closeTab, moveTab, openRepoContextMenu, pinTab, repoCurrentBranch, tabs } from "../../state/store";
 
 export function TabsBar() {
@@ -11,6 +13,18 @@ export function TabsBar() {
 
   const clearDrag = () => setDraggedTabId(null);
 
+  // Animates the dragged tab and the neighbor it's about to swap with: capture
+  // both elements' current position, let the (synchronous) reorder happen,
+  // then on the next frame FLIP each one from its old position to its new one.
+  const animateSwap = (draggedEl: HTMLElement, neighborEl: HTMLElement) => {
+    const beforeDragged = draggedEl.getBoundingClientRect();
+    const beforeNeighbor = neighborEl.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      flipTranslate(draggedEl, beforeDragged.left - draggedEl.getBoundingClientRect().left, 0);
+      flipTranslate(neighborEl, beforeNeighbor.left - neighborEl.getBoundingClientRect().left, 0);
+    });
+  };
+
   // Swaps the dragged tab one step at a time with whichever neighbor the
   // cursor has crossed past the midpoint of, instead of computing a full
   // target index and only reordering on drop -- the list reorders live as
@@ -21,6 +35,8 @@ export function TabsBar() {
     const currentTabs = tabs();
     const draggedIndex = currentTabs.findIndex((tab) => tab.id === draggedId);
     if (draggedIndex === -1) return;
+    const draggedEl = tabElements.get(draggedId);
+    if (!draggedEl) return;
 
     const nextTab = currentTabs[draggedIndex + 1];
     if (nextTab) {
@@ -28,6 +44,7 @@ export function TabsBar() {
       if (el) {
         const rect = el.getBoundingClientRect();
         if (event.clientX > rect.left + rect.width / 2) {
+          animateSwap(draggedEl, el);
           moveTab(draggedId, nextTab.id, "after");
           return;
         }
@@ -40,6 +57,7 @@ export function TabsBar() {
       if (el) {
         const rect = el.getBoundingClientRect();
         if (event.clientX < rect.left + rect.width / 2) {
+          animateSwap(draggedEl, el);
           moveTab(draggedId, prevTab.id, "before");
         }
       }
@@ -79,6 +97,7 @@ export function TabsBar() {
               if (e.dataTransfer) {
                 e.dataTransfer.effectAllowed = "move";
               }
+              suppressDragImage(e);
             }}
             onDragOver={(e) => {
               e.preventDefault();

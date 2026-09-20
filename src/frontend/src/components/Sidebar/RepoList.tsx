@@ -1,5 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { RepoSummary } from "../../api/types";
+import { flipTranslate } from "../../lib/flip";
+import { suppressDragImage } from "../../lib/dragImage";
 import {
   activeRepo,
   createRepoGroup,
@@ -67,6 +69,7 @@ function RepoRow(props: {
         if (!props.groupId || props.disableRepoDrag) return;
         e.dataTransfer?.setData("text/plain", props.repo.path);
         props.onRepoDragStart?.(props.repo.path);
+        suppressDragImage(e);
       }}
       onDragOver={(e) => {
         if (!props.groupId || props.disableRepoDrag) return;
@@ -233,6 +236,10 @@ export function RepoList() {
   const groupHeadingElements = new Map<string, HTMLElement>();
   const [draggedRepoPath, setDraggedRepoPath] = createSignal<string | null>(null);
   const [collapsedGroupIds, setCollapsedGroupIds] = createSignal<Set<string>>(new Set());
+  // moveRepoGroup round-trips through the backend before the local state
+  // (and thus the DOM order) actually updates, so guard against overlapping
+  // swap requests from rapid-fire dragover events while one is in flight.
+  let groupSwapPending = false;
 
   function toggleGroupCollapsed(groupId: string): void {
     const next = new Set(collapsedGroupIds());
@@ -305,16 +312,34 @@ export function RepoList() {
 
   const clearGroupDrag = () => setDraggedGroupId(null);
 
+  // Animates both swapped elements from their pre-swap position to their new
+  // one once the (backend-round-tripped) reorder has actually landed in the DOM.
+  const animateGroupSwap = (draggedEl: HTMLElement, neighborEl: HTMLElement, fromId: string, toId: string) => {
+    const beforeDragged = draggedEl.getBoundingClientRect();
+    const beforeNeighbor = neighborEl.getBoundingClientRect();
+    groupSwapPending = true;
+    void moveRepoGroup(fromId, toId).finally(() => {
+      groupSwapPending = false;
+      requestAnimationFrame(() => {
+        flipTranslate(draggedEl, 0, beforeDragged.top - draggedEl.getBoundingClientRect().top);
+        flipTranslate(neighborEl, 0, beforeNeighbor.top - neighborEl.getBoundingClientRect().top);
+      });
+    });
+  };
+
   // Swaps the dragged group one step at a time with whichever neighbor the
   // cursor has crossed past the (vertical) midpoint of -- mirrors TabsBar's
   // maybeSwap, adapted from clientX/left to clientY/top. The list reorders
   // live as you drag; no gap/ghost placeholder needed.
   const maybeSwapGroup = (event: DragEvent) => {
+    if (groupSwapPending) return;
     const draggedId = draggedGroupIdFrom(event);
     if (!draggedId) return;
     const currentGroups = filteredGroups();
     const draggedIndex = currentGroups.findIndex((group) => group.id === draggedId);
     if (draggedIndex === -1) return;
+    const draggedEl = groupHeadingElements.get(draggedId);
+    if (!draggedEl) return;
 
     const nextGroup = currentGroups[draggedIndex + 1];
     if (nextGroup) {
@@ -322,7 +347,7 @@ export function RepoList() {
       if (el) {
         const rect = el.getBoundingClientRect();
         if (event.clientY > rect.top + rect.height / 2) {
-          void moveRepoGroup(draggedId, nextGroup.id);
+          animateGroupSwap(draggedEl, el, draggedId, nextGroup.id);
           return;
         }
       }
@@ -334,7 +359,7 @@ export function RepoList() {
       if (el) {
         const rect = el.getBoundingClientRect();
         if (event.clientY < rect.top + rect.height / 2) {
-          void moveRepoGroup(draggedId, prevGroup.id);
+          animateGroupSwap(draggedEl, el, draggedId, prevGroup.id);
         }
       }
     }
@@ -395,6 +420,7 @@ export function RepoList() {
                     e.dataTransfer.setData("application/x-git-juggler-group", group.id);
                   }
                   e.dataTransfer?.setData("text/plain", group.id);
+                  suppressDragImage(e);
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
