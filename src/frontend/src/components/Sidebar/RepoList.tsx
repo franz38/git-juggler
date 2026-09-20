@@ -406,7 +406,8 @@ export function RepoList() {
                 onDragStart={(e) => {
                   setDraggedGroupId(group.id);
                   setGroupInsertionIndex(null);
-                  setGroupGapHeight((e.currentTarget as HTMLElement).getBoundingClientRect().height);
+                  const section = (e.currentTarget as HTMLElement).closest(".repo-group-section");
+                  setGroupGapHeight((section ?? (e.currentTarget as HTMLElement)).getBoundingClientRect().height);
                   if (e.dataTransfer) {
                     e.dataTransfer.effectAllowed = "move";
                     e.dataTransfer.setData("application/x-git-juggler-group", group.id);
