@@ -22,9 +22,9 @@ import {
 import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
 import { colorForBranch, TAG_COLOR } from "./branchColor";
 import { computeColumns } from "./computeColumns";
+import { laneWidthFor } from "./laneWidth";
 
 const LANE_MARGIN = 20;
-const LANE_WIDTH = 24;
 const DOT_RADIUS = 6;
 const CORNER_RADIUS = 8;
 const GHOST_ROW_HEIGHT = COLLAPSED_ROW_HEIGHT;
@@ -117,7 +117,14 @@ export function GraphPanel() {
   const dirtyGhostY = createMemo(() => uncommittedRowHeight() / 2);
 
   const columnFor = (hash: string) => lanes().get(hash)?.column ?? 0;
-  const xForColumn = (column: number) => LANE_MARGIN + column * LANE_WIDTH;
+  // Lanes tighten as more are needed (see laneWidthFor), so wide graphs stay compact.
+  const laneCount = createMemo(() => {
+    let max = -1;
+    for (const lane of lanes().values()) max = Math.max(max, lane.column);
+    return max + 1;
+  });
+  const laneWidth = createMemo(() => laneWidthFor(laneCount()));
+  const xForColumn = (column: number) => LANE_MARGIN + column * laneWidth();
   const xFor = (hash: string) => xForColumn(columnFor(hash));
   const yFor = (hash: string) => {
     const offset = rowLayout().offsetByHash.get(hash) ?? 0;
