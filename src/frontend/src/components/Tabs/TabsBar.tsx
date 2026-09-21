@@ -1,6 +1,26 @@
 import { For, Show, createSignal } from "solid-js";
 import { flipTranslate } from "../../lib/flip";
-import { activateTab, activeRepo, closeTab, moveTab, openRepoContextMenu, pinTab, repoCurrentBranch, tabs } from "../../state/store";
+import {
+  activateTab,
+  activeAgentSessionsByRepositoryId,
+  activeRepo,
+  agentsEnabled,
+  closeTab,
+  moveTab,
+  openRepoContextMenu,
+  pinTab,
+  repoCurrentBranch,
+  repos,
+  tabs,
+} from "../../state/store";
+
+// Active agent sessions working in this tab's repository (0 when agent
+// detection is off), for the badge next to the tab name.
+function activeAgentCount(tabId: string): number {
+  if (!agentsEnabled()) return 0;
+  const repositoryId = repos().find((repo) => repo.id === tabId)?.repository_id;
+  return repositoryId ? activeAgentSessionsByRepositoryId().get(repositoryId) ?? 0 : 0;
+}
 
 export function TabsBar() {
   const [draggedTabId, setDraggedTabId] = createSignal<string | null>(null);
@@ -117,6 +137,11 @@ export function TabsBar() {
                 <span class="tab-branch">{repoCurrentBranch(tab.id)}</span>
               </Show>
             </span>
+            <Show when={activeAgentCount(tab.id) > 0}>
+              <span class="tab-agent-badge" title={`${activeAgentCount(tab.id)} active agent session${activeAgentCount(tab.id) === 1 ? "" : "s"}`}>
+                {activeAgentCount(tab.id)}
+              </span>
+            </Show>
             <span
               class="tab-close"
               onClick={(e) => {

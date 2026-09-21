@@ -1,11 +1,14 @@
 import { For, Index, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { AgentHookProviderStatus, GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
+  DEFAULT_AGENT_POLL_SECONDS,
   KEY_BINDING_ACTIONS,
+  MAX_AGENT_POLL_SECONDS,
   addRepoPath,
   agentHooks,
   agentHooksError,
   agentHooksLoading,
+  agentPollSeconds,
   agentShowWorktrees,
   agentsEnabled,
   branchColorMode,
@@ -29,12 +32,14 @@ import {
   saveExcludedPaths,
   saveGitHubConfig,
   saveJenkinsConfig,
+  setAgentPollSeconds,
   setAgentShowWorktrees,
   setAgentsEnabled,
   setBranchColorMode,
   setKeyBinding,
 } from "../../state/store";
 import type { BranchColorMode, KeyBindingAction } from "../../state/store";
+import { isPreviewingTheme } from "../../state/themes";
 import { ThemePicker } from "./ThemePicker";
 
 type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings";
@@ -252,7 +257,7 @@ export function MainMenu() {
 
   return (
     <Show when={menuOpen()}>
-      <div class="menu-overlay" onClick={closeMenu}>
+      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} onClick={closeMenu}>
         <div class="menu-dialog" onClick={(e) => e.stopPropagation()}>
           <div class="menu-sidebar">
             <div
@@ -579,6 +584,27 @@ export function MainMenu() {
                   checked={agentShowWorktrees()}
                   disabled={!agentsEnabled()}
                   onChange={(e) => setAgentShowWorktrees(e.currentTarget.checked)}
+                />
+              </label>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Polling interval (seconds)</span>
+                  <span class="menu-hint">How often agent activity is refreshed. Default {DEFAULT_AGENT_POLL_SECONDS}.</span>
+                </span>
+                <input
+                  class="menu-number-input"
+                  type="number"
+                  min="1"
+                  max={MAX_AGENT_POLL_SECONDS}
+                  step="1"
+                  value={agentPollSeconds()}
+                  disabled={!agentsEnabled()}
+                  onChange={(e) => {
+                    setAgentPollSeconds(e.currentTarget.valueAsNumber);
+                    // Show the value that was actually applied (clamped, or the default if the field was emptied).
+                    e.currentTarget.value = String(agentPollSeconds());
+                  }}
                 />
               </label>
 

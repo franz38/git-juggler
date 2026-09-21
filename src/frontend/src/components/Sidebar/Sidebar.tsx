@@ -5,8 +5,8 @@ import { RepoList } from "./RepoList";
 
 // The left panel: the active tab's content on top, the tab menu at the bottom.
 // Both panes stay mounted and the inactive one is just hidden: the repo list
-// keeps its filter text and scroll position, and the agents panel keeps
-// polling, which the graph's agent markers depend on.
+// keeps its filter text and scroll position, and the agents panel stays
+// mounted (agent polling itself is driven from App).
 export function Sidebar() {
   const activeAgentCount = createMemo(() => (agentActivity()?.scans ?? []).filter((scan) => scan.state === "active").length);
 

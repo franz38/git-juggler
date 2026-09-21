@@ -81,6 +81,9 @@ export const activeTheme = createMemo<AppTheme>(() => {
   );
 });
 
+/** True while a theme is being previewed (hovered/focused) rather than chosen. */
+export const isPreviewingTheme = (): boolean => previewId() !== null;
+
 export function previewTheme(id: string | null): void {
   setPreviewId(id);
 }

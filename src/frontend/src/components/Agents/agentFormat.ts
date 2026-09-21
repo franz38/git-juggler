@@ -11,6 +11,18 @@ export function formatAge(ms: number): string {
   return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
 }
 
+// When the session last did something: its most recent worktree activity (ms).
+export function sessionLastActivity(scan: AgentRepositoryScan): number {
+  return scan.worktrees.reduce((latest, worktree) => Math.max(latest, worktree.last_activity), 0);
+}
+
+// Active sessions first; then whoever has been idle for the least time
+// (i.e. the most recent activity) comes first, for both groups.
+export function compareSessions(a: AgentRepositoryScan, b: AgentRepositoryScan): number {
+  if (a.state !== b.state) return a.state === "active" ? -1 : 1;
+  return sessionLastActivity(b) - sessionLastActivity(a);
+}
+
 export function shortCommit(commit: string): string {
   return commit.slice(0, 8);
 }

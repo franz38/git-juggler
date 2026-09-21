@@ -1,32 +1,14 @@
-import { For, Show, createEffect, createMemo, onCleanup, onMount } from "solid-js";
-import {
-  agentActivity,
-  agentActivityError,
-  agentActivityLoading,
-  agentActivityPolling,
-  agentShowWorktrees,
-  refreshAgentActivity,
-  setAgentActivityPollingEnabled,
-} from "../../state/store";
-import { formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
+import { For, Show, createMemo } from "solid-js";
+import { agentActivity, agentActivityError, agentShowWorktrees } from "../../state/store";
+import { compareSessions, formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
 
 export function AgentActivityPanel() {
-  const activeScans = createMemo(() => agentActivity()?.scans.filter((scan) => scan.worktrees.length > 0) ?? []);
+  const activeScans = createMemo(() =>
+    (agentActivity()?.scans.filter((scan) => scan.worktrees.length > 0) ?? []).sort(compareSessions),
+  );
   const runningCount = createMemo(() => activeScans().filter((scan) => scan.state === "active").length);
   const idleCount = createMemo(() => activeScans().length - runningCount());
   const inactiveAgentCount = createMemo(() => Math.max(0, (agentActivity()?.agents.length ?? 0) - activeScans().length));
-
-  onMount(() => {
-    void refreshAgentActivity();
-  });
-
-  createEffect(() => {
-    if (!agentActivityPolling()) return;
-    const timer = window.setInterval(() => {
-      void refreshAgentActivity();
-    }, 1000);
-    onCleanup(() => window.clearInterval(timer));
-  });
 
   return (
     <section class="agent-activity-panel">
@@ -39,19 +21,6 @@ export function AgentActivityPanel() {
       <div class="agent-discovery-row">
         <span>Reading hook events from <span class="mono">~/.local/share/git-juggler/agent-events.jsonl</span></span>
       </div>
-      <div class="agent-refresh-row">
-        <button type="button" disabled={agentActivityLoading()} onClick={() => void refreshAgentActivity()}>
-          {agentActivityLoading() ? "..." : "Refresh"}
-        </button>
-      </div>
-      <label class="agent-poll-toggle">
-        <input
-          type="checkbox"
-          checked={agentActivityPolling()}
-          onChange={(e) => setAgentActivityPollingEnabled(e.currentTarget.checked)}
-        />
-        <span>Poll every second</span>
-      </label>
       <Show when={agentActivityError()}>
         <div class="agent-error">{agentActivityError()}</div>
       </Show>

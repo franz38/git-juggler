@@ -1,4 +1,4 @@
-import { For, Show, createEffect, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, onCleanup, onMount, untrack } from "solid-js";
 import "./App.css";
 import { GraphPanel } from "./components/Graph/GraphPanel";
 import { DeleteBranchModal } from "./components/Branches/DeleteBranchModal";
@@ -18,12 +18,15 @@ import { DeleteTagModal } from "./components/Tags/DeleteTagModal";
 import {
   activeRepo,
   activateAdjacentTab,
+  agentPollSeconds,
+  agentsEnabled,
   closeMenu,
   keyBindings,
   loadActiveTabGraph,
   matchesKeyBinding,
   menuOpen,
   pollRepoStatus,
+  refreshAgentActivity,
   setSidebarWidth,
   setTerminalHeight,
   sidebarWidth,
@@ -53,6 +56,21 @@ function App() {
     const timer = window.setInterval(() => {
       void pollRepoStatus(repo);
     }, 2500);
+    onCleanup(() => window.clearInterval(timer));
+  });
+
+  // Agent activity feeds the agents tab, the repo-tab badges and the graph's
+  // agent markers, so it is polled here rather than by any one panel. The
+  // interval is configurable (Menu > Agents) and nothing runs while agent
+  // detection is off. The immediate refresh is untracked so its own loading
+  // flag doesn't re-trigger this effect.
+  createEffect(() => {
+    if (!agentsEnabled()) return;
+    const intervalMs = agentPollSeconds() * 1000;
+    untrack(() => void refreshAgentActivity());
+    const timer = window.setInterval(() => {
+      void refreshAgentActivity();
+    }, intervalMs);
     onCleanup(() => window.clearInterval(timer));
   });
 

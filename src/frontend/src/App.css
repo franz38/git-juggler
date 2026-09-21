@@ -14,6 +14,13 @@
   justify-content: center;
   padding-top: 12vh;
   z-index: 100;
+  transition: background-color 120ms ease;
+}
+
+/* While a theme is being previewed (hovered) in the picker, drop the dimming
+   layer so the app shows the theme's real colors behind the dialog. */
+.menu-overlay.previewing-theme {
+  background: transparent;
 }
 
 .menu-dialog {
@@ -234,6 +241,26 @@
 .menu-switch-row .menu-hint {
   display: block;
   margin: 3px 0 0;
+}
+
+.menu-number-input {
+  width: 72px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.menu-number-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.menu-number-input:disabled {
+  opacity: 0.5;
 }
 
 .menu-field input:focus,
@@ -716,12 +743,14 @@
   border-top-color: var(--accent);
 }
 
-.sidebar-tab-badge {
+.sidebar-tab-badge,
+.tab-agent-badge {
+  flex: 0 0 auto;
   min-width: 15px;
   padding: 0 5px;
   border-radius: 999px;
   background: var(--accent);
-  color: white;
+  color: var(--accent-fg);
   font-size: 10px;
   line-height: 15px;
   text-align: center;
@@ -777,44 +806,6 @@
   align-items: center;
   color: var(--text-dim);
   font-size: 11px;
-}
-
-.agent-refresh-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-.agent-refresh-row button {
-  flex: 0 0 auto;
-  width: 72px;
-  height: 24px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 9px;
-  cursor: pointer;
-}
-
-.agent-refresh-row button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.agent-poll-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
-.agent-poll-toggle input {
-  accent-color: var(--accent);
 }
 
 .agent-error {
@@ -2021,6 +2012,15 @@
 
 .mono {
   font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.commit-message {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .commit-files {

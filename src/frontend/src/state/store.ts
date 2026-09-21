@@ -7,6 +7,10 @@ import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
 export const FILE_ROW_HEIGHT = 20;
+// The commit message block in an expanded row; only used for the first-frame
+// height estimate (the real height is measured once the row mounts).
+export const MESSAGE_LINE_HEIGHT = 18;
+export const MESSAGE_BLOCK_PADDING = 12;
 export const DETAIL_LOADING_HEIGHT = 40;
 export const UNCOMMITTED_ROW_KEY = "__git-juggler-uncommitted__";
 
@@ -318,8 +322,39 @@ export { setSidebarTab };
 const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
 const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
 const [agentActivityError, setAgentActivityError] = createSignal<string | null>(null);
-const [agentActivityPolling, setAgentActivityPolling] = createSignal(true);
-export { agentActivity, agentActivityLoading, agentActivityError, agentActivityPolling };
+export { agentActivity, agentActivityLoading, agentActivityError };
+
+// How often agent activity is polled, in seconds (Menu > Agents). Polling
+// itself is driven from App and only runs while agent detection is enabled.
+export const DEFAULT_AGENT_POLL_SECONDS = 1;
+export const MAX_AGENT_POLL_SECONDS = 3600;
+const AGENT_POLL_SECONDS_KEY = "git-juggler:agentPollSeconds";
+
+function clampPollSeconds(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_AGENT_POLL_SECONDS;
+  return Math.min(MAX_AGENT_POLL_SECONDS, Math.max(1, Math.round(value)));
+}
+
+function loadAgentPollSeconds(): number {
+  try {
+    const stored = localStorage.getItem(AGENT_POLL_SECONDS_KEY);
+    return stored === null ? DEFAULT_AGENT_POLL_SECONDS : clampPollSeconds(Number(stored));
+  } catch {
+    return DEFAULT_AGENT_POLL_SECONDS;
+  }
+}
+
+const [agentPollSeconds, setAgentPollSecondsSignal] = createSignal(loadAgentPollSeconds());
+export { agentPollSeconds };
+export function setAgentPollSeconds(seconds: number): void {
+  const next = clampPollSeconds(seconds);
+  setAgentPollSecondsSignal(next);
+  try {
+    localStorage.setItem(AGENT_POLL_SECONDS_KEY, String(next));
+  } catch {
+    // Not critical — the setting just won't survive a reload.
+  }
+}
 
 const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(null);
 const [agentHooksLoading, setAgentHooksLoading] = createSignal(false);
@@ -365,9 +400,18 @@ export const agentActivityByRepositoryId = createMemo<Map<string, AgentWorktreeA
   return byRepository;
 });
 
-export function setAgentActivityPollingEnabled(enabled: boolean): void {
-  setAgentActivityPolling(enabled);
-}
+// Number of active agent sessions touching each repository (keyed by
+// repository_id), for the badges on the repo tabs.
+export const activeAgentSessionsByRepositoryId = createMemo<Map<string, number>>(() => {
+  const counts = new Map<string, number>();
+  for (const scan of agentActivity()?.scans ?? []) {
+    if (scan.state !== "active") continue;
+    for (const repositoryId of new Set(scan.worktrees.map((worktree) => worktree.repository_id))) {
+      counts.set(repositoryId, (counts.get(repositoryId) ?? 0) + 1);
+    }
+  }
+  return counts;
+});
 
 export async function refreshAgentActivity(): Promise<void> {
   if (!agentsEnabled() || agentActivityLoading()) return;
@@ -922,7 +966,8 @@ function rowHeight(name: string, hash: string): number {
   if (!state?.expanded.has(hash)) return COLLAPSED_ROW_HEIGHT;
   const detail = state.details[hash];
   if (!detail) return COLLAPSED_ROW_HEIGHT + DETAIL_LOADING_HEIGHT;
-  return COLLAPSED_ROW_HEIGHT + EXPANDED_BASE_HEIGHT + detail.files.length * FILE_ROW_HEIGHT;
+  const messageLines = detail.message.trimEnd().split("\n").length;
+  return COLLAPSED_ROW_HEIGHT + EXPANDED_BASE_HEIGHT + MESSAGE_BLOCK_PADDING + messageLines * MESSAGE_LINE_HEIGHT + detail.files.length * FILE_ROW_HEIGHT;
 }
 
 export const uncommittedRowHeight = createMemo<number>(() => {

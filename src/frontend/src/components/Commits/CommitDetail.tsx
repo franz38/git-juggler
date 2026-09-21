@@ -24,6 +24,7 @@ export function CommitDetailView(props: { detail?: CommitDetail }) {
           <dt>Committed</dt>
           <dd>{formatDate(props.detail!.committed_date)}</dd>
         </dl>
+        <div class="commit-message">{props.detail!.message.trimEnd()}</div>
         <div class="commit-files">
           <For each={props.detail!.files}>
             {(f) => (
