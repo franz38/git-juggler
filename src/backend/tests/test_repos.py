@@ -35,6 +35,43 @@ class RepoListTest(unittest.TestCase):
             self.assertEqual(summaries["repo-a"].repository_id, str((repo_a / ".git").resolve()))
             self.assertEqual(summaries["repo-b"].repository_id, str((repo_b / ".git").resolve()))
 
+    def test_repository_id_matches_between_a_repo_and_its_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            worktree = root / "repo-worktree"
+            self._git(repo, "worktree", "add", "-b", "feature", str(worktree))
+
+            summaries = {repo_summary.name: repo_summary for repo_summary in list_repos([root])}
+
+            self.assertEqual(summaries["repo"].repository_id, summaries["repo-worktree"].repository_id)
+            self.assertEqual(summaries["repo"].repository_id, str((repo / ".git").resolve()))
+            self.assertEqual(summaries["repo-worktree"].current_branch, "feature")
+
+    def test_current_branch_is_none_for_detached_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            head_commit = self._git(repo, "rev-parse", "HEAD")
+            self._git(repo, "checkout", head_commit)
+
+            summaries = {repo_summary.name: repo_summary for repo_summary in list_repos([root])}
+
+            self.assertIsNone(summaries["repo"].current_branch)
+
+    def test_current_branch_matches_named_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            expected_branch = self._git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+
+            summaries = {repo_summary.name: repo_summary for repo_summary in list_repos([root])}
+
+            self.assertEqual(summaries["repo"].current_branch, expected_branch)
+
 
 if __name__ == "__main__":
     unittest.main()
