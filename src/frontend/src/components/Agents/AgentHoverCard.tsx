@@ -38,7 +38,11 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
     for (const { scan, activity } of props.entries) {
       byScan.set(scan, [...(byScan.get(scan) ?? []), activity]);
     }
-    return [...byScan.entries()];
+    // Most recently active first, both for sessions and for a session's worktrees.
+    const latest = (activities: AgentWorktreeActivity[]) => Math.max(...activities.map((activity) => activity.last_activity));
+    return [...byScan.entries()]
+      .map(([scan, activities]): [AgentRepositoryScan, AgentWorktreeActivity[]] => [scan, [...activities].sort((a, b) => b.last_activity - a.last_activity)])
+      .sort((a, b) => latest(b[1]) - latest(a[1]));
   });
 
   createEffect(() => {
