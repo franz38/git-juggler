@@ -14,14 +14,14 @@ const statusPriority: Record<GitHubActionsRunStatus, number> = {
 };
 
 const statusColor: Record<GitHubActionsRunStatus, string> = {
-  success: "#36b37e",
-  failure: "#ff5630",
-  running: "#4c9aff",
-  cancelled: "#8b949e",
-  skipped: "#8b949e",
-  action_required: "#ffab00",
-  neutral: "#8b949e",
-  unknown: "#8b949e",
+  success: "var(--success)",
+  failure: "var(--danger)",
+  running: "var(--accent)",
+  cancelled: "var(--text-dim)",
+  skipped: "var(--text-dim)",
+  action_required: "var(--warning)",
+  neutral: "var(--text-dim)",
+  unknown: "var(--text-dim)",
 };
 
 function pickRun(runs: GitHubActionsRunInfo[]): GitHubActionsRunInfo {

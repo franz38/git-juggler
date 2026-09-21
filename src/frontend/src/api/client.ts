@@ -1,4 +1,5 @@
-import type { CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
+import type { RawVscodeTheme } from "../lib/appTheme";
+import type { CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -45,4 +46,20 @@ export async function updateConfig(body: ConfigUpdateRequest): Promise<ConfigRes
     throw new Error(errBody?.detail ?? `request failed (${res.status})`);
   }
   return res.json() as Promise<ConfigResponse>;
+}
+
+export function fetchThemes(): Promise<ThemesResponse> {
+  return getJson(`${API_BASE}/themes`);
+}
+
+export async function saveImportedThemes(themes: RawVscodeTheme[]): Promise<ThemesResponse> {
+  const res = await fetch(`${API_BASE}/themes/imported`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(themes),
+  });
+  if (!res.ok) {
+    throw new Error(`request failed (${res.status})`);
+  }
+  return res.json() as Promise<ThemesResponse>;
 }

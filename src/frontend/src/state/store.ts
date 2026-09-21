@@ -1214,29 +1214,7 @@ export function fetchRepo(repoId: string, repoName: string): void {
 
 // --- Appearance settings --------------------------------------------------
 
-export type Theme = "light" | "dark";
-
-const THEME_KEY = "git-juggler:theme";
-
-function loadTheme(): Theme {
-  try {
-    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-const [theme, setThemeSignal] = createSignal<Theme>(loadTheme());
-export { theme };
-
-export function setTheme(next: Theme): void {
-  setThemeSignal(next);
-  try {
-    localStorage.setItem(THEME_KEY, next);
-  } catch {
-    // Not critical — theme just won't survive a reload.
-  }
-}
+// Theme selection (built-in + VS Code themes) lives in ./themes.
 
 export type BranchColorMode = "hash" | "sequential";
 

@@ -27,14 +27,21 @@ import {
   tabs,
   terminalHeight,
   terminalOpen,
-  theme,
   toggleMenu,
   toggleTerminalOpen,
 } from "./state/store";
+import { activeTheme, loadThemes } from "./state/themes";
 
 function App() {
+  // Applies the active theme: `data-theme` picks color-scheme, and each
+  // resolved variable is set inline so it overrides the stylesheet defaults.
   createEffect(() => {
-    document.documentElement.dataset.theme = theme();
+    const active = activeTheme();
+    const root = document.documentElement;
+    root.dataset.theme = active.kind;
+    for (const [name, value] of Object.entries(active.vars)) {
+      root.style.setProperty(name, value);
+    }
   });
 
   createEffect(() => {
@@ -48,6 +55,7 @@ function App() {
 
   onMount(() => {
     loadActiveTabGraph();
+    void loadThemes();
     const handleKeydown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "ArrowRight") {
         e.preventDefault();

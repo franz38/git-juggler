@@ -12,8 +12,9 @@ from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .github_actions import get_github_actions_runs
 from .repos import list_repos, resolve_repo_path
-from .schemas import CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary
+from .schemas import CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
+from .themes import discover_themes
 
 
 def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
@@ -83,6 +84,21 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             config.save_github_config(body.github.model_dump())
 
         return _current_config()
+
+    def _current_themes() -> ThemesResponse:
+        imported = [VscodeTheme(**t) for t in config.load_imported_themes()]
+        return ThemesResponse(installed=discover_themes(), imported=imported)
+
+    @app.get("/api/themes", response_model=ThemesResponse)
+    def api_get_themes() -> ThemesResponse:
+        return _current_themes()
+
+    # Stores theme *files* the user imported in the UI (app settings, not repo
+    # state, so this doesn't fall under the git-mutations-via-terminal rule).
+    @app.put("/api/themes/imported", response_model=ThemesResponse)
+    def api_put_imported_themes(body: list[VscodeTheme]) -> ThemesResponse:
+        config.save_imported_themes([t.model_dump() for t in body])
+        return _current_themes()
 
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
     def api_graph(repo_id: str) -> GraphResponse:

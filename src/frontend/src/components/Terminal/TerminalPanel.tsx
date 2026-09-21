@@ -2,7 +2,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { createEffect, onCleanup, onMount } from "solid-js";
-import { getTerminalTheme } from "../../lib/terminalTheme";
 import { stripAnsi } from "../../lib/stripAnsi";
 import {
   feedTerminalOutput,
@@ -15,9 +14,9 @@ import {
   scheduleGraphRefresh,
   startFetch,
   startPush,
-  theme,
   unregisterTerminalSender,
 } from "../../state/store";
+import { activeTheme } from "../../state/themes";
 
 // Matches a submitted command line (ANSI codes already stripped) so ghost
 // commits / graph refreshes trigger the same way whether the command was
@@ -37,10 +36,10 @@ export function TerminalPanel(props: { repo: string | null }) {
       convertEol: true,
       fontSize: 13,
       fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-      theme: getTerminalTheme(theme()),
+      theme: activeTheme().terminal,
     });
     createEffect(() => {
-      term.options.theme = getTerminalTheme(theme());
+      term.options.theme = activeTheme().terminal;
     });
 
     const fitAddon = new FitAddon();

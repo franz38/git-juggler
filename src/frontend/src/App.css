@@ -8,7 +8,7 @@
 .menu-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--shadow);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -21,10 +21,10 @@
   width: 640px;
   max-width: calc(100vw - 32px);
   max-height: 60vh;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px var(--shadow);
   overflow: hidden;
 }
 
@@ -127,7 +127,7 @@
 .menu-add-path input {
   flex: 1;
   min-width: 0;
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -143,7 +143,7 @@
 
 .menu-add-path button {
   background: var(--accent);
-  color: #0d1117;
+  color: var(--accent-fg);
   border: none;
   border-radius: 4px;
   padding: 0 14px;
@@ -155,15 +155,15 @@
 .menu-error {
   margin-top: 10px;
   font-size: 12px;
-  color: #ffb4b4;
+  color: var(--danger-fg);
 }
 
 .menu-notice {
   margin: 0 0 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(76, 154, 255, 0.45);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 6px;
-  background: rgba(76, 154, 255, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--text);
   font-size: 12px;
 }
@@ -180,7 +180,7 @@
 .menu-field input,
 .menu-field textarea,
 .github-repo-row input {
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -208,10 +208,10 @@
   max-width: calc(100vw - 32px);
   max-height: 80vh;
   overflow-y: auto;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px var(--shadow);
   padding: 20px 24px;
 }
 
@@ -226,10 +226,10 @@
   flex-direction: column;
   width: 420px;
   max-width: calc(100vw - 32px);
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px var(--shadow);
   padding: 20px 24px;
 }
 
@@ -249,8 +249,8 @@
 }
 
 .menu-primary-button.danger {
-  border-color: #ff5630;
-  color: #ffb4a8;
+  border-color: var(--danger);
+  color: var(--danger-fg);
 }
 
 .menu-subheading {
@@ -291,7 +291,7 @@
 .menu-primary-button {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #0d1117;
+  color: var(--accent-fg);
   font-weight: 600;
 }
 
@@ -351,8 +351,144 @@
 .theme-options button.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0d1117;
+  color: var(--accent-fg);
   font-weight: 600;
+}
+
+.menu-setting-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.theme-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.theme-picker-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.theme-picker-toolbar input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.theme-picker-toolbar input[type="search"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.theme-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.theme-group-label {
+  padding: 8px 8px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.theme-row-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.theme-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-row:hover,
+.theme-row:focus-visible {
+  background: var(--hover-bg);
+  color: var(--text-h);
+  outline: none;
+}
+
+.theme-row.active {
+  background: var(--active-bg);
+  border-color: var(--accent);
+  color: var(--text-h);
+}
+
+.theme-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-row-kind {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.theme-row-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.theme-row-remove:hover {
+  color: var(--danger);
+}
+
+.theme-swatch {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 5px 0 0;
+  border: 1px solid;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.theme-swatch-panel {
+  align-self: stretch;
+  width: 8px;
+}
+
+.theme-swatch-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
 .switch {
@@ -426,7 +562,7 @@
 .repo-search input {
   flex: 1;
   min-width: 0;
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -579,13 +715,13 @@
   height: 10px;
   margin-top: 2px;
   margin-bottom: 2px;
-  border: 1px dashed rgba(88, 166, 255, 0.45);
-  background: rgba(88, 166, 255, 0.08);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .repo-group-drop-zone.highlighted {
   background: var(--accent);
-  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .repo-bookmark-overlay {
@@ -599,10 +735,10 @@
   min-width: 180px;
   max-width: 260px;
   padding: 6px;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 32px var(--shadow-soft);
 }
 
 .repo-bookmark-menu-item {
@@ -775,7 +911,7 @@
 
 .search-input {
   width: 200px;
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -843,10 +979,10 @@
   max-height: 320px;
   overflow-y: auto;
   padding: 8px;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow-soft);
 }
 
 .filter-field {
@@ -866,7 +1002,7 @@
 
 .filter-field input {
   min-width: 0;
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
@@ -933,10 +1069,10 @@
   max-height: 180px;
   overflow-y: auto;
   padding: 4px;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow-soft);
 }
 
 .multiselect-option {
@@ -1029,8 +1165,8 @@
 }
 
 .error-banner {
-  background: #4a1f24;
-  color: #ffb4b4;
+  background: var(--danger-bg);
+  color: var(--danger-fg);
   padding: 8px 16px;
   font-size: 13px;
 }
@@ -1087,11 +1223,11 @@
 }
 
 .push-spinner {
-  filter: drop-shadow(0 0 3px rgba(76, 154, 255, 0.55));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
 }
 
 .ci-active-dot {
-  filter: drop-shadow(0 0 4px rgba(76, 154, 255, 0.8));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 80%, transparent));
 }
 
 .commit-row {
@@ -1100,16 +1236,16 @@
 }
 
 .commit-row.match {
-  border-left-color: #ffd666;
+  border-left-color: var(--warning);
 }
 
 .commit-row.match .commit-subject {
-  color: #ffd666;
+  color: var(--warning);
 }
 
 @keyframes commit-row-flash {
   from {
-    background-color: rgba(76, 154, 255, 0.35);
+    background-color: color-mix(in srgb, var(--accent) 35%, transparent);
   }
   to {
     background-color: transparent;
@@ -1142,9 +1278,9 @@
 }
 
 .uncommitted-badge {
-  background: rgba(137, 147, 164, 0.15);
-  border-color: #8993a4;
-  color: #8993a4;
+  background: color-mix(in srgb, var(--text-dim) 15%, transparent);
+  border-color: var(--text-dim);
+  color: var(--text-dim);
 }
 
 .uncommitted-detail-body {
@@ -1310,10 +1446,10 @@
   min-width: 220px;
   max-width: 320px;
   padding: 8px 10px;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow-soft);
   color: var(--text);
   white-space: normal;
 }
@@ -1401,19 +1537,19 @@
 }
 
 .commit-file.status-added .file-status {
-  color: #36b37e;
+  color: var(--success);
 }
 
 .commit-file.status-deleted .file-status {
-  color: #ff5630;
+  color: var(--danger);
 }
 
 .commit-file.status-modified .file-status {
-  color: #ffab00;
+  color: var(--warning);
 }
 
 .commit-file.status-renamed .file-status {
-  color: #4c9aff;
+  color: var(--accent);
 }
 
 .terminal-container {
@@ -1491,10 +1627,10 @@
   position: fixed;
   z-index: 111;
   min-width: 140px;
-  background: var(--panel-bg);
+  background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px var(--shadow);
   padding: 4px;
 }
 

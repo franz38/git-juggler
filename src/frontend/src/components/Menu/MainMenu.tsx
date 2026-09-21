@@ -15,10 +15,9 @@ import {
   saveExcludedPaths,
   saveGitHubConfig,
   setBranchColorMode,
-  setTheme,
-  theme,
 } from "../../state/store";
-import type { BranchColorMode, Theme } from "../../state/store";
+import type { BranchColorMode } from "../../state/store";
+import { ThemePicker } from "./ThemePicker";
 
 type Section = "repos" | "github" | "appearance";
 
@@ -241,19 +240,12 @@ export function MainMenu() {
             <Show when={activeSection() === "appearance"}>
               <h3>Appearance</h3>
 
-              <div class="menu-setting">
+              <div class="menu-setting menu-setting-stacked">
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Theme</div>
+                  <p class="menu-hint">Use a built-in theme, one installed in VS Code, or import a VS Code color theme (.json).</p>
                 </div>
-                <div class="theme-options">
-                  <For each={[["dark", "Dark"], ["light", "Light"]] as [Theme, string][]}>
-                    {([value, label]) => (
-                      <button classList={{ active: theme() === value }} onClick={() => setTheme(value)}>
-                        {label}
-                      </button>
-                    )}
-                  </For>
-                </div>
+                <ThemePicker />
               </div>
 
               <div class="menu-setting">

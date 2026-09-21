@@ -1,3 +1,8 @@
+/*
+ * Defaults only. The active theme (built-in or converted from a VS Code
+ * theme, see lib/vscodeTheme.ts) overrides these inline on <html> at startup,
+ * so keep this list in sync with the keys in lib/appTheme.ts.
+ */
 :root,
 :root[data-theme="dark"] {
   --text: #c8ccd4;
@@ -9,6 +14,16 @@
   --active-bg: #202632;
   --border: #262b33;
   --accent: #4c9aff;
+  --accent-fg: #0d1117;
+  --danger: #ff5630;
+  --danger-fg: #ffb4b4;
+  --danger-bg: #4a1f24;
+  --warning: #ffd666;
+  --success: #36b37e;
+  --menu-bg: #12151b;
+  --input-bg: #0d1117;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --shadow-soft: rgba(0, 0, 0, 0.45);
 
   color-scheme: dark;
 }
@@ -23,6 +38,14 @@
   --active-bg: #e4e7eb;
   --border: #d0d7de;
   --accent: #0969da;
+  --accent-fg: #ffffff;
+  --danger: #cf222e;
+  --danger-fg: #a40e26;
+  --danger-bg: #ffebe9;
+  --warning: #9a6700;
+  --success: #1a7f37;
+  --menu-bg: #ffffff;
+  --input-bg: #ffffff;
 
   color-scheme: light;
 }

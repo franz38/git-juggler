@@ -1,3 +1,10 @@
+import type { RawVscodeTheme } from "../lib/appTheme";
+
+export interface ThemesResponse {
+  installed: RawVscodeTheme[];
+  imported: RawVscodeTheme[];
+}
+
 export interface RepoSummary {
   id: string;
   name: string;

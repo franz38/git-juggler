@@ -16,7 +16,7 @@ import {
   uncommittedRowHeight,
   upstreamCommit,
 } from "../../state/store";
-import { colorForBranch, TAG_COLOR } from "./branchColor";
+import { colorForBranch, tagColor } from "./branchColor";
 import { computeColumns } from "./computeColumns";
 
 const LANE_MARGIN = 20;
@@ -25,8 +25,8 @@ const DOT_RADIUS = 6;
 const CORNER_RADIUS = 8;
 const GHOST_ROW_HEIGHT = COLLAPSED_ROW_HEIGHT;
 const GHOST_RADIUS = 5;
-const DIRTY_COLOR = "#8993A4";
-const CI_ACTIVE_COLOR = "#4c9aff";
+const DIRTY_COLOR = "var(--text-dim)";
+const CI_ACTIVE_COLOR = "var(--accent)";
 
 interface Edge {
   key: string;
@@ -243,7 +243,7 @@ export function GraphPanel() {
                     <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                   </circle>
                 )}
-                {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={TAG_COLOR} />}
+                {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={tagColor()} />}
               </g>
             );
           }}

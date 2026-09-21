@@ -3,6 +3,20 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class VscodeTheme(BaseModel):
+    """A VS Code color theme with its ``include`` chain already merged."""
+
+    id: str
+    label: str
+    uiTheme: str = "vs-dark"  # vs | vs-dark | hc-black | hc-light
+    colors: dict[str, str] = Field(default_factory=dict)
+
+
+class ThemesResponse(BaseModel):
+    installed: list[VscodeTheme]
+    imported: list[VscodeTheme]
+
+
 class RepoSummary(BaseModel):
     id: str
     name: str

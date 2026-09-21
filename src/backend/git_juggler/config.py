@@ -50,6 +50,19 @@ def save_pinned_repo_paths(paths: list[str]) -> None:
     _save_raw(data)
 
 
+def load_imported_themes() -> list[dict]:
+    raw = _load_raw().get("imported_themes", [])
+    if not isinstance(raw, list):
+        return []
+    return [t for t in raw if isinstance(t, dict) and isinstance(t.get("id"), str)]
+
+
+def save_imported_themes(themes: list[dict]) -> None:
+    data = _load_raw()
+    data["imported_themes"] = themes
+    _save_raw(data)
+
+
 def load_repo_groups() -> list[dict]:
     raw = _load_raw().get("repo_groups", [])
     if not isinstance(raw, list):
