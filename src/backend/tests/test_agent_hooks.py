@@ -259,6 +259,172 @@ class AgentHooksTest(unittest.TestCase):
 
             self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
 
+    # --- New prompt resets what counts as proof of activity -----------------
+
+    def _tool_event(self, cwd: Path, target: Path, at_ms: int, session: str = "s1", phase: str = "PostToolUse") -> dict:
+        raw = {"session_id": session, "tool_name": "Bash", "tool_input": {"command": f"cd {target} && git status"}}
+        return {"provider": "claude", "phase": phase, "cwd": str(cwd), "pid": 1, "timestamp": at_ms, "raw": raw}
+
+    def _names(self, scan) -> list[str]:
+        return sorted(Path(activity.worktree_path).name for activity in scan.worktrees)
+
+    def _two_worktrees(self, root: Path) -> tuple[Path, Path]:
+        repo = root / "repo"
+        feature = root / "repo-feature"
+        self._init_repo(repo)
+        self._git(repo, "worktree", "add", "-b", "feature", str(feature))
+        return repo, feature
+
+    def test_new_prompt_drops_worktrees_touched_by_earlier_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, feature = self._two_worktrees(root)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            events = [self._event(repo, "SessionStart", start), self._tool_event(repo, feature, start + 1000)]
+            self._write_events(event_path, events)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
+
+            self.assertEqual(self._names(reader.recent_scans(now=start + 2000)[0]), ["repo", "repo-feature"])
+
+            # A new prompt: the earlier `cd feature` no longer counts; only the launch worktree does.
+            events.append(self._event(repo, "UserPromptSubmit", start + 5000))
+            self._write_events(event_path, events)
+            scan = reader.recent_scans(now=start + 6000)[0]
+            self.assertEqual(self._names(scan), ["repo"])
+            self.assertEqual(scan.state, "active")
+
+            # A command for the new prompt brings the other worktree back.
+            events.append(self._tool_event(repo, feature, start + 7000))
+            self._write_events(event_path, events)
+            self.assertEqual(self._names(reader.recent_scans(now=start + 8000)[0]), ["repo", "repo-feature"])
+
+    def test_only_the_latest_prompt_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, feature = self._two_worktrees(root)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(
+                event_path,
+                [
+                    self._event(repo, "UserPromptSubmit", start),
+                    self._tool_event(repo, feature, start + 1000),
+                    self._event(repo, "UserPromptSubmit", start + 2000),
+                    self._tool_event(repo, repo, start + 3000),
+                ],
+            )
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
+
+            self.assertEqual(self._names(reader.recent_scans(now=start + 4000)[0]), ["repo"])
+
+    def test_a_prompt_only_resets_its_own_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, feature = self._two_worktrees(root)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(
+                event_path,
+                [
+                    self._tool_event(repo, feature, start, session="a"),
+                    self._tool_event(repo, feature, start, session="b"),
+                    self._event(repo, "UserPromptSubmit", start + 1000, session="a"),
+                ],
+            )
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
+
+            by_session = {scan.session_id: self._names(scan) for scan in reader.recent_scans(now=start + 2000)}
+
+            self.assertEqual(by_session, {"a": ["repo"], "b": ["repo-feature"]})
+
+    def test_session_directory_still_reports_where_the_session_started(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, feature = self._two_worktrees(root)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start), self._event(feature, "UserPromptSubmit", start + 1000)])
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
+
+            scan = reader.recent_scans(now=start + 2000)[0]
+
+            self.assertEqual(scan.session_directory, str(repo))
+
+    def test_opencode_prompt_event_resets_activity_too(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, feature = self._two_worktrees(root)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+
+            def event(phase: str, at_ms: int, **raw) -> dict:
+                return {"provider": "opencode", "phase": phase, "cwd": str(repo), "pid": 999, "timestamp": at_ms, "raw": {"cwd": str(repo), "sessionID": "o1", **raw}}
+
+            events = [event("PreToolUse", start, tool="bash", args={"command": f"cd {feature} && ls"})]
+            self._write_events(event_path, events)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                self.assertIn("repo-feature", self._names(reader.recent_scans(now=start + 1000)[0]))
+
+                events.append(event("UserPromptSubmit", start + 2000))
+                self._write_events(event_path, events)
+                self.assertEqual(self._names(reader.recent_scans(now=start + 3000)[0]), ["repo"])
+
+    # --- Recording the prompt hook -----------------------------------------
+
+    def test_claude_install_adds_prompt_hook_once_and_status_requires_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings_path = root / "settings.json"
+            recorder_path = root / "agent-hook-recorder.py"
+            with patch.object(agent_hooks, "CLAUDE_SETTINGS_PATH", settings_path), patch.object(agent_hooks, "RECORDER_PATH", recorder_path), patch.object(agent_hooks, "EVENT_PATH", root / "e.jsonl"), patch.object(agent_hooks, "DATA_DIR", root):
+                # A config installed before the prompt hook existed: all the old phases, no UserPromptSubmit.
+                old_hooks = {phase: entries for phase, entries in agent_hooks._claude_snippet_dict()["hooks"].items() if phase != "UserPromptSubmit"}
+                settings_path.write_text(json.dumps({"hooks": old_hooks}), encoding="utf-8")
+                self.assertFalse(agent_hooks.claude_status().installed)
+
+                agent_hooks.install_claude_hooks()
+                agent_hooks.install_claude_hooks()
+
+                data = json.loads(settings_path.read_text(encoding="utf-8"))
+                self.assertEqual(len(data["hooks"]["UserPromptSubmit"]), 1)
+                self.assertEqual(len(data["hooks"]["SessionStart"]), 1)
+                self.assertTrue(agent_hooks.claude_status().installed)
+
+    def test_opencode_plugin_records_new_messages_and_old_plugin_needs_reinstall(self) -> None:
+        self.assertIn('"chat.message"', agent_hooks.OPENCODE_PLUGIN)
+        self.assertIn("UserPromptSubmit", agent_hooks.OPENCODE_PLUGIN)
+        with tempfile.TemporaryDirectory() as directory:
+            plugin_path = Path(directory) / "git-juggler.js"
+            plugin_path.write_text("export const GitJugglerPlugin = 1 // git-juggler-plugin v2", encoding="utf-8")
+            with patch.object(agent_hooks, "OPENCODE_PLUGIN_PATH", plugin_path):
+                self.assertFalse(agent_hooks.opencode_status().installed)
+                agent_hooks.install_opencode_hooks()
+                self.assertTrue(agent_hooks.opencode_status().installed)
+
+    def _run_recorder(self, home: Path, phase: str, payload: dict) -> list[dict]:
+        script = home / "recorder.py"
+        script.write_text(agent_hooks.RECORDER_SCRIPT, encoding="utf-8")
+        subprocess.run(["python3", str(script), "claude", phase], input=json.dumps(payload), text=True, check=True, env={"HOME": str(home), "PATH": "/usr/bin:/bin"})
+        events_file = home / ".local" / "share" / "git-juggler" / "agent-events.jsonl"
+        return [json.loads(line) for line in events_file.read_text(encoding="utf-8").splitlines()]
+
+    def test_recorder_never_stores_the_prompt_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            events = self._run_recorder(Path(directory), "UserPromptSubmit", {"session_id": "s1", "cwd": "/x", "prompt": "my secret prompt"})
+
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["phase"], "UserPromptSubmit")
+            self.assertEqual(events[0]["raw"], {"session_id": "s1", "cwd": "/x"})
+            self.assertNotIn("secret", json.dumps(events))
+
+    def test_recorder_leaves_other_phases_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            events = self._run_recorder(Path(directory), "PostToolUse", {"session_id": "s1", "prompt": "kept", "tool_name": "Bash"})
+
+            self.assertEqual(events[0]["raw"], {"session_id": "s1", "prompt": "kept", "tool_name": "Bash"})
+
 
 if __name__ == "__main__":
     unittest.main()

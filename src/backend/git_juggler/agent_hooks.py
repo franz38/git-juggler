@@ -45,6 +45,11 @@ def main() -> int:
     except Exception as exc:
         raw = {"parse_error": str(exc)}
 
+    # Only the fact that a prompt was submitted matters (it starts a new unit
+    # of work); never persist what the user typed.
+    if phase == "UserPromptSubmit" and isinstance(raw, dict):
+        raw.pop("prompt", None)
+
     event = {
         "provider": provider,
         "phase": phase,
@@ -87,6 +92,7 @@ def _claude_snippet_dict() -> dict:
     return {
         "hooks": {
             "SessionStart": [_claude_hook_entry("SessionStart")],
+            "UserPromptSubmit": [_claude_hook_entry("UserPromptSubmit")],
             "PreToolUse": [_claude_hook_entry("PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
             "PostToolUse": [_claude_hook_entry("PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
             "SessionEnd": [_claude_hook_entry("SessionEnd")],
@@ -98,7 +104,7 @@ def claude_snippet() -> str:
     return json.dumps(_claude_snippet_dict(), indent=2)
 
 
-OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v2"
+OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v3"
 
 OPENCODE_PLUGIN = f'''// git-juggler global activity hook. Managed by git-juggler. {OPENCODE_PLUGIN_MARKER}
 import fs from "node:fs"
@@ -127,6 +133,10 @@ function append(phase, payload = {{}}) {{
 export const GitJugglerPlugin = async (ctx) => {{
   append("SessionStart", {{ cwd: ctx.directory, worktree: ctx.worktree }})
   return {{
+    // A new user message starts a new unit of work (the prompt text is never recorded).
+    "chat.message": async (input) => {{
+      append("UserPromptSubmit", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID }})
+    }},
     "tool.execute.before": async (input, output) => {{
       append("PreToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID, tool: input.tool, args: output.args }})
     }},
@@ -174,7 +184,7 @@ def _has_claude_hook(settings: dict) -> bool:
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return False
-    for phase in ("SessionStart", "PreToolUse", "PostToolUse", "SessionEnd"):
+    for phase in ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"):
         entries = hooks.get(phase)
         if not isinstance(entries, list):
             return False
@@ -209,7 +219,7 @@ def opencode_status() -> HookProviderStatus:
     installed = False
     try:
         text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8") if OPENCODE_PLUGIN_PATH.exists() else ""
-        # The marker rules out plugins installed before session ids were recorded.
+        # The marker rules out plugins installed before session ids and prompt events were recorded.
         installed = "GitJugglerPlugin" in text and OPENCODE_PLUGIN_MARKER in text
     except OSError as exc:
         error = str(exc)

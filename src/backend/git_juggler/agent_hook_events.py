@@ -25,6 +25,9 @@ HOOK_EVENT_LIMIT = 5000
 SESSION_EVENT_LIMIT = 300
 IDLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000
 END_PHASES = {"sessionend", "session.deleted"}
+# A new user prompt starts a new unit of work: commands run for earlier prompts
+# stop counting as proof of activity (see _since_last_prompt).
+PROMPT_PHASES = {"userpromptsubmit"}
 HOOK_SCORE = 30
 
 
@@ -142,6 +145,9 @@ class AgentHookEventReader:
                 continue
             provider = session_key[0]
             session_id = session_events[-1].session_id
+            # Where the session started, taken before trimming to the latest prompt.
+            session_directory = session_events[0].cwd
+            session_events = self._since_last_prompt(session_events)
             card: ClaudeSession | None = None
             opencode_session: OpenCodeSession | None = None
             busy: bool | None = None  # what the agent itself reports, when it does
@@ -220,7 +226,7 @@ class AgentHookEventReader:
             scans.append(
                 AgentRepositoryScan(
                     agent_pid=self._synthetic_pid(session_key),
-                    session_directory=session_events[0].cwd,
+                    session_directory=session_directory,
                     worktrees=sorted(activities.values(), key=lambda item: item.worktree_path),
                     scanned_at=observed_at,
                     state="active" if any(item.state == "active" for item in activities.values()) else "idle",
@@ -232,6 +238,22 @@ class AgentHookEventReader:
                 )
             )
         return scans, next_change
+
+    @staticmethod
+    def _since_last_prompt(events: list[HookEvent]) -> list[HookEvent]:
+        """The session's events from its latest user prompt onward.
+
+        Commands run for an earlier prompt say nothing about where the agent is
+        working now, so once a new prompt arrives the older events no longer
+        count as evidence of activity in any worktree. The prompt event itself
+        is kept: it carries the session's cwd, so its launch worktree is active
+        right away, and other worktrees reappear only when a new command touches
+        them. Sessions with no prompt event (hook not installed) are untouched.
+        """
+        for index in range(len(events) - 1, -1, -1):
+            if events[index].phase.lower() in PROMPT_PHASES:
+                return events[index:]
+        return events
 
     def _agent_pid(self, data: dict[str, Any]) -> int | None:
         # The OpenCode plugin runs inside the agent process, so its pid is the agent's.
