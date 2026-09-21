@@ -1,5 +1,6 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
+import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
 import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
@@ -306,6 +307,13 @@ export function setAgentShowWorktrees(show: boolean): void {
   setAgentShowWorktreesSignal(show);
   saveBoolean(AGENT_WORKTREES_KEY, show);
 }
+
+// Left panel tabs: the repo list (default) and the agents list. The agents tab
+// only exists while agent detection is on, so it falls back to the repos tab.
+export type SidebarTab = "repos" | "agents";
+const [requestedSidebarTab, setSidebarTab] = createSignal<SidebarTab>("repos");
+export const sidebarTab = createMemo<SidebarTab>(() => (requestedSidebarTab() === "agents" && agentsEnabled() ? "agents" : "repos"));
+export { setSidebarTab };
 
 const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
 const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
@@ -746,10 +754,46 @@ export const commitAuthors = createMemo<string[]>(() => {
   return [...authors].sort((a, b) => a.localeCompare(b));
 });
 
+// --- Branch visibility filter (the eye button next to the commit filter) ---
+// The checked branches are remembered per repo (branch names differ between
+// repos); the "commits since" date applies to whichever repo is active.
+
+const [branchSelections, setBranchSelections] = createSignal<Record<string, string[]>>({});
+const [branchSince, setBranchSinceSignal] = createSignal("");
+export { branchSince };
+
+export function setBranchSince(date: string): void {
+  setBranchSinceSignal(date);
+}
+
+export const commitBranches = createMemo<string[]>(() => branchNames(commits()));
+
+// Checked branches of the active repo, ignoring ones that no longer exist.
+export const branchFilter = createMemo<string[]>(() => {
+  const name = activeRepo();
+  const selected = name ? branchSelections()[name] ?? [] : [];
+  const existing = new Set(commitBranches());
+  return selected.filter((branch) => existing.has(branch));
+});
+
+export function setBranchFilter(branches: string[]): void {
+  const name = activeRepo();
+  if (name) setBranchSelections((current) => ({ ...current, [name]: branches }));
+}
+
+export function clearBranchFilters(): void {
+  setBranchFilter([]);
+  setBranchSince("");
+}
+
+const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
+
 export const filteredCommits = createMemo<CommitSummary[]>(() => {
   const authors = authorFilter();
   const comment = commentFilter().trim().toLowerCase();
+  const visibleByBranch = visibleBranchHashes();
   return commits().filter((commit) => {
+    if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
     if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
     if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
     return true;
@@ -782,6 +826,15 @@ export const upstreamCommit = createMemo<string | null>(() => {
 export const isDirty = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.isDirty ?? false : false;
+});
+
+// The working-tree row belongs to HEAD, so it goes away with HEAD's branch
+// when the branch filter hides it.
+export const workingTreeVisible = createMemo<boolean>(() => {
+  const head = headCommit();
+  if (head === null || !isDirty()) return false;
+  const visible = visibleBranchHashes();
+  return visible === null || visible.has(head);
 });
 
 export const uncommittedFiles = createMemo<FileChange[]>(() => {

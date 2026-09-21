@@ -10,7 +10,7 @@ import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
 import { DirectoryBrowserModal } from "./components/Menu/DirectoryBrowserModal";
 import { MainMenu } from "./components/Menu/MainMenu";
-import { RepoList } from "./components/Sidebar/RepoList";
+import { Sidebar } from "./components/Sidebar/Sidebar";
 import { SearchBox } from "./components/Search/SearchBox";
 import { TabsBar } from "./components/Tabs/TabsBar";
 import { TerminalPanel } from "./components/Terminal/TerminalPanel";
@@ -111,9 +111,7 @@ function App() {
       <DirectoryBrowserModal />
       <RepoContextMenu />
       <TagContextMenu />
-      <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
-        <RepoList />
-      </aside>
+      <Sidebar />
       <div class="sidebar-resize-handle" onMouseDown={startSidebarResize} />
       <main class="main">
         <Show when={tabs().length > 0}>

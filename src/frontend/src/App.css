@@ -534,8 +534,61 @@
   flex: 0 0 auto;
   background: var(--panel-bg);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   user-select: none;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 2px solid transparent;
+  margin-top: -1px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.sidebar-tab:hover {
+  color: var(--text-h);
+  background: var(--hover-bg);
+}
+
+.sidebar-tab.active {
+  color: var(--text-h);
+  border-top-color: var(--accent);
+}
+
+.sidebar-tab-badge {
+  min-width: 15px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
 }
 
 .sidebar-resize-handle {
@@ -1319,6 +1372,13 @@
 .filter-field input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.filter-hint {
+  margin: 2px 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .multiselect {
