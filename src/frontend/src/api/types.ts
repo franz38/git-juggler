@@ -148,16 +148,6 @@ export interface CiRunInfo {
   duration_ms: number | null;
 }
 
-export interface AgentProcessInfo {
-  pid: number;
-  parent_pid: number | null;
-  executable: string | null;
-  command_line: string | null;
-  arguments: string[] | null;
-  open_files: string[] | null;
-  cwd: string | null;
-}
-
 export interface AgentActivityEvidence {
   type: "process-cwd" | "git-process" | "child-process" | string;
   pid: number | null;
@@ -186,7 +176,6 @@ export interface AgentWorktreeActivity {
 export interface AgentRepositoryScan {
   agent_pid: number;
   session_directory: string | null;
-  processes: AgentProcessInfo[];
   worktrees: AgentWorktreeActivity[];
   scanned_at: number;
 }

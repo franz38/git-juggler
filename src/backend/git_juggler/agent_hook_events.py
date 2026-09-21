@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent_hooks import EVENT_PATH
-from .agent_tracking.agent_repository_tracker import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity
+from .agent_tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity
 from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
 
 
@@ -81,7 +81,6 @@ class AgentHookEventReader:
                 AgentRepositoryScan(
                     agent_pid=pids[session_key],
                     session_directory=session_dirs.get(session_key),
-                    processes=[],
                     worktrees=sorted(activities.values(), key=lambda item: item.worktree_path),
                     scanned_at=observed_at,
                 )

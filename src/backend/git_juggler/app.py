@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .agent_hook_events import AgentHookEventReader
 from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
-from .agent_tracking.agent_repository_tracker import AgentRepositoryScan
+from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
 from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
@@ -134,7 +134,6 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         return AgentRepositoryScanResponse(
             agent_pid=scan.agent_pid,
             session_directory=scan.session_directory,
-            processes=[process.__dict__ for process in scan.processes],
             worktrees=[
                 {
                     "repository_id": activity.repository_id,

@@ -164,16 +164,6 @@ class CiRunInfo(BaseModel):
     duration_ms: int | None = None
 
 
-class AgentProcessInfo(BaseModel):
-    pid: int
-    parent_pid: int | None = None
-    executable: str | None = None
-    command_line: str | None = None
-    arguments: list[str] | None = None
-    open_files: list[str] | None = None
-    cwd: str | None = None
-
-
 class AgentActivityEvidence(BaseModel):
     type: str
     pid: int | None = None
@@ -202,7 +192,6 @@ class AgentWorktreeActivityResponse(BaseModel):
 class AgentRepositoryScanResponse(BaseModel):
     agent_pid: int
     session_directory: str | None = None
-    processes: list[AgentProcessInfo]
     worktrees: list[AgentWorktreeActivityResponse]
     scanned_at: int
 
