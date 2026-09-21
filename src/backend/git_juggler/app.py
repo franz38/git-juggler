@@ -8,11 +8,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from .agent_hook_events import AgentHookEventReader
+from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
+from .agent_tracking.activity_models import AgentRepositoryScan
+from .browse import browse_directory
+from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
-from .github_actions import get_github_actions_runs
 from .repos import list_repos, resolve_repo_path
-from .schemas import CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .schemas import AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -41,6 +45,10 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     def api_list_repos() -> list[RepoSummary]:
         return list_repos(config.load_repo_paths())
 
+    @app.get("/api/browse", response_model=BrowseDirectoryResponse)
+    def api_browse(path: str | None = None) -> BrowseDirectoryResponse:
+        return browse_directory(path)
+
     def _current_config() -> ConfigResponse:
         return ConfigResponse(
             repo_paths=[str(p) for p in config.load_repo_paths()],
@@ -48,6 +56,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             repo_groups=config.load_repo_groups(),
             excluded_paths=config.load_excluded_paths(),
             github=config.load_github_config(),
+            jenkins=config.load_jenkins_config(),
         )
 
     @app.get("/api/config", response_model=ConfigResponse)
@@ -82,6 +91,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
         if body.github is not None:
             config.save_github_config(body.github.model_dump())
+
+        if body.jenkins is not None:
+            config.save_jenkins_config(body.jenkins.model_dump())
 
         return _current_config()
 
@@ -128,11 +140,76 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
             raise HTTPException(status_code=404, detail="commit not found") from exc
 
-    @app.get("/api/repos/{repo_id}/github/actions", response_model=dict[str, list[GitHubActionsRunInfo]])
-    def api_github_actions(repo_id: str) -> dict[str, list[GitHubActionsRunInfo]]:
+    @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
+    def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:
         path = _resolve_repo_path(repo_id)
         commits, _, _, _, _, _, _, _ = get_graph(path)
-        return get_github_actions_runs(path, {c.hash for c in commits}, config.load_github_config())
+        return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
+
+    hook_event_reader = AgentHookEventReader()
+
+    def _agent_scan_response(scan: AgentRepositoryScan) -> AgentRepositoryScanResponse:
+        return AgentRepositoryScanResponse(
+            agent_pid=scan.agent_pid,
+            session_directory=scan.session_directory,
+            worktrees=[
+                {
+                    "repository_id": activity.repository_id,
+                    "worktree_path": activity.worktree_path,
+                    "branch": activity.branch,
+                    "commit": activity.commit,
+                    "process_ids": activity.process_ids,
+                    "first_seen": activity.first_seen,
+                    "last_seen": activity.last_seen,
+                    "last_activity": activity.last_activity,
+                    "evidence": [evidence.__dict__ for evidence in activity.evidence],
+                    "activity_score": activity.activity_score,
+                    "state": activity.state,
+                    "is_home": activity.is_home,
+                }
+                for activity in scan.worktrees
+            ],
+            scanned_at=scan.scanned_at,
+            state=scan.state,
+            provider=scan.provider,
+            session_id=scan.session_id,
+            process_pid=scan.process_pid,
+            name=scan.name,
+            details=scan.details.__dict__ if scan.details is not None else None,
+        )
+
+    def _hook_status_response(status) -> AgentHookProviderStatusResponse:
+        return AgentHookProviderStatusResponse(**status.__dict__)
+
+    @app.get("/api/agents/activity", response_model=AgentActivityResponse)
+    def api_agent_activity() -> AgentActivityResponse:
+        hook_scans = hook_event_reader.recent_scans()
+        scans = [_agent_scan_response(scan) for scan in hook_scans]
+        scanned_at = max((scan.scanned_at for scan in scans), default=0)
+        return AgentActivityResponse(
+            agents=[
+                {"pid": scan.agent_pid, "command_line": "hook activity", "matched_pattern": "hook"}
+                for scan in hook_scans
+            ],
+            scans=scans,
+            scanned_at=scanned_at,
+        )
+
+    @app.get("/api/agents/hooks", response_model=AgentHooksResponse)
+    def api_agent_hooks() -> AgentHooksResponse:
+        statuses = hooks_status()
+        return AgentHooksResponse(
+            claude=_hook_status_response(statuses["claude"]),
+            opencode=_hook_status_response(statuses["opencode"]),
+        )
+
+    @app.post("/api/agents/hooks/claude/install", response_model=AgentHookProviderStatusResponse)
+    def api_install_claude_hooks() -> AgentHookProviderStatusResponse:
+        return _hook_status_response(install_claude_hooks())
+
+    @app.post("/api/agents/hooks/opencode/install", response_model=AgentHookProviderStatusResponse)
+    def api_install_opencode_hooks() -> AgentHookProviderStatusResponse:
+        return _hook_status_response(install_opencode_hooks())
 
     @app.websocket("/ws/terminal")
     async def ws_terminal(websocket: WebSocket) -> None:

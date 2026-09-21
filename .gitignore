@@ -24,3 +24,6 @@ secrets.env
 .idea/
 .vscode/
 *.sw?
+
+# Personal task notes (see CLAUDE.md)
+todo.txt

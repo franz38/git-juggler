@@ -132,6 +132,20 @@ def save_github_config(github: dict | None) -> None:
     _save_raw(data)
 
 
+def load_jenkins_config() -> dict | None:
+    raw = _load_raw().get("jenkins")
+    return raw if isinstance(raw, dict) else None
+
+
+def save_jenkins_config(jenkins: dict | None) -> None:
+    data = _load_raw()
+    if jenkins is None:
+        data.pop("jenkins", None)
+    else:
+        data["jenkins"] = jenkins
+    _save_raw(data)
+
+
 def ensure_seeded(default_path: Path) -> None:
     """On first run (no config file yet), seed it with the CLI-provided path
     so existing single-path usage keeps working without extra setup."""

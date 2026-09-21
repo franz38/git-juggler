@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { CommitDetail, ConfigResponse, ConfigUpdateRequest, GitHubActionsRunInfo, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -15,6 +15,11 @@ export function fetchRepos(): Promise<RepoSummary[]> {
   return getJson(`${API_BASE}/repos`);
 }
 
+export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return getJson(`${API_BASE}/browse${query}`);
+}
+
 export function fetchGraph(repoId: string): Promise<GraphResponse> {
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/graph`);
 }
@@ -27,8 +32,24 @@ export function fetchCommitDetail(repoId: string, hash: string): Promise<CommitD
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}`);
 }
 
-export function fetchGitHubActionsRuns(repoId: string): Promise<Record<string, GitHubActionsRunInfo[]>> {
-  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/github/actions`);
+export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>> {
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/runs`);
+}
+
+export function fetchAgentActivity(): Promise<AgentActivityResponse> {
+  return getJson(`${API_BASE}/agents/activity`);
+}
+
+export function fetchAgentHooks(): Promise<AgentHooksResponse> {
+  return getJson(`${API_BASE}/agents/hooks`);
+}
+
+export async function installAgentHook(provider: "claude" | "opencode"): Promise<AgentHookProviderStatus> {
+  const res = await fetch(`${API_BASE}/agents/hooks/${provider}/install`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`request failed (${res.status}): install ${provider} hooks`);
+  }
+  return res.json() as Promise<AgentHookProviderStatus>;
 }
 
 export function fetchConfig(): Promise<ConfigResponse> {

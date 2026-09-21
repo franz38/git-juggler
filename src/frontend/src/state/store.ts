@@ -1,7 +1,8 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { fetchCommitDetail, fetchConfig, fetchGitHubActionsRuns, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { CommitDetail, CommitSummary, FileChange, GitHubActionsRunInfo, GitHubConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
+import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -26,14 +27,15 @@ interface RepoState {
   checkedOutBranches: string[];
   headCommit: string | null;
   upstreamCommit: string | null;
+  refsSignature: string | null;
   isDirty: boolean;
   uncommittedFiles: FileChange[];
   uncommittedExpanded: boolean;
   expanded: Set<string>;
   details: Record<string, CommitDetail>;
-  githubActionsRuns: Record<string, GitHubActionsRunInfo[]>;
-  githubActionsLoading: boolean;
-  githubActionsError: string | null;
+  ciRuns: Record<string, CiRunInfo[]>;
+  ciLoading: boolean;
+  ciError: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -58,6 +60,7 @@ function loadTabsState(): PersistedTabsState {
 
 const restoredTabsState = loadTabsState();
 const [repos, setRepos] = createSignal<RepoSummary[]>([]);
+const [reposLoading, setReposLoading] = createSignal(false);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
@@ -96,13 +99,13 @@ export function reportRowHeight(hash: string, height: number): void {
   }
 }
 
-export { repos, tabs, activeRepo };
+export { repos, reposLoading, tabs, activeRepo };
 
 // --- Repos sidebar -------------------------------------------------------
 
 const SIDEBAR_WIDTH_KEY = "git-juggler:sidebarWidth";
 export const SIDEBAR_DEFAULT_WIDTH = 250;
-export const SIDEBAR_MIN_WIDTH = 120;
+export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 400;
 
 function loadSidebarWidth(): number {
@@ -129,11 +132,143 @@ export function setSidebarWidth(width: number): void {
 }
 
 export async function loadRepos(): Promise<void> {
+  setReposLoading(true);
   try {
     setRepos(await fetchRepos());
   } catch {
     // The sidebar just stays empty; nowhere good to surface this yet.
+  } finally {
+    setReposLoading(false);
   }
+}
+
+// --- Directory browser -----------------------------------------------------
+// A read-only folder picker (backed by GET /api/browse) for filling in a
+// repo search path without typing an absolute path by hand.
+
+export interface DirectoryBrowserState {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+  loading: boolean;
+  error: string | null;
+  onSelect: (path: string) => void;
+}
+
+const [directoryBrowser, setDirectoryBrowser] = createSignal<DirectoryBrowserState | null>(null);
+export { directoryBrowser };
+
+async function loadBrowseDirectory(path: string | undefined, onSelect: (path: string) => void): Promise<void> {
+  setDirectoryBrowser((current) =>
+    current ? { ...current, loading: true, error: null } : { path: path ?? "", parent: null, entries: [], loading: true, error: null, onSelect },
+  );
+  try {
+    const data = await browseDirectory(path);
+    setDirectoryBrowser({ path: data.path, parent: data.parent, entries: data.entries, loading: false, error: null, onSelect });
+  } catch (e) {
+    setDirectoryBrowser((current) => (current ? { ...current, loading: false, error: (e as Error).message } : current));
+  }
+}
+
+export function openDirectoryBrowser(onSelect: (path: string) => void): void {
+  void loadBrowseDirectory(undefined, onSelect);
+}
+
+export function navigateDirectoryBrowser(path: string): void {
+  const state = directoryBrowser();
+  if (!state) return;
+  void loadBrowseDirectory(path, state.onSelect);
+}
+
+export function closeDirectoryBrowser(): void {
+  setDirectoryBrowser(null);
+}
+
+export function selectDirectoryBrowserPath(): void {
+  const state = directoryBrowser();
+  if (!state) return;
+  state.onSelect(state.path);
+  setDirectoryBrowser(null);
+}
+
+// --- Key bindings ----------------------------------------------------------
+
+export interface KeyBinding {
+  key: string;
+  mod: boolean; // Cmd on mac, Ctrl elsewhere -- treated as one interchangeable modifier
+  shift: boolean;
+  alt: boolean;
+}
+
+export type KeyBindingAction = "nextTab" | "prevTab" | "toggleMenu";
+
+export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
+  { id: "nextTab", label: "Next tab" },
+  { id: "prevTab", label: "Previous tab" },
+  { id: "toggleMenu", label: "Open/close main menu" },
+];
+
+const DEFAULT_KEY_BINDINGS: Record<KeyBindingAction, KeyBinding> = {
+  nextTab: { key: "ArrowRight", mod: true, shift: true, alt: false },
+  prevTab: { key: "ArrowLeft", mod: true, shift: true, alt: false },
+  toggleMenu: { key: "p", mod: true, shift: false, alt: false },
+};
+
+const KEY_BINDINGS_KEY = "git-juggler:keyBindings";
+
+function loadKeyBindings(): Record<KeyBindingAction, KeyBinding> {
+  try {
+    const raw = localStorage.getItem(KEY_BINDINGS_KEY);
+    if (!raw) return { ...DEFAULT_KEY_BINDINGS };
+    const parsed = JSON.parse(raw) as Partial<Record<KeyBindingAction, KeyBinding>>;
+    return { ...DEFAULT_KEY_BINDINGS, ...parsed };
+  } catch {
+    return { ...DEFAULT_KEY_BINDINGS };
+  }
+}
+
+const [keyBindings, setKeyBindingsSignal] = createSignal(loadKeyBindings());
+export { keyBindings };
+
+export function setKeyBinding(action: KeyBindingAction, binding: KeyBinding): void {
+  const next = { ...keyBindings(), [action]: binding };
+  setKeyBindingsSignal(next);
+  try {
+    localStorage.setItem(KEY_BINDINGS_KEY, JSON.stringify(next));
+  } catch {
+    // Not critical — the binding just won't survive a reload.
+  }
+}
+
+export function resetKeyBinding(action: KeyBindingAction): void {
+  setKeyBinding(action, DEFAULT_KEY_BINDINGS[action]);
+}
+
+export function matchesKeyBinding(e: KeyboardEvent, binding: KeyBinding): boolean {
+  return (
+    e.key.toLowerCase() === binding.key.toLowerCase() &&
+    (e.metaKey || e.ctrlKey) === binding.mod &&
+    e.shiftKey === binding.shift &&
+    e.altKey === binding.alt
+  );
+}
+
+const KEY_DISPLAY_NAMES: Record<string, string> = {
+  " ": "Space",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+};
+
+export function formatKeyBinding(binding: KeyBinding): string {
+  const parts: string[] = [];
+  if (binding.mod) parts.push("Cmd/Ctrl");
+  if (binding.shift) parts.push("Shift");
+  if (binding.alt) parts.push("Alt");
+  const keyName = KEY_DISPLAY_NAMES[binding.key] ?? (binding.key.length === 1 ? binding.key.toUpperCase() : binding.key);
+  parts.push(keyName);
+  return parts.join("+");
 }
 
 // Pinned repos are persisted server-side (~/.config/git-juggler/config.json)
@@ -142,6 +277,145 @@ export async function loadRepos(): Promise<void> {
 const [pinnedRepos, setPinnedRepos] = createSignal<Set<string>>(new Set());
 const [repoGroups, setRepoGroups] = createSignal<RepoGroupConfig[]>([]);
 export { pinnedRepos, repoGroups };
+
+const AGENTS_ENABLED_KEY = "git-juggler:agentsEnabled";
+const AGENT_WORKTREES_KEY = "git-juggler:agentShowWorktrees";
+
+function loadBoolean(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveBoolean(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    // Not critical — the setting just won't survive a reload.
+  }
+}
+
+const [agentsEnabled, setAgentsEnabledSignal] = createSignal(loadBoolean(AGENTS_ENABLED_KEY));
+export { agentsEnabled };
+
+// Whether the agents panel lists each session's worktrees (off by default).
+const [agentShowWorktrees, setAgentShowWorktreesSignal] = createSignal(loadBoolean(AGENT_WORKTREES_KEY));
+export { agentShowWorktrees };
+export function setAgentShowWorktrees(show: boolean): void {
+  setAgentShowWorktreesSignal(show);
+  saveBoolean(AGENT_WORKTREES_KEY, show);
+}
+
+// Left panel tabs: the repo list (default) and the agents list. The agents tab
+// only exists while agent detection is on, so it falls back to the repos tab.
+export type SidebarTab = "repos" | "agents";
+const [requestedSidebarTab, setSidebarTab] = createSignal<SidebarTab>("repos");
+export const sidebarTab = createMemo<SidebarTab>(() => (requestedSidebarTab() === "agents" && agentsEnabled() ? "agents" : "repos"));
+export { setSidebarTab };
+
+const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
+const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
+const [agentActivityError, setAgentActivityError] = createSignal<string | null>(null);
+const [agentActivityPolling, setAgentActivityPolling] = createSignal(true);
+export { agentActivity, agentActivityLoading, agentActivityError, agentActivityPolling };
+
+const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(null);
+const [agentHooksLoading, setAgentHooksLoading] = createSignal(false);
+const [agentHooksError, setAgentHooksError] = createSignal<string | null>(null);
+export { agentHooks, agentHooksLoading, agentHooksError };
+
+// When disabled, no agent data is fetched (refreshAgentActivity below
+// no-ops) or shown (AgentActivityPanel isn't rendered at all) anywhere.
+export function setAgentsEnabled(enabled: boolean): void {
+  setAgentsEnabledSignal(enabled);
+  saveBoolean(AGENTS_ENABLED_KEY, enabled);
+  if (!enabled) {
+    setAgentActivity(null);
+    setAgentActivityError(null);
+  }
+}
+
+export const agentActivityByWorktreePath = createMemo<Map<string, AgentWorktreeActivity>>(() => {
+  const byPath = new Map<string, AgentWorktreeActivity>();
+  for (const scan of agentActivity()?.scans ?? []) {
+    for (const activity of scan.worktrees) {
+      const existing = byPath.get(activity.worktree_path);
+      if (!existing || activity.last_activity > existing.last_activity) {
+        byPath.set(activity.worktree_path, activity);
+      }
+    }
+  }
+  return byPath;
+});
+
+export const agentActivityByRepositoryId = createMemo<Map<string, AgentWorktreeActivity[]>>(() => {
+  const byRepository = new Map<string, AgentWorktreeActivity[]>();
+  for (const scan of agentActivity()?.scans ?? []) {
+    for (const activity of scan.worktrees) {
+      const items = byRepository.get(activity.repository_id) ?? [];
+      items.push(activity);
+      byRepository.set(activity.repository_id, items);
+    }
+  }
+  for (const items of byRepository.values()) {
+    items.sort((a, b) => b.last_activity - a.last_activity);
+  }
+  return byRepository;
+});
+
+export function setAgentActivityPollingEnabled(enabled: boolean): void {
+  setAgentActivityPolling(enabled);
+}
+
+export async function refreshAgentActivity(): Promise<void> {
+  if (!agentsEnabled() || agentActivityLoading()) return;
+  setAgentActivityLoading(true);
+  setAgentActivityError(null);
+  try {
+    setAgentActivity(await fetchAgentActivity());
+  } catch (e) {
+    setAgentActivityError((e as Error).message);
+  } finally {
+    setAgentActivityLoading(false);
+  }
+}
+
+export async function refreshAgentHooks(): Promise<void> {
+  if (agentHooksLoading()) return;
+  setAgentHooksLoading(true);
+  setAgentHooksError(null);
+  try {
+    setAgentHooks(await fetchAgentHooks());
+  } catch (e) {
+    setAgentHooksError((e as Error).message);
+  } finally {
+    setAgentHooksLoading(false);
+  }
+}
+
+export async function installAgentHooks(provider: "claude" | "opencode"): Promise<void> {
+  if (agentHooksLoading()) return;
+  setAgentHooksLoading(true);
+  setAgentHooksError(null);
+  try {
+    const status: AgentHookProviderStatus = await installAgentHook(provider);
+    const current = agentHooks();
+    if (!current) {
+      setAgentHooks(await fetchAgentHooks());
+      return;
+    }
+    setAgentHooks({
+      claude: provider === "claude" ? status : current.claude,
+      opencode: provider === "opencode" ? status : current.opencode,
+    });
+  } catch (e) {
+    setAgentHooksError((e as Error).message);
+  } finally {
+    setAgentHooksLoading(false);
+  }
+}
 
 function updateGroupsFromConfig(groups: RepoGroupConfig[]): void {
   setRepoGroups(groups.map((group) => ({ ...group, repo_paths: [...group.repo_paths] })));
@@ -249,14 +523,15 @@ function ensureRepoState(name: string): void {
       checkedOutBranches: [],
       headCommit: null,
       upstreamCommit: null,
+      refsSignature: null,
       isDirty: false,
       uncommittedFiles: [],
       uncommittedExpanded: false,
       expanded: new Set(),
       details: {},
-      githubActionsRuns: {},
-      githubActionsLoading: false,
-      githubActionsError: null,
+      ciRuns: {},
+      ciLoading: false,
+      ciError: null,
       loading: false,
       error: null,
     });
@@ -273,9 +548,11 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
+    // Re-seeded by the next status poll.
+    setRepoStates(name, "refsSignature", null);
     setRepoStates(name, "isDirty", data.is_dirty);
     setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
-    void loadGitHubActionsInto(name);
+    void loadCiRunsInto(name);
   } catch (e) {
     setRepoStates(name, "error", (e as Error).message);
   } finally {
@@ -311,6 +588,13 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
   try {
     const status = await fetchRepoStatus(repoId);
     if (status.head_commit !== state.headCommit || status.current_branch !== state.currentBranch) {
+      await refreshRepoGraph(repoId);
+      return;
+    }
+    // New/moved/deleted branches, tags or worktrees don't move HEAD.
+    const known = state.refsSignature;
+    setRepoStates(repoId, "refsSignature", status.refs_signature);
+    if (known !== null && known !== status.refs_signature) {
       await refreshRepoGraph(repoId);
       return;
     }
@@ -470,10 +754,46 @@ export const commitAuthors = createMemo<string[]>(() => {
   return [...authors].sort((a, b) => a.localeCompare(b));
 });
 
+// --- Branch visibility filter (the eye button next to the commit filter) ---
+// The checked branches are remembered per repo (branch names differ between
+// repos); the "commits since" date applies to whichever repo is active.
+
+const [branchSelections, setBranchSelections] = createSignal<Record<string, string[]>>({});
+const [branchSince, setBranchSinceSignal] = createSignal("");
+export { branchSince };
+
+export function setBranchSince(date: string): void {
+  setBranchSinceSignal(date);
+}
+
+export const commitBranches = createMemo<string[]>(() => branchNames(commits()));
+
+// Checked branches of the active repo, ignoring ones that no longer exist.
+export const branchFilter = createMemo<string[]>(() => {
+  const name = activeRepo();
+  const selected = name ? branchSelections()[name] ?? [] : [];
+  const existing = new Set(commitBranches());
+  return selected.filter((branch) => existing.has(branch));
+});
+
+export function setBranchFilter(branches: string[]): void {
+  const name = activeRepo();
+  if (name) setBranchSelections((current) => ({ ...current, [name]: branches }));
+}
+
+export function clearBranchFilters(): void {
+  setBranchFilter([]);
+  setBranchSince("");
+}
+
+const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
+
 export const filteredCommits = createMemo<CommitSummary[]>(() => {
   const authors = authorFilter();
   const comment = commentFilter().trim().toLowerCase();
+  const visibleByBranch = visibleBranchHashes();
   return commits().filter((commit) => {
+    if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
     if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
     if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
     return true;
@@ -508,6 +828,15 @@ export const isDirty = createMemo<boolean>(() => {
   return name ? repoStates[name]?.isDirty ?? false : false;
 });
 
+// The working-tree row belongs to HEAD, so it goes away with HEAD's branch
+// when the branch filter hides it.
+export const workingTreeVisible = createMemo<boolean>(() => {
+  const head = headCommit();
+  if (head === null || !isDirty()) return false;
+  const visible = visibleBranchHashes();
+  return visible === null || visible.has(head);
+});
+
 export const uncommittedFiles = createMemo<FileChange[]>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.uncommittedFiles ?? [] : [];
@@ -540,9 +869,9 @@ export const commitDetails = createMemo<Record<string, CommitDetail>>(() => {
   return name ? repoStates[name]?.details ?? {} : {};
 });
 
-export const githubActionsRuns = createMemo<Record<string, GitHubActionsRunInfo[]>>(() => {
+export const ciRuns = createMemo<Record<string, CiRunInfo[]>>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.githubActionsRuns ?? {} : {};
+  return name ? repoStates[name]?.ciRuns ?? {} : {};
 });
 
 export const graphLoading = createMemo<boolean>(() => {
@@ -667,46 +996,89 @@ const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(
 export { excludedPaths, excludedPathsError };
 
 const defaultGitHubConfig: GitHubConfig = {
+  enabled: true,
+  auto_detect: true,
   api_base_url: "https://api.github.com",
   token_env: "GITHUB_TOKEN",
   repos: [],
+};
+
+const defaultJenkinsConfig: JenkinsConfig = {
+  enabled: true,
+  base_url: "",
+  username: "",
+  api_token_env: "JENKINS_API_TOKEN",
+  build_limit: 50,
+  jobs: [],
 };
 
 const [githubConfig, setGitHubConfig] = createSignal<GitHubConfig>(defaultGitHubConfig);
 const [githubConfigError, setGitHubConfigError] = createSignal<string | null>(null);
 export { githubConfig, githubConfigError };
 
-const GITHUB_ACTIONS_POLL_MS = 10000;
-const GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
-const githubActionsPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const githubActionsPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+const [jenkinsConfig, setJenkinsConfig] = createSignal<JenkinsConfig>(defaultJenkinsConfig);
+const [jenkinsConfigError, setJenkinsConfigError] = createSignal<string | null>(null);
+export { jenkinsConfig, jenkinsConfigError };
 
-function hasRunningGitHubActions(runsByHash: Record<string, GitHubActionsRunInfo[]>): boolean {
+const CI_POLL_MS = 10000;
+const CI_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
+const ciPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const ciPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+
+function hasRunningCiRuns(runsByHash: Record<string, CiRunInfo[]>): boolean {
   return Object.values(runsByHash).some((runs) => runs.some((run) => run.status === "running"));
 }
 
-function clearGitHubActionsPoll(repoId: string): void {
-  const timer = githubActionsPollTimers.get(repoId);
+function clearCiPoll(repoId: string): void {
+  const timer = ciPollTimers.get(repoId);
   if (timer) clearTimeout(timer);
-  githubActionsPollTimers.delete(repoId);
+  ciPollTimers.delete(repoId);
 }
 
-function scheduleGitHubActionsPollIfNeeded(repoId: string, runsByHash: Record<string, GitHubActionsRunInfo[]>): void {
-  clearGitHubActionsPoll(repoId);
-  if (!hasRunningGitHubActions(runsByHash)) return;
-  githubActionsPollTimers.set(
+function scheduleCiPollIfNeeded(repoId: string, runsByHash: Record<string, CiRunInfo[]>): void {
+  clearCiPoll(repoId);
+  if (!hasRunningCiRuns(runsByHash)) return;
+  ciPollTimers.set(
     repoId,
     setTimeout(() => {
-      githubActionsPollTimers.delete(repoId);
-      void loadGitHubActionsInto(repoId);
-    }, GITHUB_ACTIONS_POLL_MS),
+      ciPollTimers.delete(repoId);
+      void loadCiRunsInto(repoId);
+    }, CI_POLL_MS),
   );
 }
 
-function clearGitHubActionsPushRefresh(repoId: string): void {
-  const timers = githubActionsPushRefreshTimers.get(repoId) ?? [];
+function clearCiPushRefresh(repoId: string): void {
+  const timers = ciPushRefreshTimers.get(repoId) ?? [];
   for (const timer of timers) clearTimeout(timer);
-  githubActionsPushRefreshTimers.delete(repoId);
+  ciPushRefreshTimers.delete(repoId);
+}
+
+function applyGitHubConfig(config: GitHubConfig | null): void {
+  const nextConfig = config ?? defaultGitHubConfig;
+  setGitHubConfig(nextConfig);
+  if (nextConfig.enabled || jenkinsConfig().enabled) return;
+
+  for (const repoId of Object.keys(repoStates)) {
+    clearCiPoll(repoId);
+    clearCiPushRefresh(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
+  }
+}
+
+function applyJenkinsConfig(config: JenkinsConfig | null): void {
+  const nextConfig = config ?? defaultJenkinsConfig;
+  setJenkinsConfig(nextConfig);
+  if (nextConfig.enabled || githubConfig().enabled) return;
+
+  for (const repoId of Object.keys(repoStates)) {
+    clearCiPoll(repoId);
+    clearCiPushRefresh(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
+  }
 }
 
 export async function loadConfig(): Promise<void> {
@@ -716,58 +1088,80 @@ export async function loadConfig(): Promise<void> {
     setPinnedRepos(new Set(data.pinned_repo_paths));
     updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
-    setGitHubConfig(data.github ?? defaultGitHubConfig);
+    applyGitHubConfig(data.github);
+    applyJenkinsConfig(data.jenkins);
     setRepoPathsError(null);
     setExcludedPathsError(null);
     setGitHubConfigError(null);
+    setJenkinsConfigError(null);
   } catch (e) {
     setRepoPathsError((e as Error).message);
   }
 }
 
-async function loadGitHubActionsInto(repoId: string): Promise<void> {
+async function loadCiRunsInto(repoId: string): Promise<void> {
   ensureRepoState(repoId);
-  if (repoStates[repoId].githubActionsLoading) return;
-  setRepoStates(repoId, "githubActionsLoading", true);
-  setRepoStates(repoId, "githubActionsError", null);
+  if (!githubConfig().enabled && !jenkinsConfig().enabled) {
+    clearCiPoll(repoId);
+    setRepoStates(repoId, "ciRuns", {});
+    setRepoStates(repoId, "ciLoading", false);
+    setRepoStates(repoId, "ciError", null);
+    return;
+  }
+  if (repoStates[repoId].ciLoading) return;
+  setRepoStates(repoId, "ciLoading", true);
+  setRepoStates(repoId, "ciError", null);
   try {
-    const runs = await fetchGitHubActionsRuns(repoId);
-    setRepoStates(repoId, "githubActionsRuns", runs);
-    scheduleGitHubActionsPollIfNeeded(repoId, runs);
+    const runs = await fetchCiRuns(repoId);
+    setRepoStates(repoId, "ciRuns", runs);
+    scheduleCiPollIfNeeded(repoId, runs);
   } catch (e) {
-    setRepoStates(repoId, "githubActionsError", (e as Error).message);
-    clearGitHubActionsPoll(repoId);
+    setRepoStates(repoId, "ciError", (e as Error).message);
+    clearCiPoll(repoId);
   } finally {
-    setRepoStates(repoId, "githubActionsLoading", false);
+    setRepoStates(repoId, "ciLoading", false);
   }
 }
 
-export function scheduleGitHubActionsRefreshAfterPush(repoId: string): void {
+export function scheduleCiRefreshAfterPush(repoId: string): void {
   scheduleGraphRefresh(repoId);
-  clearGitHubActionsPushRefresh(repoId);
+  if (!githubConfig().enabled && !jenkinsConfig().enabled) return;
+  clearCiPushRefresh(repoId);
   const timers: ReturnType<typeof setTimeout>[] = [];
-  for (const delay of GITHUB_ACTIONS_PUSH_REFRESH_DELAYS_MS) {
+  for (const delay of CI_PUSH_REFRESH_DELAYS_MS) {
     const timer = setTimeout(() => {
-      const current = githubActionsPushRefreshTimers.get(repoId) ?? [];
+      const current = ciPushRefreshTimers.get(repoId) ?? [];
       const remaining = current.filter((item) => item !== timer);
-      if (remaining.length > 0) githubActionsPushRefreshTimers.set(repoId, remaining);
-      else githubActionsPushRefreshTimers.delete(repoId);
-      void loadGitHubActionsInto(repoId);
+      if (remaining.length > 0) ciPushRefreshTimers.set(repoId, remaining);
+      else ciPushRefreshTimers.delete(repoId);
+      void loadCiRunsInto(repoId);
     }, delay);
     timers.push(timer);
   }
-  githubActionsPushRefreshTimers.set(repoId, timers);
+  ciPushRefreshTimers.set(repoId, timers);
 }
 
 export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {
   try {
     const data = await updateConfig({ github: next });
-    setGitHubConfig(data.github ?? defaultGitHubConfig);
+    applyGitHubConfig(data.github);
     setGitHubConfigError(null);
     const current = activeRepo();
-    if (current) void loadGitHubActionsInto(current);
+    if (current && ((data.github ?? defaultGitHubConfig).enabled || jenkinsConfig().enabled)) void loadCiRunsInto(current);
   } catch (e) {
     setGitHubConfigError((e as Error).message);
+  }
+}
+
+export async function saveJenkinsConfig(next: JenkinsConfig): Promise<void> {
+  try {
+    const data = await updateConfig({ jenkins: next });
+    applyJenkinsConfig(data.jenkins);
+    setJenkinsConfigError(null);
+    const current = activeRepo();
+    if (current && ((data.jenkins ?? defaultJenkinsConfig).enabled || githubConfig().enabled)) void loadCiRunsInto(current);
+  } catch (e) {
+    setJenkinsConfigError((e as Error).message);
   }
 }
 
@@ -1120,7 +1514,8 @@ const PUSH_MAX_DURATION_MS = 30000;
 
 const [fetchingRepos, setFetchingRepos] = createSignal<Set<string>>(new Set());
 const [pushingRepos, setPushingRepos] = createSignal<Set<string>>(new Set());
-export { fetchingRepos, pushingRepos };
+const [pushingTargetCommits, setPushingTargetCommits] = createSignal<Record<string, string>>({});
+export { fetchingRepos, pushingRepos, pushingTargetCommits };
 
 const fetchQuietTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const fetchMaxTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1171,13 +1566,21 @@ export function stopPush(repoId: string): void {
     next.delete(repoId);
     setPushingRepos(next);
   }
+  if (pushingTargetCommits()[repoId]) {
+    const next = { ...pushingTargetCommits() };
+    delete next[repoId];
+    setPushingTargetCommits(next);
+  }
   void refreshRepoGraph(repoId);
 }
 
-export function startPush(repoId: string): void {
+export function startPush(repoId: string, targetCommit?: string): void {
   const next = new Set(pushingRepos());
   next.add(repoId);
   setPushingRepos(next);
+  if (targetCommit) {
+    setPushingTargetCommits({ ...pushingTargetCommits(), [repoId]: targetCommit });
+  }
   clearPushTimers(repoId);
   pushMaxTimers.set(
     repoId,

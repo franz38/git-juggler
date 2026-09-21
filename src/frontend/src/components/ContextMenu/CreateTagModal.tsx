@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal } from "solid-js";
+import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import {
   activeRepo,
   closeCreateTagModal,
@@ -8,7 +8,7 @@ import {
   scheduleGraphRefresh,
 } from "../../state/store";
 
-type Phase = "form" | "pending" | "success" | "error";
+type Phase = "form" | "pending" | "error";
 
 export function CreateTagModal() {
   const [tagName, setTagName] = createSignal("");
@@ -24,6 +24,14 @@ export function CreateTagModal() {
       setPhase("form");
       setResultText("");
     }
+  });
+
+  onMount(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && createTagModal()) closeCreateTagModal();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    onCleanup(() => document.removeEventListener("keydown", handleKeyDown));
   });
 
   const sanitizedName = () => tagName().trim().replace(/\s+/g, "-");
@@ -46,9 +54,8 @@ export function CreateTagModal() {
         : await createLightweightTagInTerminal(repo, target.hash, name);
 
     if (success) {
-      setPhase("success");
-      setResultText(`Tag "${name}" created.`);
       scheduleGraphRefresh(repo);
+      closeCreateTagModal();
     } else {
       setPhase("error");
       setResultText(`Failed to create tag "${name}" — see the terminal for details.`);
@@ -107,14 +114,6 @@ export function CreateTagModal() {
 
             <Show when={phase() === "pending"}>
               <p class="menu-hint">{pendingLabel()}</p>
-            </Show>
-            <Show when={phase() === "success"}>
-              <p class="menu-hint">{resultText()}</p>
-              <div class="menu-actions">
-                <button type="button" class="menu-secondary-button" onClick={closeCreateTagModal}>
-                  Close
-                </button>
-              </div>
             </Show>
             <Show when={phase() === "error"}>
               <p class="menu-error">{resultText()}</p>

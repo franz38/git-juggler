@@ -21,6 +21,7 @@ class RepoSummary(BaseModel):
     id: str
     name: str
     path: str
+    repository_id: str
     current_branch: str | None = None
 
 
@@ -31,9 +32,25 @@ class GitHubRepoConfig(BaseModel):
 
 
 class GitHubConfig(BaseModel):
+    enabled: bool = True
+    auto_detect: bool = True
     api_base_url: str = "https://api.github.com"
     token_env: str = "GITHUB_TOKEN"
     repos: list[GitHubRepoConfig] = Field(default_factory=list)
+
+
+class JenkinsJobConfig(BaseModel):
+    repo_path: str
+    job_url: str
+
+
+class JenkinsConfig(BaseModel):
+    enabled: bool = True
+    base_url: str = ""
+    username: str = ""
+    api_token_env: str = "JENKINS_API_TOKEN"
+    build_limit: int = 50
+    jobs: list[JenkinsJobConfig] = Field(default_factory=list)
 
 
 class RepoGroupConfig(BaseModel):
@@ -48,6 +65,7 @@ class ConfigResponse(BaseModel):
     repo_groups: list[RepoGroupConfig] = Field(default_factory=list)
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
     github: GitHubConfig | None = None
+    jenkins: JenkinsConfig | None = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -56,6 +74,33 @@ class ConfigUpdateRequest(BaseModel):
     repo_groups: list[RepoGroupConfig] | None = None
     excluded_paths: list[str] | None = None
     github: GitHubConfig | None = None
+    jenkins: JenkinsConfig | None = None
+
+
+class BrowseEntry(BaseModel):
+    name: str
+    path: str
+
+
+class BrowseDirectoryResponse(BaseModel):
+    path: str
+    parent: str | None
+    entries: list[BrowseEntry]
+
+
+class AgentHookProviderStatusResponse(BaseModel):
+    provider: str
+    installed: bool
+    config_path: str
+    event_path: str
+    snippet: str
+    description: str
+    error: str | None = None
+
+
+class AgentHooksResponse(BaseModel):
+    claude: AgentHookProviderStatusResponse
+    opencode: AgentHookProviderStatusResponse
 
 
 class PersonInfo(BaseModel):
@@ -105,6 +150,7 @@ class RepoStatusResponse(BaseModel):
     upstream_commit: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
+    refs_signature: str = ""
 
 
 class CommitDetail(BaseModel):
@@ -120,14 +166,82 @@ class CommitDetail(BaseModel):
     files: list[FileChange]
 
 
-class GitHubActionsRunInfo(BaseModel):
+class CiRunInfo(BaseModel):
+    provider: str
     status: str
-    workflow_name: str
-    run_number: int
-    run_id: int
+    name: str
+    number: int
     url: str
     branch: str | None = None
     event: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     duration_ms: int | None = None
+
+
+class AgentActivityEvidence(BaseModel):
+    type: str
+    pid: int | None = None
+    cwd: str | None = None
+    path: str | None = None
+    executable: str | None = None
+    command: str | None = None
+    process_role: str | None = None
+    tool: str | None = None
+    score: int = 0
+
+
+class AgentWorktreeActivityResponse(BaseModel):
+    repository_id: str
+    worktree_path: str
+    branch: str | None = None
+    commit: str
+    process_ids: list[int]
+    first_seen: int
+    last_seen: int
+    last_activity: int
+    evidence: list[AgentActivityEvidence] = Field(default_factory=list)
+    activity_score: int = 0
+    state: str = "active"
+    is_home: bool = False
+
+
+class AgentSessionDetails(BaseModel):
+    started_at: int | None = None
+    status_updated_at: int | None = None
+    version: str | None = None
+    kind: str | None = None
+    entrypoint: str | None = None
+    title: str | None = None
+    model: str | None = None
+    permission_mode: str | None = None
+    agent: str | None = None
+    last_prompt: str | None = None
+    worktree_path: str | None = None
+    worktree_name: str | None = None
+    worktree_branch: str | None = None
+
+
+class AgentRepositoryScanResponse(BaseModel):
+    agent_pid: int
+    session_directory: str | None = None
+    worktrees: list[AgentWorktreeActivityResponse]
+    scanned_at: int
+    state: str = "active"
+    provider: str = ""
+    session_id: str | None = None
+    process_pid: int | None = None
+    name: str | None = None
+    details: AgentSessionDetails | None = None
+
+
+class AgentProcessCandidateResponse(BaseModel):
+    pid: int
+    command_line: str
+    matched_pattern: str
+
+
+class AgentActivityResponse(BaseModel):
+    agents: list[AgentProcessCandidateResponse]
+    scans: list[AgentRepositoryScanResponse]
+    scanned_at: int

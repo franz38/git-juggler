@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -117,6 +118,22 @@ def _uncommitted_files(repo: Repo, excluded_paths: list[str]) -> list[FileChange
     ]
 
 
+def _refs_signature(repo: Repo) -> str:
+    """Cheap fingerprint of every ref plus the worktree branch set, so the
+    frontend can notice new/moved/deleted branches, tags and worktrees."""
+    parts = [f"{ref.path}={ref.commit.hexsha}" for ref in repo.references if _ref_ok(ref)]
+    parts.extend(f"wt:{b}" for b in sorted(get_worktree_branches(repo)))
+    return hashlib.sha1("\n".join(sorted(parts)).encode()).hexdigest()
+
+
+def _ref_ok(ref) -> bool:
+    try:
+        ref.commit
+        return True
+    except Exception:
+        return False
+
+
 def get_repo_status(repo_path: Path) -> RepoStatusResponse:
     repo = Repo(repo_path)
     try:
@@ -130,6 +147,7 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
         upstream_commit=_current_upstream_commit(repo),
         is_dirty=bool(uncommitted_files),
         uncommitted_files=uncommitted_files,
+        refs_signature=_refs_signature(repo),
     )
 
 

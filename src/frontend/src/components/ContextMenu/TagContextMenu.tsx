@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
 import { activeRepo, closeTagContextMenu, openDeleteTagModal, runInTerminal, scheduleGraphRefresh, tagContextMenu } from "../../state/store";
 
 function shellQuote(value: string): string {
@@ -6,6 +7,8 @@ function shellQuote(value: string): string {
 }
 
 export function TagContextMenu() {
+  let panelRef: HTMLDivElement | undefined;
+
   const handleDelete = () => {
     const menu = tagContextMenu();
     if (!menu) return;
@@ -24,10 +27,10 @@ export function TagContextMenu() {
 
   return (
     <Show when={tagContextMenu()}>
-      {(menu) => (
-        <>
-          <div class="context-menu-overlay" onClick={closeTagContextMenu} onContextMenu={(e) => e.preventDefault()} />
-          <div class="context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
+      {(menu) => {
+        dismissOnOutsideClick(() => panelRef, closeTagContextMenu);
+        return (
+          <div class="context-menu" ref={panelRef} style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
             <div class="context-menu-item" onClick={handleDelete}>
               Delete tag
             </div>
@@ -35,8 +38,8 @@ export function TagContextMenu() {
               Push tag
             </div>
           </div>
-        </>
-      )}
+        );
+      }}
     </Show>
   );
 }

@@ -1,40 +1,160 @@
-import { For, Index, Show, createEffect, createSignal } from "solid-js";
-import type { GitHubConfig } from "../../api/types";
+import { For, Index, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import type { AgentHookProviderStatus, GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
+  KEY_BINDING_ACTIONS,
   addRepoPath,
+  agentHooks,
+  agentHooksError,
+  agentHooksLoading,
+  agentShowWorktrees,
+  agentsEnabled,
   branchColorMode,
   closeMenu,
   excludedPaths,
   excludedPathsError,
+  formatKeyBinding,
   githubConfig,
   githubConfigError,
+  installAgentHooks,
+  jenkinsConfig,
+  jenkinsConfigError,
+  keyBindings,
   menuOpen,
+  openDirectoryBrowser,
+  refreshAgentHooks,
   removeRepoPath,
   repoPaths,
   repoPathsError,
+  resetKeyBinding,
   saveExcludedPaths,
   saveGitHubConfig,
+  saveJenkinsConfig,
+  setAgentShowWorktrees,
+  setAgentsEnabled,
   setBranchColorMode,
+  setKeyBinding,
 } from "../../state/store";
-import type { BranchColorMode } from "../../state/store";
+import type { BranchColorMode, KeyBindingAction } from "../../state/store";
 import { ThemePicker } from "./ThemePicker";
 
-type Section = "repos" | "github" | "appearance";
+type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings";
+
+const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings"];
 
 const emptyGitHubConfig: GitHubConfig = {
+  enabled: true,
+  auto_detect: true,
   api_base_url: "https://api.github.com",
   token_env: "GITHUB_TOKEN",
   repos: [],
 };
 
+const emptyJenkinsConfig: JenkinsConfig = {
+  enabled: true,
+  base_url: "",
+  username: "",
+  api_token_env: "JENKINS_API_TOKEN",
+  build_limit: 50,
+  jobs: [],
+};
+
+function HookSetupCard(props: { title: string; status: AgentHookProviderStatus; onInstall: () => void }) {
+  const [copied, setCopied] = createSignal(false);
+  const copySnippet = async () => {
+    await navigator.clipboard.writeText(props.status.snippet);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div class="agent-hook-card">
+      <div class="agent-hook-card-heading">
+        <div>
+          <div class="menu-setting-label">{props.title}</div>
+          <p class="menu-hint">{props.status.description}</p>
+        </div>
+        <span class={props.status.installed ? "agent-hook-status installed" : "agent-hook-status"}>{props.status.installed ? "Installed" : "Not installed"}</span>
+      </div>
+      <div class="agent-hook-meta">Config: <span class="mono">{props.status.config_path}</span></div>
+      <div class="agent-hook-meta">Events: <span class="mono">{props.status.event_path}</span></div>
+      <Show when={props.status.error}>
+        {(error) => <div class="menu-error">{error()}</div>}
+      </Show>
+      <div class="menu-actions">
+        <button type="button" class="menu-primary-button" disabled={agentHooksLoading()} onClick={props.onInstall}>
+          Auto-install
+        </button>
+        <button type="button" class="menu-secondary-button" onClick={() => void copySnippet()}>
+          {copied() ? "Copied" : "Copy config"}
+        </button>
+      </div>
+      <p class="menu-hint">Manual setup: add this configuration globally, then restart existing agent sessions.</p>
+      <pre class="agent-hook-snippet"><code>{props.status.snippet}</code></pre>
+    </div>
+  );
+}
+
 export function MainMenu() {
   const [activeSection, setActiveSection] = createSignal<Section>("repos");
   const [newPath, setNewPath] = createSignal("");
   const [githubDraft, setGitHubDraft] = createSignal<GitHubConfig>(emptyGitHubConfig);
+  const [jenkinsDraft, setJenkinsDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
+  const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
+
+  // Captures the next real keypress (ignoring bare modifier taps) and binds
+  // it to `action`; Escape cancels without changing anything. Runs in the
+  // capture phase and stops propagation so it never also triggers the app's
+  // own global shortcuts or the section switcher below while recording.
+  const startRecording = (action: KeyBindingAction) => {
+    setRecordingAction(action);
+    const handleCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Shift" || e.key === "Control" || e.key === "Meta" || e.key === "Alt") return;
+      window.removeEventListener("keydown", handleCapture, true);
+      setRecordingAction(null);
+      if (e.key === "Escape") return;
+      setKeyBinding(action, { key: e.key, mod: e.metaKey || e.ctrlKey, shift: e.shiftKey, alt: e.altKey });
+    };
+    window.addEventListener("keydown", handleCapture, true);
+  };
+
+  // Up/Down cycle through sections while the menu is open, skipped while
+  // typing in a field or while recording a new key binding above (which
+  // needs to see raw arrow keys itself).
+  onMount(() => {
+    const handleMenuKeydown = (e: KeyboardEvent) => {
+      if (!menuOpen() || recordingAction()) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const idx = SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(SECTION_ORDER[Math.min(idx + 1, SECTION_ORDER.length - 1)]);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(SECTION_ORDER[Math.max(idx - 1, 0)]);
+      }
+    };
+    window.addEventListener("keydown", handleMenuKeydown);
+    onCleanup(() => window.removeEventListener("keydown", handleMenuKeydown));
+  });
 
   createEffect(() => {
     const config = githubConfig();
     setGitHubDraft({ ...config, repos: config.repos.map((repo) => ({ ...repo })) });
+  });
+
+  createEffect(() => {
+    if (menuOpen() && activeSection() === "agents" && !agentHooks() && !agentHooksLoading()) {
+      void refreshAgentHooks();
+    }
+  });
+
+  createEffect(() => {
+    const config = jenkinsConfig();
+    setJenkinsDraft({ ...config, jobs: config.jobs.map((job) => ({ ...job })) });
   });
 
   const [excludedPathsDraft, setExcludedPathsDraft] = createSignal("");
@@ -92,6 +212,44 @@ export function MainMenu() {
     });
   };
 
+  const updateJenkinsDraft = <K extends keyof JenkinsConfig>(key: K, value: JenkinsConfig[K]) => {
+    setJenkinsDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateJenkinsJob = (index: number, key: "repo_path" | "job_url", value: string) => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: current.jobs.map((job, i) => (i === index ? { ...job, [key]: value } : job)),
+    }));
+  };
+
+  const addJenkinsJob = () => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: [...current.jobs, { repo_path: "", job_url: "" }],
+    }));
+  };
+
+  const removeJenkinsJob = (index: number) => {
+    setJenkinsDraft((current) => ({
+      ...current,
+      jobs: current.jobs.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSaveJenkins = () => {
+    void saveJenkinsConfig({
+      ...jenkinsDraft(),
+      base_url: jenkinsDraft().base_url.trim(),
+      username: jenkinsDraft().username.trim(),
+      api_token_env: jenkinsDraft().api_token_env.trim() || "JENKINS_API_TOKEN",
+      build_limit: Math.max(1, Math.min(Number(jenkinsDraft().build_limit) || 50, 500)),
+      jobs: jenkinsDraft().jobs
+        .map((job) => ({ repo_path: job.repo_path.trim(), job_url: job.job_url.trim() }))
+        .filter((job) => job.repo_path && job.job_url),
+    });
+  };
+
   return (
     <Show when={menuOpen()}>
       <div class="menu-overlay" onClick={closeMenu}>
@@ -117,6 +275,27 @@ export function MainMenu() {
               onClick={() => setActiveSection("github")}
             >
               GitHub Actions
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "jenkins" }}
+              onClick={() => setActiveSection("jenkins")}
+            >
+              Jenkins
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "agents" }}
+              onClick={() => setActiveSection("agents")}
+            >
+              Agents
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "keybindings" }}
+              onClick={() => setActiveSection("keybindings")}
+            >
+              Key bindings
             </div>
           </div>
           <div class="menu-content">
@@ -145,7 +324,16 @@ export function MainMenu() {
                     if (e.key === "Enter") handleAdd();
                   }}
                 />
-                <button onClick={handleAdd}>Add</button>
+                <button
+                  type="button"
+                  class="menu-secondary-button"
+                  onClick={() => openDirectoryBrowser((path) => setNewPath(path))}
+                >
+                  Explore
+                </button>
+                <button type="button" class="menu-add-button" onClick={handleAdd}>
+                  Add
+                </button>
               </div>
               <Show when={repoPathsError()}>
                 <div class="menu-error">{repoPathsError()}</div>
@@ -167,11 +355,23 @@ export function MainMenu() {
             </Show>
             <Show when={activeSection() === "github"}>
               <h3>GitHub Actions</h3>
-              <p class="menu-hint">Map local repos to GitHub repos to show workflow run status on matching commits.</p>
+              <p class="menu-hint">Workflow status is detected from each repo's origin remote by default.</p>
 
               <div class="menu-notice">
                 GitHub token is not stored by git-juggler. Set <span class="mono">{githubDraft().token_env || "GITHUB_TOKEN"}</span> before starting the backend.
               </div>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable GitHub Actions integration</span>
+                  <span class="menu-hint">When disabled, workflow status is not requested or shown.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={githubDraft().enabled}
+                  onChange={(e) => updateGitHubDraft("enabled", e.currentTarget.checked)}
+                />
+              </label>
 
               <label class="menu-field">
                 <span>API base URL</span>
@@ -191,9 +391,22 @@ export function MainMenu() {
                 />
               </label>
 
-              <div class="menu-subheading">Repo mappings</div>
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Automatic GitHub Actions detection</span>
+                  <span class="menu-hint">Infer owner and repo from each local repo's origin remote.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={githubDraft().auto_detect}
+                  onChange={(e) => updateGitHubDraft("auto_detect", e.currentTarget.checked)}
+                />
+              </label>
+
+              <div class="menu-subheading">Advanced repo overrides</div>
+              <p class="menu-hint">Only add mappings when origin cannot be used or should map to a different GitHub repo.</p>
               <div class="github-repo-mappings">
-                <Show when={githubDraft().repos.length > 0} fallback={<div class="menu-empty">No GitHub repos configured</div>}>
+                <Show when={githubDraft().repos.length > 0} fallback={<div class="menu-empty">No overrides configured</div>}>
                   <Index each={githubDraft().repos}>
                     {(repo, index) => (
                     <div class="github-repo-row">
@@ -226,7 +439,7 @@ export function MainMenu() {
 
               <div class="menu-actions">
                 <button type="button" class="menu-secondary-button" onClick={addGitHubRepo}>
-                  Add mapping
+                  Add override
                 </button>
                 <button type="button" class="menu-primary-button" onClick={handleSaveGitHub}>
                   Save GitHub settings
@@ -236,6 +449,164 @@ export function MainMenu() {
               <Show when={githubConfigError()}>
                 <div class="menu-error">{githubConfigError()}</div>
               </Show>
+            </Show>
+            <Show when={activeSection() === "jenkins"}>
+              <h3>Jenkins</h3>
+              <p class="menu-hint">Jenkins builds are matched to commits from configured job URLs.</p>
+
+              <div class="menu-notice">
+                Jenkins API token is not stored by git-juggler. Set <span class="mono">{jenkinsDraft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the backend.
+              </div>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable Jenkins integration</span>
+                  <span class="menu-hint">When disabled, Jenkins build status is not requested or shown.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={jenkinsDraft().enabled}
+                  onChange={(e) => updateJenkinsDraft("enabled", e.currentTarget.checked)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Jenkins base URL</span>
+                <input
+                  type="text"
+                  placeholder="https://jenkins.example.com"
+                  value={jenkinsDraft().base_url}
+                  onInput={(e) => updateJenkinsDraft("base_url", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Username</span>
+                <input
+                  type="text"
+                  value={jenkinsDraft().username}
+                  onInput={(e) => updateJenkinsDraft("username", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Token env var</span>
+                <input
+                  type="text"
+                  value={jenkinsDraft().api_token_env}
+                  onInput={(e) => updateJenkinsDraft("api_token_env", e.currentTarget.value)}
+                />
+              </label>
+
+              <label class="menu-field">
+                <span>Build limit per job</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={jenkinsDraft().build_limit}
+                  onInput={(e) => updateJenkinsDraft("build_limit", Number(e.currentTarget.value))}
+                />
+              </label>
+
+              <div class="menu-subheading">Job mappings</div>
+              <p class="menu-hint">Map each local repo to one or more Jenkins job URLs.</p>
+              <div class="github-repo-mappings">
+                <Show when={jenkinsDraft().jobs.length > 0} fallback={<div class="menu-empty">No Jenkins jobs configured</div>}>
+                  <Index each={jenkinsDraft().jobs}>
+                    {(job, index) => (
+                      <div class="github-repo-row">
+                        <input
+                          type="text"
+                          placeholder="/absolute/path/to/repo"
+                          value={job().repo_path}
+                          onInput={(e) => updateJenkinsJob(index, "repo_path", e.currentTarget.value)}
+                        />
+                        <input
+                          type="text"
+                          placeholder="https://jenkins.example.com/job/my-pipeline/job/main"
+                          value={job().job_url}
+                          onInput={(e) => updateJenkinsJob(index, "job_url", e.currentTarget.value)}
+                        />
+                        <button type="button" class="menu-secondary-button" onClick={() => removeJenkinsJob(index)}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </Index>
+                </Show>
+              </div>
+
+              <div class="menu-actions">
+                <button type="button" class="menu-secondary-button" onClick={addJenkinsJob}>
+                  Add job
+                </button>
+                <button type="button" class="menu-primary-button" onClick={handleSaveJenkins}>
+                  Save Jenkins settings
+                </button>
+              </div>
+
+              <Show when={jenkinsConfigError()}>
+                <div class="menu-error">{jenkinsConfigError()}</div>
+              </Show>
+            </Show>
+            <Show when={activeSection() === "agents"}>
+              <h3>Agents</h3>
+              <p class="menu-hint">
+                Detects local coding-agent processes (Claude Code, opencode) and the worktrees they're active in, shown as badges in
+                the sidebar and commit graph.
+              </p>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Enable agent activity detection</span>
+                  <span class="menu-hint">When disabled, no agent data is fetched or shown anywhere in the app.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={agentsEnabled()}
+                  onChange={(e) => setAgentsEnabled(e.currentTarget.checked)}
+                />
+              </label>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Show worktrees in the agents panel</span>
+                  <span class="menu-hint">Lists each session's worktrees (branch, commit, last activity) under the session. Off by default.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={agentShowWorktrees()}
+                  disabled={!agentsEnabled()}
+                  onChange={(e) => setAgentShowWorktrees(e.currentTarget.checked)}
+                />
+              </label>
+
+              <div class="agent-hooks-section">
+                <div class="menu-setting-main">
+                  <div class="menu-setting-label">High-confidence hooks</div>
+                  <p class="menu-hint">
+                    Hooks append JSONL events to git-juggler so short-lived tool calls can be attributed to the worktree they actually
+                    touch. Agent activity is sourced from these hook events only.
+                  </p>
+                </div>
+                <div class="menu-actions">
+                  <button type="button" class="menu-secondary-button" disabled={agentHooksLoading()} onClick={() => void refreshAgentHooks()}>
+                    {agentHooksLoading() ? "Loading..." : "Refresh hook status"}
+                  </button>
+                </div>
+                <Show when={agentHooksError()}>
+                  {(error) => <div class="menu-error">{error()}</div>}
+                </Show>
+                <Show when={agentHooks()} fallback={<div class="menu-hint">Open this section to load hook setup status.</div>}>
+                  {(hooks) => (
+                    <div class="agent-hook-grid">
+                      <HookSetupCard title="Claude" status={hooks().claude} onInstall={() => void installAgentHooks("claude")} />
+                      <HookSetupCard title="OpenCode" status={hooks().opencode} onInstall={() => void installAgentHooks("opencode")} />
+                    </div>
+                  )}
+                </Show>
+              </div>
             </Show>
             <Show when={activeSection() === "appearance"}>
               <h3>Appearance</h3>
@@ -262,6 +633,40 @@ export function MainMenu() {
                     )}
                   </For>
                 </div>
+              </div>
+            </Show>
+            <Show when={activeSection() === "keybindings"}>
+              <h3>Key bindings</h3>
+              <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>
+              <div class="menu-path-list">
+                <For each={KEY_BINDING_ACTIONS}>
+                  {(action) => (
+                    <div class="menu-path-row">
+                      <span class="menu-path-text">{action.label}</span>
+                      <span class="keybinding-value">
+                        {recordingAction() === action.id ? "Press a key…" : formatKeyBinding(keyBindings()[action.id])}
+                      </span>
+                      <div class="keybinding-actions">
+                        <button
+                          type="button"
+                          class="menu-secondary-button"
+                          disabled={recordingAction() !== null}
+                          onClick={() => startRecording(action.id)}
+                        >
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          class="menu-secondary-button"
+                          disabled={recordingAction() !== null}
+                          onClick={() => resetKeyBinding(action.id)}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </div>

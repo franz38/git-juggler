@@ -1,32 +1,37 @@
-import { For, createMemo } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   COLLAPSED_ROW_HEIGHT,
   activeRepo,
+  agentActivity,
   checkedOutBranches,
+  ciRuns,
   currentBranch,
   fetchingRepos,
   filteredCommits,
-  githubActionsRuns,
   headCommit,
-  isDirty,
   openContextMenu,
+  pushingTargetCommits,
   pushingRepos,
+  repos,
   rowLayout,
   toggleExpand,
   uncommittedRowHeight,
   upstreamCommit,
+  workingTreeVisible,
 } from "../../state/store";
+import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
 import { colorForBranch, tagColor } from "./branchColor";
 import { computeColumns } from "./computeColumns";
+import { laneWidthFor } from "./laneWidth";
 
 const LANE_MARGIN = 20;
-const LANE_WIDTH = 24;
 const DOT_RADIUS = 6;
 const CORNER_RADIUS = 8;
 const GHOST_ROW_HEIGHT = COLLAPSED_ROW_HEIGHT;
 const GHOST_RADIUS = 5;
 const DIRTY_COLOR = "var(--text-dim)";
 const CI_ACTIVE_COLOR = "var(--accent)";
+const AGENT_ACTIVE_COLOR = "#b57cff";
 
 interface Edge {
   key: string;
@@ -61,10 +66,36 @@ export function GraphPanel() {
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
   const runningActionsByHash = createMemo(() => {
     const hashes = new Set<string>();
-    for (const [hash, runs] of Object.entries(githubActionsRuns())) {
+    for (const [hash, runs] of Object.entries(ciRuns())) {
       if (runs.some((run) => run.status === "running")) hashes.add(hash);
     }
     return hashes;
+  });
+  const agentEntriesByHash = createMemo(() => {
+    const repoId = activeRepo();
+    const repo = repoId ? repos().find((item) => item.id === repoId) : undefined;
+    const byHash = new Map<string, AgentHoverEntry[]>();
+    if (!repo) return byHash;
+    for (const scan of agentActivity()?.scans ?? []) {
+      for (const activity of scan.worktrees) {
+        if (activity.repository_id !== repo.repository_id || !commitByHash().has(activity.commit)) continue;
+        const items = byHash.get(activity.commit) ?? [];
+        items.push({ scan, activity });
+        byHash.set(activity.commit, items);
+      }
+    }
+    return byHash;
+  });
+  const [hoveredAgentCommit, setHoveredAgentCommit] = createSignal<{ hash: string; anchor: DOMRect } | null>(null);
+  const hoveredEntries = () => {
+    const hovered = hoveredAgentCommit();
+    return hovered ? agentEntriesByHash().get(hovered.hash) ?? [] : [];
+  };
+  // The card is positioned from the commit's on-screen rect, so scrolling would strand it.
+  onMount(() => {
+    const clear = () => setHoveredAgentCommit(null);
+    window.addEventListener("scroll", clear, true);
+    onCleanup(() => window.removeEventListener("scroll", clear, true));
   });
 
   const isFetching = createMemo(() => {
@@ -75,7 +106,7 @@ export function GraphPanel() {
     const repo = activeRepo();
     return repo !== null && pushingRepos().has(repo);
   });
-  const hasDirtyGhost = createMemo(() => isDirty() && headCommit() !== null);
+  const hasDirtyGhost = createMemo(() => workingTreeVisible());
   const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeight() : 0));
   // The fetch band's height is applied to real commits via a CSS-transitioned
   // group transform (see the <g> below) rather than baked into yFor, so the
@@ -86,7 +117,14 @@ export function GraphPanel() {
   const dirtyGhostY = createMemo(() => uncommittedRowHeight() / 2);
 
   const columnFor = (hash: string) => lanes().get(hash)?.column ?? 0;
-  const xForColumn = (column: number) => LANE_MARGIN + column * LANE_WIDTH;
+  // Lanes tighten as more are needed (see laneWidthFor), so wide graphs stay compact.
+  const laneCount = createMemo(() => {
+    let max = -1;
+    for (const lane of lanes().values()) max = Math.max(max, lane.column);
+    return max + 1;
+  });
+  const laneWidth = createMemo(() => laneWidthFor(laneCount()));
+  const xForColumn = (column: number) => LANE_MARGIN + column * laneWidth();
   const xFor = (hash: string) => xForColumn(columnFor(hash));
   const yFor = (hash: string) => {
     const offset = rowLayout().offsetByHash.get(hash) ?? 0;
@@ -105,6 +143,35 @@ export function GraphPanel() {
     const head = headCommit();
     if (!head) return { commits: new Set(), edges: new Set() };
     const upstream = upstreamCommit();
+    const targetCommit = activeRepo() ? pushingTargetCommits()[activeRepo()!] : undefined;
+    if (targetCommit) {
+      const byHash = commitByHash();
+      const collectAncestors = (start: string): Set<string> => {
+        const seen = new Set<string>();
+        const stack = [start];
+        while (stack.length > 0) {
+          const hash = stack.pop()!;
+          if (seen.has(hash)) continue;
+          seen.add(hash);
+          for (const parent of byHash.get(hash)?.parents ?? []) stack.push(parent);
+        }
+        return seen;
+      };
+
+      const commits = collectAncestors(targetCommit);
+      if (upstream) {
+        for (const hash of collectAncestors(upstream)) commits.delete(hash);
+      }
+
+      const edges = new Set<string>();
+      for (const hash of commits) {
+        const commit = byHash.get(hash);
+        for (const parent of commit?.parents ?? []) {
+          if (commits.has(parent) || parent === upstream) edges.add(`${hash}-${parent}`);
+        }
+      }
+      return { commits: commits.size > 0 ? commits : new Set([targetCommit]), edges };
+    }
     if (!upstream || head === upstream) return { commits: new Set([head]), edges: new Set() };
     const byHash = commitByHash();
     const commits = new Set<string>();
@@ -181,6 +248,7 @@ export function GraphPanel() {
   });
 
   return (
+    <>
     <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayout().total}px` }}>
       {hasDirtyGhost() && headCommit() && (
         <g class="dirty-ghost">
@@ -217,8 +285,14 @@ export function GraphPanel() {
         <For each={rowLayout().order}>
           {(c) => {
             const isCheckedOut = () => headCommit() === c.hash;
+            const agentEntries = () => agentEntriesByHash().get(c.hash);
+            const hasActiveAgent = () => agentEntries()?.some((entry) => entry.activity.state === "active") ?? false;
             return (
-              <g>
+              <g
+                onMouseEnter={(e) => agentEntries()?.length && setHoveredAgentCommit({ hash: c.hash, anchor: e.currentTarget.getBoundingClientRect() })}
+                onMouseLeave={() => setHoveredAgentCommit((current) => (current?.hash === c.hash ? null : current))}
+              >
+                {agentEntries()?.length && <circle class="agent-hover-target" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 9} fill="transparent" />}
                 <circle
                   cx={xFor(c.hash)}
                   cy={yFor(c.hash)}
@@ -243,6 +317,15 @@ export function GraphPanel() {
                     <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                   </circle>
                 )}
+                {agentEntries()?.length && (
+                  <g class="agent-active-marker" classList={{ idle: !hasActiveAgent() }}>
+                    <circle cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 7} fill="none" stroke={AGENT_ACTIVE_COLOR} stroke-width="2" stroke-dasharray="4 3">
+                      {hasActiveAgent() && (
+                        <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="1.4s" repeatCount="indefinite" />
+                      )}
+                    </circle>
+                  </g>
+                )}
                 {c.refs.tags.length > 0 && <circle cx={xFor(c.hash) + DOT_RADIUS + 2} cy={yFor(c.hash) - DOT_RADIUS} r={3} fill={tagColor()} />}
               </g>
             );
@@ -250,5 +333,13 @@ export function GraphPanel() {
         </For>
       </g>
     </svg>
+    <Show when={hoveredAgentCommit()}>
+      {(hovered) => (
+        <Show when={hoveredEntries().length > 0}>
+          <AgentHoverCard entries={hoveredEntries()} anchor={hovered().anchor} />
+        </Show>
+      )}
+    </Show>
+    </>
   );
 }
