@@ -1027,14 +1027,13 @@
   flex: 0 0 auto;
   accent-color: var(--accent);
   cursor: pointer;
+  /* Zero the browser's default checkbox margin so repo and group checkboxes
+     share the same right edge. */
+  margin: 0;
 }
 
 .repo-select {
   margin-left: auto;
-}
-
-.repo-group-select {
-  margin: 0;
 }
 
 .repo-group-heading.dragging {
