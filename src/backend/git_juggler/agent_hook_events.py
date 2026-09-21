@@ -4,8 +4,9 @@ import hashlib
 import json
 import re
 import shlex
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -35,11 +36,44 @@ class AgentHookEventReader:
         self.event_path = event_path
         self.git_resolver = git_resolver or GitResolver()
         self.ttl_ms = ttl_ms
+        self._lock = threading.Lock()
+        self._cached_signature: tuple[int, int] | None = None
+        self._cached_scans: list[AgentRepositoryScan] = []
+        self._cached_valid_until = 0
 
     def recent_scans(self, now: int | None = None) -> list[AgentRepositoryScan]:
+        """Scans for events inside the TTL window.
+
+        The endpoint is polled every second, so the result is reused while the
+        events file is unchanged (mtime + size) and nothing in it has aged out
+        or could have moved branch/commit (git resolver TTL). An explicit `now`
+        always recomputes.
+        """
         observed_at = now or int(time.time() * 1000)
-        self.git_resolver.clear_cache()
+        signature = self._file_signature()
+        with self._lock:
+            if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
+                return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
+            scans, oldest_event = self._compute_scans(observed_at)
+            resolver_ttl_ms = int(self.git_resolver.ttl_seconds * 1000)
+            self._cached_signature = signature
+            self._cached_scans = scans
+            self._cached_valid_until = min(
+                observed_at + resolver_ttl_ms,
+                oldest_event + self.ttl_ms + 1 if oldest_event is not None else observed_at + resolver_ttl_ms,
+            )
+            return list(scans)
+
+    def _file_signature(self) -> tuple[int, int] | None:
+        try:
+            stat = self.event_path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def _compute_scans(self, observed_at: int) -> tuple[list[AgentRepositoryScan], int | None]:
         events = [event for event in self._read_events() if observed_at - event.timestamp <= self.ttl_ms]
+        oldest_event = min((event.timestamp for event in events), default=None)
         by_session: dict[tuple[str, str], dict[str, AgentWorktreeActivity]] = {}
         session_dirs: dict[tuple[str, str], str | None] = {}
         pids: dict[tuple[str, str], int] = {}
@@ -85,7 +119,7 @@ class AgentHookEventReader:
                     scanned_at=observed_at,
                 )
             )
-        return scans
+        return scans, oldest_event
 
     def _read_events(self) -> list[HookEvent]:
         if not self.event_path.exists():

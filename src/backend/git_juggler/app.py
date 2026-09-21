@@ -130,6 +130,8 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         commits, _, _, _, _, _, _, _ = get_graph(path)
         return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
 
+    hook_event_reader = AgentHookEventReader()
+
     def _agent_scan_response(scan: AgentRepositoryScan) -> AgentRepositoryScanResponse:
         return AgentRepositoryScanResponse(
             agent_pid=scan.agent_pid,
@@ -157,7 +159,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/api/agents/activity", response_model=AgentActivityResponse)
     def api_agent_activity() -> AgentActivityResponse:
-        hook_scans = AgentHookEventReader().recent_scans()
+        hook_scans = hook_event_reader.recent_scans()
         scans = [_agent_scan_response(scan) for scan in hook_scans]
         scanned_at = max((scan.scanned_at for scan in scans), default=0)
         return AgentActivityResponse(

@@ -80,3 +80,61 @@ class GitResolverIntegrationTest(unittest.TestCase):
             self.assertIsNotNone(info)
             assert info is not None
             self.assertEqual(info.worktree_path, str(repo_path.resolve()))
+
+
+class GitResolverEfficiencyTest(unittest.TestCase):
+    def _counting_resolver(self, ttl_seconds: float, clock) -> tuple[GitResolver, list[list[str]]]:
+        calls: list[list[str]] = []
+        resolver = GitResolver(ttl_seconds=ttl_seconds, clock=clock)
+        original = resolver.runner.run
+
+        def run(args):
+            calls.append(list(args))
+            return original(args)
+
+        resolver.runner.run = run  # type: ignore[method-assign]
+        return resolver, calls
+
+    def _repo(self, path: Path) -> None:
+        path.mkdir(parents=True)
+        for args in (("init",), ("config", "user.name", "T"), ("config", "user.email", "t@e.c")):
+            subprocess.run(["git", *args], cwd=path, check=True, capture_output=True)
+        (path / "a.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "a.txt"], cwd=path, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "i"], cwd=path, check=True, capture_output=True)
+
+    def test_one_git_spawn_per_directory_and_cached_within_ttl(self) -> None:
+        now = [0.0]
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            self._repo(repo)
+            resolver, calls = self._counting_resolver(3.0, lambda: now[0])
+
+            self.assertIsNotNone(resolver.resolve_path(repo / "a.txt"))
+            self.assertIsNotNone(resolver.resolve_path(repo / "a.txt"))
+            self.assertEqual(len(calls), 1)
+
+            now[0] = 3.5
+            resolver.resolve_path(repo / "a.txt")
+            self.assertEqual(len(calls), 2)
+
+    def test_non_git_path_costs_one_spawn_and_is_cached(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            deep = Path(directory) / "a" / "b" / "c"
+            deep.mkdir(parents=True)
+            resolver, calls = self._counting_resolver(3.0, lambda: 0.0)
+
+            self.assertIsNone(resolver.resolve_path(deep))
+            self.assertIsNone(resolver.resolve_path(deep))
+            self.assertEqual(len(calls), 1)
+
+    def test_missing_directory_steps_up_to_existing_one(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            self._repo(repo)
+            resolver, calls = self._counting_resolver(3.0, lambda: 0.0)
+
+            info = resolver.resolve_path(repo / "deleted" / "dir" / "f.txt")
+
+            self.assertIsNotNone(info)
+            self.assertEqual(len(calls), 1)

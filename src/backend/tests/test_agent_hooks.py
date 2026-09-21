@@ -86,6 +86,38 @@ class AgentHooksTest(unittest.TestCase):
             self.assertEqual(feature.branch, "feature")
             self.assertIn("hook-posttooluse", {evidence.type for evidence in feature.evidence})
 
+    def test_repeated_polls_reuse_result_until_events_file_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+
+            def event(session: str) -> str:
+                return json.dumps({"provider": "claude", "phase": "SessionStart", "cwd": str(repo), "pid": 1, "timestamp": int(time.time() * 1000), "raw": {"session_id": session}}) + "\n"
+
+            event_path.write_text(event("s1"), encoding="utf-8")
+            reader = AgentHookEventReader(event_path=event_path)
+            calls: list[str] = []
+            original = reader.git_resolver._resolve_uncached
+            reader.git_resolver._resolve_uncached = lambda d: (calls.append(str(d)), original(d))[1]  # type: ignore[method-assign]
+
+            first = reader.recent_scans()
+            second = reader.recent_scans()
+            self.assertEqual(len(first), 1)
+            self.assertEqual(len(second), 1)
+            self.assertEqual(len(calls), 1)
+
+            with event_path.open("a", encoding="utf-8") as file:
+                file.write(event("s2"))
+            self.assertEqual(len(reader.recent_scans()), 2)
+
+    def test_missing_events_file_yields_no_scans(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            reader = AgentHookEventReader(event_path=Path(directory) / "none.jsonl")
+            self.assertEqual(reader.recent_scans(), [])
+            self.assertEqual(reader.recent_scans(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

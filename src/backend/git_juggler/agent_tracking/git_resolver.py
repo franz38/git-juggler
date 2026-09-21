@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,9 +24,18 @@ class GitCommandRunner:
 
 
 class GitResolver:
-    def __init__(self, runner: GitCommandRunner | None = None) -> None:
+    """Maps a path to its git worktree (root, repo id, branch, commit).
+
+    Results are cached for `ttl_seconds` (including "not a repo"), so a caller
+    that resolves the same directories every second only spawns git once per
+    directory per TTL window. The TTL bounds how stale branch/commit can be.
+    """
+
+    def __init__(self, runner: GitCommandRunner | None = None, ttl_seconds: float = 3.0, clock: Callable[[], float] = time.monotonic) -> None:
         self.runner = runner or GitCommandRunner()
-        self._cache: dict[str, GitWorktreeInfo | None] = {}
+        self.ttl_seconds = ttl_seconds
+        self._clock = clock
+        self._cache: dict[str, tuple[float, GitWorktreeInfo | None]] = {}
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -35,41 +45,43 @@ class GitResolver:
             key = normalize_path(directory)
         except OSError:
             return None
-        if key not in self._cache:
-            self._cache[key] = self._resolve_uncached(Path(key))
-        return self._cache[key]
+        now = self._clock()
+        cached = self._cache.get(key)
+        if cached is not None and now - cached[0] < self.ttl_seconds:
+            return cached[1]
+        info = self._resolve_uncached(Path(key))
+        self._cache[key] = (now, info)
+        return info
 
     def resolve_path(self, path: str | Path) -> GitWorktreeInfo | None:
         try:
             candidate = Path(path).expanduser().resolve()
         except OSError:
             return None
-        if candidate.is_file():
-            candidate = candidate.parent
-        while True:
-            resolved = self.resolve_directory(candidate)
-            if resolved is not None:
-                return resolved
+        # git discovers the repo by walking up on its own, so only step up past
+        # directories that don't exist (e.g. a deleted file's folder); never
+        # spawn git once per ancestor.
+        while not candidate.is_dir():
             parent = candidate.parent
             if parent == candidate:
                 return None
             candidate = parent
+        return self.resolve_directory(candidate)
 
     def _resolve_uncached(self, directory: Path) -> GitWorktreeInfo | None:
-        top_level = self._git(directory, "rev-parse", "--show-toplevel")
-        common_git_dir = self._git(directory, "rev-parse", "--git-common-dir")
-        commit = self._git(directory, "rev-parse", "HEAD")
-        if top_level is None or common_git_dir is None or commit is None:
+        # One spawn for everything. `--abbrev-ref` only affects the argument
+        # after it, so the output is: toplevel, common dir, full sha, branch
+        # ("HEAD" when detached). Fails as a whole in a non-repo or unborn repo.
+        output = self._git(directory, "rev-parse", "--show-toplevel", "--git-common-dir", "HEAD", "--abbrev-ref", "HEAD")
+        lines = output.splitlines() if output else []
+        if len(lines) != 4:
             return None
-
-        branch = self._git(directory, "branch", "--show-current")
-        normalized_common = self._normalize_git_path(directory, common_git_dir)
-        normalized_top = normalize_path(top_level)
+        top_level, common_git_dir, commit, branch = lines
         return GitWorktreeInfo(
-            repository_id=normalized_common,
-            worktree_path=normalized_top,
-            common_git_dir=normalized_common,
-            branch=branch if branch else None,
+            repository_id=self._normalize_git_path(directory, common_git_dir),
+            worktree_path=normalize_path(top_level),
+            common_git_dir=self._normalize_git_path(directory, common_git_dir),
+            branch=None if branch == "HEAD" else branch,
             commit=commit,
         )
 
