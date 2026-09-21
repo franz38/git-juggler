@@ -16,7 +16,7 @@ from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .repos import list_repos, resolve_repo_path
-from .schemas import AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .schemas import AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -111,6 +111,17 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     def api_put_imported_themes(body: list[VscodeTheme]) -> ThemesResponse:
         config.save_imported_themes([t.model_dump() for t in body])
         return _current_themes()
+
+    # UI preferences (theme, pinned themes, key bindings, agent settings, ...)
+    # kept server-side so every browser shows the same setup. App settings only,
+    # nothing here touches a repo.
+    @app.get("/api/preferences", response_model=Preferences)
+    def api_get_preferences() -> Preferences:
+        return config.load_preferences()
+
+    @app.put("/api/preferences", response_model=Preferences)
+    def api_put_preferences(body: Preferences) -> Preferences:
+        return config.update_preferences(body.model_dump(mode="json", exclude_unset=True))
 
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
     def api_graph(repo_id: str) -> GraphResponse:

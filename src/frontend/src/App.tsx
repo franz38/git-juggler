@@ -36,6 +36,7 @@ import {
   toggleMenu,
   toggleTerminalOpen,
 } from "./state/store";
+import { loadPreferences } from "./state/preferences";
 import { activeTheme, loadThemes } from "./state/themes";
 
 function App() {
@@ -77,6 +78,7 @@ function App() {
   onMount(() => {
     loadActiveTabGraph();
     void loadThemes();
+    void loadPreferences();
     const handleKeydown = (e: KeyboardEvent) => {
       const bindings = keyBindings();
       if (matchesKeyBinding(e, bindings.nextTab)) {

@@ -1,6 +1,8 @@
 import { createMemo, createSignal } from "solid-js";
 import { fetchThemes, saveImportedThemes } from "../api/client";
+import type { Preferences } from "../api/types";
 import { BUILTIN_DARK, BUILTIN_LIGHT, BUILTIN_THEMES, type AppTheme, type RawVscodeTheme } from "../lib/appTheme";
+import { savePreference } from "./preferenceSync";
 import { rawThemeFromFile, resolveVscodeTheme } from "../lib/vscodeTheme";
 
 // --- Persistence ------------------------------------------------------------
@@ -34,13 +36,51 @@ function loadCachedTheme(): AppTheme | null {
   }
 }
 
-function persist(id: string, theme: AppTheme | undefined): void {
+const PINNED_KEY = "git-juggler:pinnedThemes";
+
+function isStored(key: string): boolean {
   try {
-    localStorage.setItem(THEME_KEY, id);
+    return localStorage.getItem(key) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function loadPinned(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PINNED_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function cachePinned(ids: string[]): void {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
+  } catch {
+    // Not critical — pins just won't survive a reload without the server.
+  }
+}
+
+// Refreshes only the cached copy of the resolved theme (never the "selected
+// theme" key: that one must exist only once a choice was made or received from
+// the server, because its presence is what lets this browser seed the server).
+function cacheTheme(theme: AppTheme | undefined): void {
+  try {
     if (theme) localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme));
   } catch {
     // Not critical — theme just won't survive a reload.
   }
+}
+
+function persist(id: string, theme: AppTheme | undefined): void {
+  try {
+    localStorage.setItem(THEME_KEY, id);
+  } catch {
+    // Not critical — theme just won't survive a reload.
+  }
+  cacheTheme(theme);
 }
 
 // --- State ------------------------------------------------------------------
@@ -92,6 +132,48 @@ export function setThemeId(id: string): void {
   setPreviewId(null);
   setThemeIdSignal(id);
   persist(id, allThemes().find((t) => t.id === id));
+  savePreference({ theme_id: id });
+}
+
+// --- Pinned themes ------------------------------------------------------------
+// Pinned themes are listed first in the picker. Like the selected theme, the
+// list is shared across browsers (localStorage is just the local cache).
+
+const [pinnedThemeIds, setPinnedThemeIds] = createSignal<string[]>(loadPinned());
+export { pinnedThemeIds };
+
+export const isThemePinned = (id: string): boolean => pinnedThemeIds().includes(id);
+
+export function togglePinTheme(id: string): void {
+  const next = isThemePinned(id) ? pinnedThemeIds().filter((p) => p !== id) : [...pinnedThemeIds(), id];
+  setPinnedThemeIds(next);
+  cachePinned(next);
+  savePreference({ pinned_themes: next });
+}
+
+/**
+ * Reconciles the selected theme and pinned list with the backend's copy
+ * (which wins, so every browser converges) and returns whatever exists only in
+ * this browser so the caller can upload it. Doesn't write back to the server.
+ */
+export function applyRemoteThemePreferences(remote: Preferences): Preferences {
+  const seed: Preferences = {};
+
+  if (remote.theme_id) {
+    setThemeIdSignal(remote.theme_id);
+    persist(remote.theme_id, allThemes().find((t) => t.id === remote.theme_id));
+  } else if (isStored(THEME_KEY)) {
+    seed.theme_id = themeId();
+  }
+
+  if (remote.pinned_themes) {
+    setPinnedThemeIds(remote.pinned_themes);
+    cachePinned(remote.pinned_themes);
+  } else if (isStored(PINNED_KEY)) {
+    seed.pinned_themes = pinnedThemeIds();
+  }
+
+  return seed;
 }
 
 // --- Loading / importing ------------------------------------------------------
@@ -104,7 +186,7 @@ export async function loadThemes(): Promise<void> {
     setThemesError(null);
     // Refresh the cache in case the theme file changed on disk.
     const id = themeId();
-    persist(id, allThemes().find((t) => t.id === id));
+    cacheTheme(allThemes().find((t) => t.id === id));
   } catch (err) {
     setThemesError(err instanceof Error ? err.message : "Could not load themes");
   }

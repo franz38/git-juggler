@@ -4,11 +4,14 @@ import {
   importThemeFile,
   importedThemes,
   installedThemes,
+  isThemePinned,
+  pinnedThemeIds,
   previewTheme,
   removeImportedTheme,
   setThemeId,
   themeId,
   themesError,
+  togglePinTheme,
 } from "../../state/themes";
 
 function Swatch(props: { theme: AppTheme }) {
@@ -37,6 +40,15 @@ function ThemeRow(props: { theme: AppTheme; removable?: boolean }) {
         <span class="theme-row-name">{props.theme.name}</span>
         <span class="theme-row-kind">{props.theme.kind}</span>
       </button>
+      <button
+        class="theme-row-pin"
+        classList={{ pinned: isThemePinned(props.theme.id) }}
+        title={isThemePinned(props.theme.id) ? "Unpin theme" : "Pin theme"}
+        aria-pressed={isThemePinned(props.theme.id)}
+        onClick={() => togglePinTheme(props.theme.id)}
+      >
+        {isThemePinned(props.theme.id) ? "★" : "☆"}
+      </button>
       <Show when={props.removable}>
         <button class="theme-row-remove" title="Remove imported theme" onClick={() => void removeImportedTheme(props.theme.id)}>
           ×
@@ -55,9 +67,20 @@ export function ThemePicker() {
   onCleanup(() => previewTheme(null));
 
   const matches = (t: AppTheme) => t.name.toLowerCase().includes(query().trim().toLowerCase());
-  const builtin = createMemo(() => BUILTIN_THEMES.filter(matches));
-  const imported = createMemo(() => importedThemes().filter(matches));
-  const installed = createMemo(() => installedThemes().filter(matches));
+  const allThemes = createMemo(() => [...BUILTIN_THEMES, ...importedThemes(), ...installedThemes()]);
+  const isImported = (t: AppTheme) => importedThemes().some((i) => i.id === t.id);
+
+  // Pinned themes are listed once, at the top, in the order they were pinned;
+  // the sections below show everything else. A pinned theme that's no longer
+  // available (e.g. its extension was uninstalled) just doesn't appear.
+  const pinned = createMemo(() =>
+    pinnedThemeIds()
+      .map((id) => allThemes().find((t) => t.id === id))
+      .filter((t): t is AppTheme => t !== undefined && matches(t)),
+  );
+  const builtin = createMemo(() => BUILTIN_THEMES.filter((t) => matches(t) && !isThemePinned(t.id)));
+  const imported = createMemo(() => importedThemes().filter((t) => matches(t) && !isThemePinned(t.id)));
+  const installed = createMemo(() => installedThemes().filter((t) => matches(t) && !isThemePinned(t.id)));
 
   const onFileChosen = async (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
@@ -95,6 +118,10 @@ export function ThemePicker() {
       </Show>
 
       <div class="theme-list">
+        <Show when={pinned().length}>
+          <div class="theme-group-label">Pinned</div>
+          <For each={pinned()}>{(t) => <ThemeRow theme={t} removable={isImported(t)} />}</For>
+        </Show>
         <Show when={builtin().length}>
           <div class="theme-group-label">Built-in</div>
           <For each={builtin()}>{(t) => <ThemeRow theme={t} />}</For>
@@ -110,7 +137,9 @@ export function ThemePicker() {
             <p class="menu-hint">
               {installedThemes().length === 0
                 ? "No VS Code themes found in ~/.vscode/extensions or the VS Code app. You can still import a theme file."
-                : "No themes match."}
+                : installedThemes().every((t) => isThemePinned(t.id)) && !query().trim()
+                  ? "All installed themes are pinned."
+                  : "No themes match."}
             </p>
           }
         >

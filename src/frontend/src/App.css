@@ -615,6 +615,21 @@
   font-size: 11px;
 }
 
+.theme-row-pin {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.theme-row-pin:hover,
+.theme-row-pin.pinned {
+  color: var(--warning);
+}
+
 .theme-row-remove {
   background: transparent;
   border: none;

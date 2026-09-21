@@ -1,5 +1,24 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
 
+export interface KeyBindingPreference {
+  key: string;
+  mod: boolean;
+  shift: boolean;
+  alt: boolean;
+}
+
+// UI preferences shared across browsers (stored by the backend). Every field
+// is optional: null/undefined means "not set on the server yet".
+export interface Preferences {
+  theme_id?: string | null;
+  pinned_themes?: string[] | null;
+  branch_color_mode?: "hash" | "sequential" | null;
+  agents_enabled?: boolean | null;
+  agent_show_worktrees?: boolean | null;
+  agent_poll_seconds?: number | null;
+  key_bindings?: Record<string, KeyBindingPreference> | null;
+}
+
 export interface ThemesResponse {
   installed: RawVscodeTheme[];
   imported: RawVscodeTheme[];

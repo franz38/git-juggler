@@ -2,7 +2,8 @@ import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
-import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary } from "../api/types";
+import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -242,6 +243,7 @@ export function setKeyBinding(action: KeyBindingAction, binding: KeyBinding): vo
   } catch {
     // Not critical — the binding just won't survive a reload.
   }
+  savePreference({ key_bindings: next });
 }
 
 export function resetKeyBinding(action: KeyBindingAction): void {
@@ -310,6 +312,7 @@ export { agentShowWorktrees };
 export function setAgentShowWorktrees(show: boolean): void {
   setAgentShowWorktreesSignal(show);
   saveBoolean(AGENT_WORKTREES_KEY, show);
+  savePreference({ agent_show_worktrees: show });
 }
 
 // Left panel tabs: the repo list (default) and the agents list. The agents tab
@@ -354,6 +357,7 @@ export function setAgentPollSeconds(seconds: number): void {
   } catch {
     // Not critical — the setting just won't survive a reload.
   }
+  savePreference({ agent_poll_seconds: next });
 }
 
 const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(null);
@@ -363,13 +367,18 @@ export { agentHooks, agentHooksLoading, agentHooksError };
 
 // When disabled, no agent data is fetched (refreshAgentActivity below
 // no-ops) or shown (AgentActivityPanel isn't rendered at all) anywhere.
-export function setAgentsEnabled(enabled: boolean): void {
+function applyAgentsEnabled(enabled: boolean): void {
   setAgentsEnabledSignal(enabled);
   saveBoolean(AGENTS_ENABLED_KEY, enabled);
   if (!enabled) {
     setAgentActivity(null);
     setAgentActivityError(null);
   }
+}
+
+export function setAgentsEnabled(enabled: boolean): void {
+  applyAgentsEnabled(enabled);
+  savePreference({ agents_enabled: enabled });
 }
 
 export const agentActivityByWorktreePath = createMemo<Map<string, AgentWorktreeActivity>>(() => {
@@ -1692,4 +1701,83 @@ export function setBranchColorMode(next: BranchColorMode): void {
   } catch {
     // Not critical — the setting just won't survive a reload.
   }
+  savePreference({ branch_color_mode: next });
+}
+
+// --- Syncing preferences with the backend ------------------------------------
+// The settings above start from localStorage (instant, no flash) and are then
+// reconciled with the backend's copy so every browser shows the same setup.
+
+function isStoredLocally(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function isKeyBinding(value: unknown): value is KeyBinding {
+  const b = value as KeyBinding | null;
+  return !!b && typeof b.key === "string" && b.key.length > 0 && typeof b.mod === "boolean" && typeof b.shift === "boolean" && typeof b.alt === "boolean";
+}
+
+/**
+ * Applies the backend's values for these settings (they win, so browsers
+ * converge) and returns the ones set only in this browser, so the caller can
+ * upload them: that's how an existing browser's setup seeds a fresh backend.
+ * Applying doesn't write back to the server, so it can't echo.
+ */
+export function applyRemotePreferences(remote: Preferences): Preferences {
+  const seed: Preferences = {};
+
+  if (remote.branch_color_mode) {
+    setBranchColorModeSignal(remote.branch_color_mode);
+    try {
+      localStorage.setItem(BRANCH_COLOR_MODE_KEY, remote.branch_color_mode);
+    } catch {
+      // Cache only.
+    }
+  } else if (isStoredLocally(BRANCH_COLOR_MODE_KEY)) {
+    seed.branch_color_mode = branchColorMode();
+  }
+
+  if (typeof remote.agents_enabled === "boolean") applyAgentsEnabled(remote.agents_enabled);
+  else if (isStoredLocally(AGENTS_ENABLED_KEY)) seed.agents_enabled = agentsEnabled();
+
+  if (typeof remote.agent_show_worktrees === "boolean") {
+    setAgentShowWorktreesSignal(remote.agent_show_worktrees);
+    saveBoolean(AGENT_WORKTREES_KEY, remote.agent_show_worktrees);
+  } else if (isStoredLocally(AGENT_WORKTREES_KEY)) {
+    seed.agent_show_worktrees = agentShowWorktrees();
+  }
+
+  if (typeof remote.agent_poll_seconds === "number") {
+    const seconds = clampPollSeconds(remote.agent_poll_seconds);
+    setAgentPollSecondsSignal(seconds);
+    try {
+      localStorage.setItem(AGENT_POLL_SECONDS_KEY, String(seconds));
+    } catch {
+      // Cache only.
+    }
+  } else if (isStoredLocally(AGENT_POLL_SECONDS_KEY)) {
+    seed.agent_poll_seconds = agentPollSeconds();
+  }
+
+  if (remote.key_bindings) {
+    const merged = { ...DEFAULT_KEY_BINDINGS };
+    for (const action of Object.keys(DEFAULT_KEY_BINDINGS) as KeyBindingAction[]) {
+      const candidate = remote.key_bindings[action];
+      if (isKeyBinding(candidate)) merged[action] = candidate;
+    }
+    setKeyBindingsSignal(merged);
+    try {
+      localStorage.setItem(KEY_BINDINGS_KEY, JSON.stringify(merged));
+    } catch {
+      // Cache only.
+    }
+  } else if (isStoredLocally(KEY_BINDINGS_KEY)) {
+    seed.key_bindings = keyBindings();
+  }
+
+  return seed;
 }

@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -67,6 +67,23 @@ export async function updateConfig(body: ConfigUpdateRequest): Promise<ConfigRes
     throw new Error(errBody?.detail ?? `request failed (${res.status})`);
   }
   return res.json() as Promise<ConfigResponse>;
+}
+
+export function fetchPreferences(): Promise<Preferences> {
+  return getJson(`${API_BASE}/preferences`);
+}
+
+// Partial update: only the fields present in `patch` are changed on the server.
+export async function updatePreferences(patch: Preferences): Promise<Preferences> {
+  const res = await fetch(`${API_BASE}/preferences`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    throw new Error(`request failed (${res.status})`);
+  }
+  return res.json() as Promise<Preferences>;
 }
 
 export function fetchThemes(): Promise<ThemesResponse> {

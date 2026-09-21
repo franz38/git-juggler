@@ -1,6 +1,32 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class KeyBindingPreference(BaseModel):
+    key: str = Field(min_length=1, max_length=32)
+    mod: bool = False
+    shift: bool = False
+    alt: bool = False
+
+
+class Preferences(BaseModel):
+    """UI preferences shared by every browser talking to this backend.
+
+    Every field is optional: ``None`` means "not set on the server", and the
+    frontend falls back to its own default. Used as the PUT body too, where only
+    the fields actually sent are applied (an explicit ``null`` clears one).
+    """
+
+    theme_id: str | None = Field(default=None, max_length=512)
+    pinned_themes: list[str] | None = Field(default=None, max_length=500)
+    branch_color_mode: Literal["hash", "sequential"] | None = None
+    agents_enabled: bool | None = None
+    agent_show_worktrees: bool | None = None
+    agent_poll_seconds: int | None = Field(default=None, ge=1, le=3600)
+    key_bindings: dict[str, KeyBindingPreference] | None = Field(default=None, max_length=32)
 
 
 class VscodeTheme(BaseModel):

@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from .schemas import Preferences
+
 CONFIG_DIR = Path.home() / ".config" / "git-juggler"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
@@ -48,6 +52,42 @@ def save_pinned_repo_paths(paths: list[str]) -> None:
     data = _load_raw()
     data["pinned_repo_paths"] = paths
     _save_raw(data)
+
+
+def load_preferences() -> Preferences:
+    """The stored UI preferences. Each field is validated on its own so one bad
+    (hand-edited, or from a newer version) value doesn't discard the others."""
+    raw = _load_raw().get("preferences", {})
+    if not isinstance(raw, dict):
+        return Preferences()
+    valid: dict = {}
+    for key, value in raw.items():
+        if key not in Preferences.model_fields:
+            continue
+        try:
+            Preferences.model_validate({key: value})
+        except ValidationError:
+            continue
+        valid[key] = value
+    return Preferences.model_validate(valid)
+
+
+def update_preferences(patch: dict) -> Preferences:
+    """Apply a partial update: keys in ``patch`` are set, ``None`` values clear
+    the stored key, everything not mentioned is left alone."""
+    stored = _load_raw().get("preferences", {})
+    merged = dict(stored) if isinstance(stored, dict) else {}
+    for key, value in patch.items():
+        if key not in Preferences.model_fields:
+            continue
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    data = _load_raw()
+    data["preferences"] = merged
+    _save_raw(data)
+    return load_preferences()
 
 
 def load_imported_themes() -> list[dict]:
