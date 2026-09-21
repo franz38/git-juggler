@@ -106,7 +106,7 @@ export function SearchBox() {
             <input type="date" value={branchSince()} onInput={(e) => setBranchSince(e.currentTarget.value)} />
           </label>
           <p class="filter-hint">
-            Only the checked branches (and their history) are shown. With a date, only branches with commits on or after it are kept.
+            Only branches that match every filter are shown: checked in the list (if any are) and with a commit on or after the date (if set).
           </p>
           <button type="button" class="filter-clear-button" onClick={clearBranchFilters}>
             Clear

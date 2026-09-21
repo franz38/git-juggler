@@ -19,29 +19,31 @@ export function startOfDayMs(date: string): number | null {
 
 // Which commits a branch filter keeps, or null when no filter is active.
 //
-// A branch counts when it is checked (or when nothing is checked) and, if a
-// date is set, its tip commit is on or after that date, i.e. the branch has
-// commits since then. Everything reachable from a kept branch's tip stays, so
-// the shown history is connected; the rest of the graph (other branches,
-// stashes, commits only reachable from remote refs) is hidden.
+// The filters combine with AND, per branch: a branch is shown only if it is
+// checked (or nothing is checked) AND, when a date is set, its tip commit is
+// on or after that day (i.e. it has commits since then). A branch that fails
+// any filter is not shown at all, even when a branch that passes is built on
+// top of it.
+//
+// A shown branch contributes the commits it owns (`commit.branch`) plus its
+// tip commit, so a branch whose tip is owned by another branch (e.g. merged)
+// still appears, with its label. Stashes and other branches are hidden.
 export function visibleCommitHashes(commits: CommitSummary[], selected: string[], sinceMs: number | null): Set<string> | null {
   if (selected.length === 0 && sinceMs === null) return null;
-  const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
-  const stack: string[] = [];
+  const shownBranches = new Set<string>();
+  const tips: string[] = [];
   for (const commit of commits) {
-    if (commit.refs.branches.length === 0) continue;
-    if (selected.length > 0 && !commit.refs.branches.some((name) => selected.includes(name))) continue;
-    if (sinceMs !== null && Date.parse(commit.committed_date) < sinceMs) continue;
-    stack.push(commit.hash);
+    const recentEnough = sinceMs === null || Date.parse(commit.committed_date) >= sinceMs;
+    if (!recentEnough) continue;
+    for (const name of commit.refs.branches) {
+      if (selected.length > 0 && !selected.includes(name)) continue;
+      shownBranches.add(name);
+      tips.push(commit.hash);
+    }
   }
-  const visible = new Set<string>();
-  while (stack.length > 0) {
-    const hash = stack.pop()!;
-    if (visible.has(hash)) continue;
-    const commit = byHash.get(hash);
-    if (!commit) continue;
-    visible.add(hash);
-    stack.push(...commit.parents);
+  const visible = new Set(tips);
+  for (const commit of commits) {
+    if (shownBranches.has(commit.branch)) visible.add(commit.hash);
   }
   return visible;
 }
