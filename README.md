@@ -1,7 +1,8 @@
 # git-juggler
 
-Scans the first-level children of a directory for git repos, and serves a web UI
-to browse each repo's commit graph and run a real shell, backed by a FastAPI server.
+A local Git dashboard for people juggling agents and too many repos.
+
+git-juggler is a local dashboard for agent-heavy workflows and multi-repo projects. Watch agents work live, follow every repo’s git graph, and see what changed across your workspace without opening a dozen editors.
 
 ## How to install
 
