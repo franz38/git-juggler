@@ -5,7 +5,6 @@ import {
   activeRepo,
   agentActivityByRepositoryId,
   agentActivityByWorktreePath,
-  agentsEnabled,
   createRepoGroup,
   fetchRepo,
   loadConfig,
@@ -22,7 +21,6 @@ import {
   setRepoInGroup,
   setRepoPinned,
 } from "../../state/store";
-import { AgentActivityPanel } from "../Agents/AgentActivityPanel";
 
 interface BookmarkMenuState {
   repo: RepoSummary;
@@ -444,9 +442,6 @@ export function RepoList() {
 
   return (
     <div class="repo-list">
-      <Show when={agentsEnabled()}>
-        <AgentActivityPanel />
-      </Show>
       <div class="repo-search">
         <input
           type="text"

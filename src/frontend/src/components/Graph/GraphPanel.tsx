@@ -9,7 +9,6 @@ import {
   fetchingRepos,
   filteredCommits,
   headCommit,
-  isDirty,
   openContextMenu,
   pushingTargetCommits,
   pushingRepos,
@@ -18,6 +17,7 @@ import {
   toggleExpand,
   uncommittedRowHeight,
   upstreamCommit,
+  workingTreeVisible,
 } from "../../state/store";
 import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
 import { colorForBranch, TAG_COLOR } from "./branchColor";
@@ -106,7 +106,7 @@ export function GraphPanel() {
     const repo = activeRepo();
     return repo !== null && pushingRepos().has(repo);
   });
-  const hasDirtyGhost = createMemo(() => isDirty() && headCommit() !== null);
+  const hasDirtyGhost = createMemo(() => workingTreeVisible());
   const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeight() : 0));
   // The fetch band's height is applied to real commits via a CSS-transitioned
   // group transform (see the <g> below) rather than baked into yFor, so the

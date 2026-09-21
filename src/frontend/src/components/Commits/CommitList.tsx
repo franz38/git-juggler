@@ -1,5 +1,5 @@
 import { For, Show, createMemo } from "solid-js";
-import { COLLAPSED_ROW_HEIGHT, activeRepo, errorMessage, fetchingRepos, graphLoading, headCommit, isDirty, rowLayout, uncommittedFiles } from "../../state/store";
+import { COLLAPSED_ROW_HEIGHT, activeRepo, errorMessage, fetchingRepos, graphLoading, rowLayout, uncommittedFiles, workingTreeVisible } from "../../state/store";
 import { CommitRow } from "./CommitRow";
 import { UncommittedRow } from "./UncommittedRow";
 
@@ -18,7 +18,7 @@ export function CommitList() {
       <Show when={graphLoading() && !hasCommits()}>
         <div class="loading-banner">Loading commits…</div>
       </Show>
-      <Show when={isDirty() && headCommit() !== null}>
+      <Show when={workingTreeVisible()}>
         <UncommittedRow files={uncommittedFiles()} />
       </Show>
       {/* Matches the graph's reserved ghost-commit band so rows stay aligned
