@@ -25,9 +25,12 @@ import {
   loadActiveTabGraph,
   matchesKeyBinding,
   menuOpen,
+  PIPELINE_POLL_MS,
   pollRepoStatus,
   refreshAgentActivity,
+  refreshPipelines,
   setSidebarWidth,
+  sidebarTab,
   setTerminalHeight,
   sidebarWidth,
   tabs,
@@ -72,6 +75,18 @@ function App() {
     const timer = window.setInterval(() => {
       void refreshAgentActivity();
     }, intervalMs);
+    onCleanup(() => window.clearInterval(timer));
+  });
+
+  // Having the Pipelines tab open forces polling of all repos' active
+  // pipelines; switching away stops it (the last result stays on screen). The
+  // immediate refresh is untracked, like the agent one above.
+  createEffect(() => {
+    if (sidebarTab() !== "pipelines") return;
+    untrack(() => void refreshPipelines());
+    const timer = window.setInterval(() => {
+      void refreshPipelines();
+    }, PIPELINE_POLL_MS);
     onCleanup(() => window.clearInterval(timer));
   });
 

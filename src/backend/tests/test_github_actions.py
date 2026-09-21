@@ -97,6 +97,53 @@ class GitHubActionsRepoInferenceTest(unittest.TestCase):
         self.assertEqual(len(runs), github_actions.GITHUB_RUNS_PER_PAGE + 1)
         self.assertEqual(runs[-1]["id"], 999)
 
+    def test_maps_jobs_and_steps_to_stages(self) -> None:
+        payload = {
+            "jobs": [
+                {
+                    "name": "build",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "2026-01-01T10:00:00Z",
+                    "completed_at": "2026-01-01T10:01:30Z",
+                    "steps": [{"name": "Checkout", "status": "completed", "conclusion": "success"}],
+                },
+                {"name": "deploy", "status": "in_progress", "conclusion": None, "started_at": "2026-01-01T10:02:00Z", "steps": []},
+                {"name": "release", "status": "queued", "conclusion": None, "steps": []},
+            ]
+        }
+        with patch.object(github_actions, "_get_json", lambda url, headers: payload):
+            stages = github_actions._fetch_run_stages({}, {"owner": "o", "repo": "r"}, "42")
+
+        assert stages is not None
+        self.assertEqual([s.status for s in stages], ["success", "running", "pending"])
+        self.assertEqual(stages[0].duration_ms, 90000)
+        self.assertEqual(stages[0].steps[0].name, "Checkout")
+        self.assertIsNone(stages[1].steps)
+
+    def test_stage_fetch_rejects_non_numeric_run_id(self) -> None:
+        self.assertIsNone(github_actions._fetch_run_stages({}, {"owner": "o", "repo": "r"}, "../x"))
+
+    def test_active_runs_keep_only_unfinished_runs_with_stages(self) -> None:
+        def fake_get_json(url: str, headers: dict[str, str]) -> dict | None:
+            if "/jobs" in url:
+                return {"jobs": [{"name": "build", "status": "in_progress", "conclusion": None}]}
+            return {
+                "workflow_runs": [
+                    {"id": 1, "status": "in_progress", "conclusion": None, "run_number": 5, "name": "CI"},
+                    {"id": 2, "status": "completed", "conclusion": "success", "run_number": 4, "name": "CI"},
+                    {"id": 3, "status": "queued", "conclusion": None, "run_number": 6, "name": "CI"},
+                ]
+            }
+
+        config = {"repos": [{"repo_path": "/tmp/repo", "owner": "o", "repo": "r"}]}
+        with patch.object(github_actions, "_get_json", fake_get_json):
+            runs = github_actions.get_active_runs(Path("/tmp/repo"), config)
+
+        self.assertEqual([r.run_id for r in runs], ["1", "3"])
+        self.assertEqual(runs[0].status, "running")
+        self.assertEqual(runs[0].stages[0].name, "build")
+
 
 if __name__ == "__main__":
     unittest.main()

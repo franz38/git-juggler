@@ -173,6 +173,27 @@ export interface CiRunInfo {
   created_at: string | null;
   updated_at: string | null;
   duration_ms: number | null;
+  /** Provider handle for fetching the run's stages (GitHub run id / Jenkins build URL). */
+  run_id: string | null;
+  /** Only filled in for active pipelines; otherwise fetched on demand. */
+  stages: CiStage[] | null;
+}
+
+export type CiStageStatus = CiRunStatus | "pending";
+
+/** A GitHub job / Jenkins pipeline stage; GitHub jobs carry their steps. */
+export interface CiStage {
+  name: string;
+  status: CiStageStatus;
+  started_at: string | null;
+  duration_ms: number | null;
+  steps: CiStage[] | null;
+}
+
+export interface ActivePipeline {
+  repo_id: string;
+  repo_name: string;
+  run: CiRunInfo;
 }
 
 export interface AgentActivityEvidence {

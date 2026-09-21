@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -34,6 +34,15 @@ export function fetchCommitDetail(repoId: string, hash: string): Promise<CommitD
 
 export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>> {
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/runs`);
+}
+
+export function fetchRunStages(repoId: string, provider: string, runId: string): Promise<CiStage[]> {
+  const query = new URLSearchParams({ provider, run_id: runId });
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/stages?${query}`);
+}
+
+export function fetchActivePipelines(): Promise<ActivePipeline[]> {
+  return getJson(`${API_BASE}/ci/active`);
 }
 
 export function fetchAgentActivity(): Promise<AgentActivityResponse> {

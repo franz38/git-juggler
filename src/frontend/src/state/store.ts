@@ -1,8 +1,8 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
-import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary } from "../api/types";
+import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, updateConfig } from "../api/client";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
@@ -315,11 +315,13 @@ export function setAgentShowWorktrees(show: boolean): void {
   savePreference({ agent_show_worktrees: show });
 }
 
-// Left panel tabs: the repo list (default) and the agents list. The agents tab
-// only exists while agent detection is on, so it falls back to the repos tab.
-export type SidebarTab = "repos" | "agents";
+// Left panel tabs: the repo list (default), the agents list and the pipelines
+// list. The agents tab only exists while agent detection is on and the
+// pipelines tab while GitHub or Jenkins is enabled, so each falls back to the
+// repos tab. (`sidebarTab` itself is defined below, next to the CI config it
+// depends on.)
+export type SidebarTab = "repos" | "agents" | "pipelines";
 const [requestedSidebarTab, setSidebarTab] = createSignal<SidebarTab>("repos");
-export const sidebarTab = createMemo<SidebarTab>(() => (requestedSidebarTab() === "agents" && agentsEnabled() ? "agents" : "repos"));
 export { setSidebarTab };
 
 const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
@@ -1073,6 +1075,67 @@ export { githubConfig, githubConfigError };
 const [jenkinsConfig, setJenkinsConfig] = createSignal<JenkinsConfig>(defaultJenkinsConfig);
 const [jenkinsConfigError, setJenkinsConfigError] = createSignal<string | null>(null);
 export { jenkinsConfig, jenkinsConfigError };
+
+export const ciEnabled = createMemo(() => githubConfig().enabled || jenkinsConfig().enabled);
+
+export const sidebarTab = createMemo<SidebarTab>(() => {
+  const tab = requestedSidebarTab();
+  if (tab === "agents" && agentsEnabled()) return "agents";
+  if (tab === "pipelines" && ciEnabled()) return "pipelines";
+  return "repos";
+});
+
+// Queued/running pipelines across all repos (Pipelines tab). Polled from App
+// only while that tab is open.
+export const PIPELINE_POLL_MS = 10000;
+const [pipelines, setPipelines] = createSignal<ActivePipeline[]>([]);
+const [pipelinesLoaded, setPipelinesLoaded] = createSignal(false);
+const [pipelinesLoading, setPipelinesLoading] = createSignal(false);
+const [pipelinesError, setPipelinesError] = createSignal<string | null>(null);
+export { pipelines, pipelinesLoaded, pipelinesError };
+
+export async function refreshPipelines(): Promise<void> {
+  if (!ciEnabled() || pipelinesLoading()) return;
+  setPipelinesLoading(true);
+  try {
+    setPipelines(await fetchActivePipelines());
+    setPipelinesError(null);
+    setPipelinesLoaded(true);
+  } catch (e) {
+    setPipelinesError((e as Error).message);
+  } finally {
+    setPipelinesLoading(false);
+  }
+}
+
+// Stages of individual runs, loaded lazily when a commit's CI badge is
+// hovered. `null` = the provider has no stage data for that run.
+const [runStages, setRunStages] = createSignal<Record<string, CiStage[] | null>>({});
+export { runStages };
+const runStagesInFlight = new Set<string>();
+
+export function runStagesKey(run: CiRunInfo): string {
+  return `${run.provider}:${run.run_id ?? ""}`;
+}
+
+export async function loadRunStages(repoId: string, run: CiRunInfo): Promise<void> {
+  if (!run.run_id) return;
+  const key = runStagesKey(run);
+  // Finished runs never change, so they're cached; running ones are refetched
+  // on every hover to show fresh progress.
+  if (run.status !== "running" && key in runStages()) return;
+  if (runStagesInFlight.has(key)) return;
+  runStagesInFlight.add(key);
+  try {
+    const stages = await fetchRunStages(repoId, run.provider, run.run_id);
+    setRunStages((prev) => ({ ...prev, [key]: stages }));
+  } catch {
+    // Keep stages from an earlier successful fetch if a refresh fails.
+    setRunStages((prev) => (key in prev ? prev : { ...prev, [key]: null }));
+  } finally {
+    runStagesInFlight.delete(key);
+  }
+}
 
 const CI_POLL_MS = 10000;
 const CI_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];

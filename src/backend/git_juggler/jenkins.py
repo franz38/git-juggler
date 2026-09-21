@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-from .schemas import CiRunInfo
+from .schemas import CiRunInfo, CiStage
 
 
 def _matching_job_configs(jenkins_config: dict, repo_path: Path) -> list[dict]:
@@ -167,6 +167,94 @@ def _fetch_build(build_url: str, headers: dict[str, str]) -> dict | None:
     return _fetch_json(f"{build_url.rstrip('/')}/api/json?{query}", headers)
 
 
+def _build_info(build: dict, name: str, build_url: str) -> CiRunInfo:
+    actions = build.get("actions")
+    params = _extract_parameters(actions)
+    url = str(build.get("url") or build_url)
+    return CiRunInfo(
+        provider="jenkins",
+        status=_normalize_status(build.get("result"), build.get("building")),
+        name=name,
+        number=int(build.get("number") or 0),
+        url=url,
+        branch=_extract_branch(actions, params),
+        event=None,
+        created_at=_timestamp_ms_to_iso(build.get("timestamp")),
+        updated_at=None,
+        duration_ms=int(build.get("duration")) if isinstance(build.get("duration"), int) else None,
+        run_id=url,
+    )
+
+
+_STAGE_STATUSES = {
+    "SUCCESS": "success",
+    "FAILED": "failure",
+    "IN_PROGRESS": "running",
+    "PAUSED_PENDING_INPUT": "action_required",
+    "NOT_EXECUTED": "pending",
+    "UNSTABLE": "unstable",
+    "ABORTED": "aborted",
+}
+
+
+def _fetch_build_stages(build_url: str, headers: dict[str, str]) -> list[CiStage] | None:
+    """Stages from the Pipeline Stage View plugin (`wfapi`). None when the
+    plugin isn't installed / the job isn't a pipeline (404)."""
+    data = _fetch_json(f"{build_url.rstrip('/')}/wfapi/describe", headers)
+    raw_stages = data.get("stages") if isinstance(data, dict) else None
+    if not isinstance(raw_stages, list):
+        return None
+    stages: list[CiStage] = []
+    for raw in raw_stages:
+        if not isinstance(raw, dict):
+            continue
+        duration = raw.get("durationMillis")
+        stages.append(
+            CiStage(
+                name=str(raw.get("name") or "stage"),
+                status=_STAGE_STATUSES.get(str(raw.get("status")), "unknown"),
+                started_at=_timestamp_ms_to_iso(raw.get("startTimeMillis")),
+                duration_ms=duration if isinstance(duration, int) else None,
+            )
+        )
+    return stages
+
+
+def get_build_stages(repo_path: Path, jenkins_config: dict | None, build_url: str) -> list[CiStage] | None:
+    """Stages for one build. The build URL comes from the client, so it is only
+    followed when it lives under a job configured for this repo."""
+    if not jenkins_config:
+        return None
+    wanted = build_url.rstrip("/") + "/"
+    for job in _matching_job_configs(jenkins_config, repo_path):
+        if wanted.startswith(str(job["job_url"]).rstrip("/") + "/"):
+            return _fetch_build_stages(build_url, _headers(jenkins_config))
+    return None
+
+
+def get_active_builds(repo_path: Path, jenkins_config: dict | None) -> list[CiRunInfo]:
+    """Builds running right now, with their stages."""
+    if not jenkins_config:
+        return []
+    headers = _headers(jenkins_config)
+    tree = (
+        "builds[number,url,result,building,timestamp,duration,"
+        "actions[lastBuiltRevision[branch[name]],parameters[name,value]]]{0,10}"
+    )
+    result: list[CiRunInfo] = []
+    for job in _matching_job_configs(jenkins_config, repo_path):
+        job_url = str(job["job_url"])
+        data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
+        builds = data.get("builds") if isinstance(data, dict) else None
+        for build in builds if isinstance(builds, list) else []:
+            if not isinstance(build, dict) or build.get("building") is not True:
+                continue
+            info = _build_info(build, _job_name(job_url), job_url)
+            info.stages = _fetch_build_stages(info.url, headers)
+            result.append(info)
+    return result
+
+
 def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config: dict | None) -> dict[str, list[CiRunInfo]]:
     if not commit_hashes or not jenkins_config:
         return {}
@@ -195,20 +283,7 @@ def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config:
             matching_shas = _extract_commit_shas(build) & commit_hashes
             if not matching_shas:
                 continue
-            actions = build.get("actions")
-            params = _extract_parameters(actions)
-            info = CiRunInfo(
-                provider="jenkins",
-                status=_normalize_status(build.get("result"), build.get("building")),
-                name=name,
-                number=int(build.get("number") or 0),
-                url=str(build.get("url") or build_url),
-                branch=_extract_branch(actions, params),
-                event=None,
-                created_at=_timestamp_ms_to_iso(build.get("timestamp")),
-                updated_at=None,
-                duration_ms=int(build.get("duration")) if isinstance(build.get("duration"), int) else None,
-            )
+            info = _build_info(build, name, build_url)
             for sha in matching_shas:
                 by_sha.setdefault(sha, []).append(info)
 

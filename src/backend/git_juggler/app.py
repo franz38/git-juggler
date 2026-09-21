@@ -12,11 +12,11 @@ from .agent_hook_events import AgentHookEventReader
 from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
 from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
-from .ci import get_ci_runs
+from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .repos import list_repos, resolve_repo_path
-from .schemas import AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -156,6 +156,21 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         path = _resolve_repo_path(repo_id)
         commits, _, _, _, _, _, _, _ = get_graph(path)
         return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
+
+    # Stages (GitHub jobs / Jenkins pipeline stages) of one run. `run_id` is the
+    # value CiRunInfo.run_id carried; 404 when the provider has no stage data.
+    @app.get("/api/repos/{repo_id}/ci/stages", response_model=list[CiStage])
+    def api_ci_stages(repo_id: str, provider: str, run_id: str) -> list[CiStage]:
+        path = _resolve_repo_path(repo_id)
+        stages = get_ci_run_stages(path, provider, run_id, config.load_github_config(), config.load_jenkins_config())
+        if stages is None:
+            raise HTTPException(status_code=404, detail="stages not available")
+        return stages
+
+    # Queued/running pipelines across all repos, for the Pipelines tab.
+    @app.get("/api/ci/active", response_model=list[ActivePipeline])
+    def api_ci_active() -> list[ActivePipeline]:
+        return get_active_pipelines(list_repos(config.load_repo_paths()), config.load_github_config(), config.load_jenkins_config())
 
     hook_event_reader = AgentHookEventReader()
 
