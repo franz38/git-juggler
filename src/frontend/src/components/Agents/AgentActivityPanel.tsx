@@ -4,6 +4,7 @@ import {
   agentActivityError,
   agentActivityLoading,
   agentActivityPolling,
+  agentShowWorktrees,
   refreshAgentActivity,
   setAgentActivityPollingEnabled,
 } from "../../state/store";
@@ -80,28 +81,30 @@ export function AgentActivityPanel() {
                   <Show when={scan.session_directory}>
                     {(sessionDirectory) => <div class="agent-session-directory" title={sessionDirectory()}>Session: {sessionDirectory()}</div>}
                   </Show>
-                  <For each={scan.worktrees} fallback={<div class="agent-empty">No Git worktrees detected</div>}>
-                    {(worktree) => (
-                      <div class="agent-worktree-card" title={worktree.worktree_path}>
-                        <div class="agent-worktree-title">
-                          {worktree.worktree_path.split("/").pop() || worktree.worktree_path}
-                          <Show when={worktree.is_home}>
-                            <span class="agent-state-pill" title="The worktree this session was started in">home</span>
-                          </Show>
+                  <Show when={agentShowWorktrees()}>
+                    <For each={scan.worktrees} fallback={<div class="agent-empty">No Git worktrees detected</div>}>
+                      {(worktree) => (
+                        <div class="agent-worktree-card" title={worktree.worktree_path}>
+                          <div class="agent-worktree-title">
+                            {worktree.worktree_path.split("/").pop() || worktree.worktree_path}
+                            <Show when={worktree.is_home}>
+                              <span class="agent-state-pill" title="The worktree this session was started in">home</span>
+                            </Show>
+                          </div>
+                          <div class="agent-worktree-meta">
+                            {worktree.branch ?? "detached"} · {shortCommit(worktree.commit)}
+                          </div>
+                          <div class="agent-worktree-meta">Processes: {worktree.process_ids.join(", ")}</div>
+                          <div class="agent-worktree-meta">Last: {formatTime(worktree.last_activity)} · {worktree.state}</div>
+                          <div class="agent-evidence-row">
+                            <For each={[...new Set(worktree.evidence.map((item) => item.type))]}>
+                              {(type) => <span class="agent-evidence-pill">{type}</span>}
+                            </For>
+                          </div>
                         </div>
-                        <div class="agent-worktree-meta">
-                          {worktree.branch ?? "detached"} · {shortCommit(worktree.commit)}
-                        </div>
-                        <div class="agent-worktree-meta">Processes: {worktree.process_ids.join(", ")}</div>
-                        <div class="agent-worktree-meta">Last: {formatTime(worktree.last_activity)} · {worktree.state}</div>
-                        <div class="agent-evidence-row">
-                          <For each={[...new Set(worktree.evidence.map((item) => item.type))]}>
-                            {(type) => <span class="agent-evidence-pill">{type}</span>}
-                          </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
+                      )}
+                    </For>
+                  </Show>
                 </div>
               )}
             </For>

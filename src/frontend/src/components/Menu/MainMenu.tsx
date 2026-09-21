@@ -6,6 +6,7 @@ import {
   agentHooks,
   agentHooksError,
   agentHooksLoading,
+  agentShowWorktrees,
   agentsEnabled,
   branchColorMode,
   closeMenu,
@@ -28,6 +29,7 @@ import {
   saveExcludedPaths,
   saveGitHubConfig,
   saveJenkinsConfig,
+  setAgentShowWorktrees,
   setAgentsEnabled,
   setBranchColorMode,
   setKeyBinding,
@@ -565,6 +567,19 @@ export function MainMenu() {
                   type="checkbox"
                   checked={agentsEnabled()}
                   onChange={(e) => setAgentsEnabled(e.currentTarget.checked)}
+                />
+              </label>
+
+              <label class="menu-switch-row">
+                <span>
+                  <span class="menu-setting-label">Show worktrees in the agents panel</span>
+                  <span class="menu-hint">Lists each session's worktrees (branch, commit, last activity) under the session. Off by default.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={agentShowWorktrees()}
+                  disabled={!agentsEnabled()}
+                  onChange={(e) => setAgentShowWorktrees(e.currentTarget.checked)}
                 />
               </label>
 

@@ -278,18 +278,34 @@ const [repoGroups, setRepoGroups] = createSignal<RepoGroupConfig[]>([]);
 export { pinnedRepos, repoGroups };
 
 const AGENTS_ENABLED_KEY = "git-juggler:agentsEnabled";
+const AGENT_WORKTREES_KEY = "git-juggler:agentShowWorktrees";
 
-function loadAgentsEnabled(): boolean {
+function loadBoolean(key: string): boolean {
   try {
-    const raw = localStorage.getItem(AGENTS_ENABLED_KEY);
-    return raw === null ? false : raw === "true";
+    return localStorage.getItem(key) === "true";
   } catch {
     return false;
   }
 }
 
-const [agentsEnabled, setAgentsEnabledSignal] = createSignal(loadAgentsEnabled());
+function saveBoolean(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    // Not critical — the setting just won't survive a reload.
+  }
+}
+
+const [agentsEnabled, setAgentsEnabledSignal] = createSignal(loadBoolean(AGENTS_ENABLED_KEY));
 export { agentsEnabled };
+
+// Whether the agents panel lists each session's worktrees (off by default).
+const [agentShowWorktrees, setAgentShowWorktreesSignal] = createSignal(loadBoolean(AGENT_WORKTREES_KEY));
+export { agentShowWorktrees };
+export function setAgentShowWorktrees(show: boolean): void {
+  setAgentShowWorktreesSignal(show);
+  saveBoolean(AGENT_WORKTREES_KEY, show);
+}
 
 const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
 const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
@@ -306,11 +322,7 @@ export { agentHooks, agentHooksLoading, agentHooksError };
 // no-ops) or shown (AgentActivityPanel isn't rendered at all) anywhere.
 export function setAgentsEnabled(enabled: boolean): void {
   setAgentsEnabledSignal(enabled);
-  try {
-    localStorage.setItem(AGENTS_ENABLED_KEY, String(enabled));
-  } catch {
-    // Not critical — the setting just won't survive a reload.
-  }
+  saveBoolean(AGENTS_ENABLED_KEY, enabled);
   if (!enabled) {
     setAgentActivity(null);
     setAgentActivityError(null);
