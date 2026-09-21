@@ -111,6 +111,26 @@ class GitGraphTest(unittest.TestCase):
             self.assertFalse(status.is_dirty)
             self.assertEqual(status.uncommitted_files, [])
 
+    def test_refs_signature_changes_for_new_branch_and_worktree(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "main-repo"
+            path.mkdir()
+            repo = self._init_repo(path, author)
+            (path / "a.txt").write_text("a\n", encoding="utf-8")
+            repo.index.add(["a.txt"])
+            repo.index.commit("initial", author=author, committer=author)
+
+            before = get_repo_status(path).refs_signature
+            self.assertEqual(before, get_repo_status(path).refs_signature)
+
+            repo.git.branch("feature")
+            with_branch = get_repo_status(path).refs_signature
+            self.assertNotEqual(before, with_branch)
+
+            repo.git.worktree("add", str(Path(directory) / "wt"), "feature")
+            self.assertNotEqual(with_branch, get_repo_status(path).refs_signature)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -111,6 +111,7 @@ export interface RepoStatusResponse {
   upstream_commit: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
+  refs_signature: string;
 }
 
 export interface FileChange {

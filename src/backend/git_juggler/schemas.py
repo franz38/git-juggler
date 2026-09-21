@@ -136,6 +136,7 @@ class RepoStatusResponse(BaseModel):
     upstream_commit: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
+    refs_signature: str = ""
 
 
 class CommitDetail(BaseModel):

@@ -26,6 +26,7 @@ interface RepoState {
   checkedOutBranches: string[];
   headCommit: string | null;
   upstreamCommit: string | null;
+  refsSignature: string | null;
   isDirty: boolean;
   uncommittedFiles: FileChange[];
   uncommittedExpanded: boolean;
@@ -502,6 +503,7 @@ function ensureRepoState(name: string): void {
       checkedOutBranches: [],
       headCommit: null,
       upstreamCommit: null,
+      refsSignature: null,
       isDirty: false,
       uncommittedFiles: [],
       uncommittedExpanded: false,
@@ -526,6 +528,8 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
+    // Re-seeded by the next status poll.
+    setRepoStates(name, "refsSignature", null);
     setRepoStates(name, "isDirty", data.is_dirty);
     setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
     void loadCiRunsInto(name);
@@ -564,6 +568,13 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
   try {
     const status = await fetchRepoStatus(repoId);
     if (status.head_commit !== state.headCommit || status.current_branch !== state.currentBranch) {
+      await refreshRepoGraph(repoId);
+      return;
+    }
+    // New/moved/deleted branches, tags or worktrees don't move HEAD.
+    const known = state.refsSignature;
+    setRepoStates(repoId, "refsSignature", status.refs_signature);
+    if (known !== null && known !== status.refs_signature) {
       await refreshRepoGraph(repoId);
       return;
     }
