@@ -173,6 +173,22 @@ export interface AgentWorktreeActivity {
   evidence: AgentActivityEvidence[];
   activity_score: number;
   state: "active" | "idle";
+  is_home: boolean;
+}
+
+export interface AgentSessionDetails {
+  started_at: number | null;
+  status_updated_at: number | null;
+  version: string | null;
+  kind: string | null;
+  entrypoint: string | null;
+  title: string | null;
+  model: string | null;
+  permission_mode: string | null;
+  last_prompt: string | null;
+  worktree_path: string | null;
+  worktree_name: string | null;
+  worktree_branch: string | null;
 }
 
 export interface AgentRepositoryScan {
@@ -185,6 +201,7 @@ export interface AgentRepositoryScan {
   session_id: string | null;
   process_pid: number | null;
   name: string | null;
+  details: AgentSessionDetails | null;
 }
 
 export interface AgentProcessCandidate {

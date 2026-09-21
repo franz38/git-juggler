@@ -209,7 +209,7 @@ class AgentHooksTest(unittest.TestCase):
             start = 1_000_000_000_000
             self._write_events(event_path, [self._event(repo, "SessionStart", start, "open"), self._event(repo, "SessionStart", start, "gone")])
             self._card(sessions, 111, "open", status="busy")
-            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None)
 
             with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
                 # 10 minutes after the last event: the timer alone says idle, but Claude says busy.
@@ -238,7 +238,7 @@ class AgentHooksTest(unittest.TestCase):
             event_path = root / "events.jsonl"
             self._write_events(event_path, [self._event(repo, "SessionStart", int(time.time() * 1000))])
             self._card(sessions, 111, "s1", status="busy")
-            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None)
 
             with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
                 self.assertEqual(reader.recent_scans()[0].state, "active")
@@ -255,7 +255,7 @@ class AgentHooksTest(unittest.TestCase):
             event_path = root / "events.jsonl"
             start = 1_000_000_000_000
             self._write_events(event_path, [self._event(repo, "SessionStart", start)])
-            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=root / "does-not-exist")
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=root / "does-not-exist", claude_projects_dir=None)
 
             self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
 

@@ -17,6 +17,10 @@ class ClaudeSession:
     kind: str | None
     name: str | None
     cwd: str | None
+    started_at: int | None = None
+    status_updated_at: int | None = None
+    version: str | None = None
+    entrypoint: str | None = None
 
 
 def registry_signature(directory: Path | None) -> tuple[tuple[str, int], ...] | None:
@@ -61,5 +65,9 @@ def read_registry(directory: Path | None) -> dict[str, ClaudeSession] | None:
             kind=data.get("kind") if isinstance(data.get("kind"), str) else None,
             name=data.get("name") if isinstance(data.get("name"), str) else None,
             cwd=data.get("cwd") if isinstance(data.get("cwd"), str) else None,
+            started_at=data.get("startedAt") if isinstance(data.get("startedAt"), int) else None,
+            status_updated_at=data.get("statusUpdatedAt") if isinstance(data.get("statusUpdatedAt"), int) else None,
+            version=data.get("version") if isinstance(data.get("version"), str) else None,
+            entrypoint=data.get("entrypoint") if isinstance(data.get("entrypoint"), str) else None,
         )
     return sessions

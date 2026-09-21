@@ -149,6 +149,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
                     "evidence": [evidence.__dict__ for evidence in activity.evidence],
                     "activity_score": activity.activity_score,
                     "state": activity.state,
+                    "is_home": activity.is_home,
                 }
                 for activity in scan.worktrees
             ],
@@ -158,6 +159,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             session_id=scan.session_id,
             process_pid=scan.process_pid,
             name=scan.name,
+            details=scan.details.__dict__ if scan.details is not None else None,
         )
 
     def _hook_status_response(status) -> AgentHookProviderStatusResponse:

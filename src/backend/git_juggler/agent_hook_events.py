@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from .agent_hooks import EVENT_PATH
-from .agent_tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity
+from .agent_tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity, SessionDetails
 from .agent_tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
+from .agent_tracking.claude_transcripts import CLAUDE_PROJECTS_DIR, TranscriptInfo, find_transcript, read_transcript_info, transcript_signature
 from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
 
 
@@ -52,10 +53,13 @@ def _pid_alive(pid: int) -> bool:
 
 
 class AgentHookEventReader:
-    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR) -> None:
+    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR, claude_projects_dir: Path | None = CLAUDE_PROJECTS_DIR) -> None:
         self.event_path = event_path
         # None disables the Claude session registry (hooks-only behaviour).
         self.claude_sessions_dir = claude_sessions_dir
+        self.claude_projects_dir = claude_projects_dir
+        self._transcript_paths: dict[str, Path] = {}
+        self._transcript_cache: dict[Path, tuple[tuple[int, int], TranscriptInfo]] = {}
         self.git_resolver = git_resolver or GitResolver()
         self.ttl_ms = ttl_ms
         self._lock = threading.Lock()
@@ -78,7 +82,7 @@ class AgentHookEventReader:
         always recomputes.
         """
         observed_at = now or int(time.time() * 1000)
-        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir))
+        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir), self._transcripts_signature())
         with self._lock:
             if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
                 return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
@@ -88,6 +92,26 @@ class AgentHookEventReader:
             self._cached_scans = scans
             self._cached_valid_until = min(observed_at + resolver_ttl_ms, next_change) if next_change is not None else observed_at + resolver_ttl_ms
             return list(scans)
+
+    def _transcripts_signature(self) -> tuple:
+        return tuple(sorted((str(path), transcript_signature(path)) for path in self._transcript_paths.values()))
+
+    def _transcript_info(self, session_id: str) -> TranscriptInfo | None:
+        path = self._transcript_paths.get(session_id)
+        if path is None or not path.exists():
+            path = find_transcript(self.claude_projects_dir, session_id)
+            if path is None:
+                self._transcript_paths.pop(session_id, None)
+                return None
+            self._transcript_paths[session_id] = path
+        signature = transcript_signature(path)
+        if signature is None:
+            return None
+        cached = self._transcript_cache.get(path)
+        if cached is None or cached[0] != signature:
+            cached = (signature, read_transcript_info(path))
+            self._transcript_cache[path] = cached
+        return cached[1]
 
     def _file_signature(self) -> tuple[int, int] | None:
         try:
@@ -167,6 +191,12 @@ class AgentHookEventReader:
             elif card is not None and card.status == "busy":
                 # Working right now: the most recently touched worktree is where.
                 max(activities.values(), key=lambda item: item.last_activity).state = "active"
+            details = self._session_details(card, session_id) if card is not None and session_id else None
+            if details is not None and details.worktree_path:
+                # The worktree the session itself declares (Claude's worktree-state record).
+                declared = self.git_resolver.resolve_path(details.worktree_path)
+                for activity in activities.values():
+                    activity.is_home = declared is not None and activity.worktree_path == declared.worktree_path
             scans.append(
                 AgentRepositoryScan(
                     agent_pid=self._synthetic_pid(session_key),
@@ -178,6 +208,7 @@ class AgentHookEventReader:
                     session_id=session_id,
                     process_pid=process_pid,
                     name=card.name if card is not None else None,
+                    details=details,
                 )
             )
         return scans, next_change
@@ -186,6 +217,23 @@ class AgentHookEventReader:
         # The OpenCode plugin runs inside the agent process, so its pid is the agent's.
         pid = data.get("pid")
         return pid if data.get("provider") == "opencode" and isinstance(pid, int) else None
+
+    def _session_details(self, card: ClaudeSession, session_id: str) -> SessionDetails:
+        transcript = self._transcript_info(session_id) or TranscriptInfo()
+        return SessionDetails(
+            started_at=card.started_at,
+            status_updated_at=card.status_updated_at,
+            version=card.version,
+            kind=card.kind,
+            entrypoint=card.entrypoint,
+            title=transcript.title,
+            model=transcript.model,
+            permission_mode=transcript.permission_mode,
+            last_prompt=transcript.last_prompt,
+            worktree_path=transcript.worktree_path,
+            worktree_name=transcript.worktree_name,
+            worktree_branch=transcript.worktree_branch,
+        )
 
     def _session_key(self, event: HookEvent) -> tuple[str, str]:
         if event.session_id:

@@ -189,6 +189,22 @@ class AgentWorktreeActivityResponse(BaseModel):
     evidence: list[AgentActivityEvidence] = Field(default_factory=list)
     activity_score: int = 0
     state: str = "active"
+    is_home: bool = False
+
+
+class AgentSessionDetails(BaseModel):
+    started_at: int | None = None
+    status_updated_at: int | None = None
+    version: str | None = None
+    kind: str | None = None
+    entrypoint: str | None = None
+    title: str | None = None
+    model: str | None = None
+    permission_mode: str | None = None
+    last_prompt: str | None = None
+    worktree_path: str | None = None
+    worktree_name: str | None = None
+    worktree_branch: str | None = None
 
 
 class AgentRepositoryScanResponse(BaseModel):
@@ -201,6 +217,7 @@ class AgentRepositoryScanResponse(BaseModel):
     session_id: str | None = None
     process_pid: int | None = None
     name: str | None = None
+    details: AgentSessionDetails | None = None
 
 
 class AgentProcessCandidateResponse(BaseModel):
