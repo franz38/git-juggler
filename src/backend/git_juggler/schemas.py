@@ -192,6 +192,14 @@ class CommitDetail(BaseModel):
     files: list[FileChange]
 
 
+class CiStage(BaseModel):
+    name: str
+    status: str
+    started_at: str | None = None
+    duration_ms: int | None = None
+    steps: list["CiStage"] | None = None
+
+
 class CiRunInfo(BaseModel):
     provider: str
     status: str
@@ -203,6 +211,16 @@ class CiRunInfo(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     duration_ms: int | None = None
+    # Provider-specific handle used to fetch the run's stages later: the
+    # workflow run id for GitHub Actions, the build URL for Jenkins.
+    run_id: str | None = None
+    stages: list[CiStage] | None = None
+
+
+class ActivePipeline(BaseModel):
+    repo_id: str
+    repo_name: str
+    run: CiRunInfo
 
 
 class AgentActivityEvidence(BaseModel):
