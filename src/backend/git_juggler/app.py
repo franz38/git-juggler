@@ -148,10 +148,12 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
                     "last_activity": activity.last_activity,
                     "evidence": [evidence.__dict__ for evidence in activity.evidence],
                     "activity_score": activity.activity_score,
+                    "state": activity.state,
                 }
                 for activity in scan.worktrees
             ],
             scanned_at=scan.scanned_at,
+            state=scan.state,
         )
 
     def _hook_status_response(status) -> AgentHookProviderStatusResponse:

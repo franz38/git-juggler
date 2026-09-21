@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import os
 import shlex
+import sys
 import threading
 import time
 from dataclasses import dataclass, replace
@@ -16,7 +18,10 @@ from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
 
 
 HOOK_ACTIVITY_TTL_MS = 120_000
-HOOK_EVENT_LIMIT = 500
+HOOK_EVENT_LIMIT = 5000
+SESSION_EVENT_LIMIT = 300
+IDLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000
+END_PHASES = {"sessionend", "session.deleted"}
 HOOK_SCORE = 30
 
 
@@ -27,8 +32,22 @@ class HookEvent:
     session_id: str | None
     cwd: str | None
     pid: int | None
+    agent_pid: int | None
     timestamp: int
     raw: dict[str, Any]
+
+
+def _pid_alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        # os.kill(pid, 0) would terminate the process there.
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
 
 
 class AgentHookEventReader:
@@ -42,9 +61,11 @@ class AgentHookEventReader:
         self._cached_valid_until = 0
 
     def recent_scans(self, now: int | None = None) -> list[AgentRepositoryScan]:
-        """Scans for events inside the TTL window.
+        """One scan per open agent session.
 
-        The endpoint is polled every second, so the result is reused while the
+        A worktree is "active" while its latest event is within the TTL and
+        "idle" afterwards; the session disappears on its end hook (or when
+        its process is gone). The endpoint is polled every second, so the result is reused while the
         events file is unchanged (mtime + size) and nothing in it has aged out
         or could have moved branch/commit (git resolver TTL). An explicit `now`
         always recomputes.
@@ -54,14 +75,11 @@ class AgentHookEventReader:
         with self._lock:
             if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
                 return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
-            scans, oldest_event = self._compute_scans(observed_at)
+            scans, next_change = self._compute_scans(observed_at)
             resolver_ttl_ms = int(self.git_resolver.ttl_seconds * 1000)
             self._cached_signature = signature
             self._cached_scans = scans
-            self._cached_valid_until = min(
-                observed_at + resolver_ttl_ms,
-                oldest_event + self.ttl_ms + 1 if oldest_event is not None else observed_at + resolver_ttl_ms,
-            )
+            self._cached_valid_until = min(observed_at + resolver_ttl_ms, next_change) if next_change is not None else observed_at + resolver_ttl_ms
             return list(scans)
 
     def _file_signature(self) -> tuple[int, int] | None:
@@ -72,54 +90,85 @@ class AgentHookEventReader:
         return (stat.st_mtime_ns, stat.st_size)
 
     def _compute_scans(self, observed_at: int) -> tuple[list[AgentRepositoryScan], int | None]:
-        events = [event for event in self._read_events() if observed_at - event.timestamp <= self.ttl_ms]
-        oldest_event = min((event.timestamp for event in events), default=None)
-        by_session: dict[tuple[str, str], dict[str, AgentWorktreeActivity]] = {}
-        session_dirs: dict[tuple[str, str], str | None] = {}
-        pids: dict[tuple[str, str], int] = {}
-
-        for event in events:
-            session_key = (event.provider, event.session_id or f"pid:{event.pid or 'unknown'}")
-            session_dirs.setdefault(session_key, event.cwd)
-            pids[session_key] = self._synthetic_pid(session_key)
-            for path in self._candidate_paths(event):
-                worktree = self.git_resolver.resolve_path(path)
-                if worktree is None:
-                    continue
-                activity = by_session.setdefault(session_key, {}).get(worktree.worktree_path)
-                if activity is None:
-                    activity = self._new_activity(worktree, event.timestamp)
-                    by_session[session_key][worktree.worktree_path] = activity
-                if event.pid is not None and event.pid not in activity.process_ids:
-                    activity.process_ids.append(event.pid)
-                activity.last_seen = max(activity.last_seen, event.timestamp)
-                activity.last_activity = max(activity.last_activity, event.timestamp)
-                activity.activity_score += HOOK_SCORE
-                activity.evidence.append(
-                    ActivityEvidence(
-                        type=f"hook-{event.phase.lower()}",
-                        pid=event.pid,
-                        cwd=event.cwd,
-                        path=str(path),
-                        command=self._command(event),
-                        process_role="hook",
-                        tool=self._tool(event),
-                        score=HOOK_SCORE,
-                    )
-                )
+        """Returns the scans plus the time the next active->idle flip happens."""
+        sessions: dict[tuple[str, str], list[HookEvent]] = {}
+        for event in self._read_events():
+            if observed_at - event.timestamp <= IDLE_SESSION_MAX_MS:
+                sessions.setdefault(self._session_key(event), []).append(event)
 
         scans: list[AgentRepositoryScan] = []
-        for session_key, activities in by_session.items():
-            provider, session = session_key
+        next_change: int | None = None
+        for session_key, session_events in sessions.items():
+            # A session is open until its end hook fires (or its process dies),
+            # however long it has been quiet.
+            if session_events[-1].phase.lower() in END_PHASES:
+                continue
+            agent_pid = next((event.agent_pid for event in reversed(session_events) if event.agent_pid is not None), None)
+            if agent_pid is not None and not _pid_alive(agent_pid):
+                continue
+
+            activities: dict[str, AgentWorktreeActivity] = {}
+            for event in session_events[-SESSION_EVENT_LIMIT:]:
+                for path in self._candidate_paths(event):
+                    worktree = self.git_resolver.resolve_path(path)
+                    if worktree is None:
+                        continue
+                    activity = activities.get(worktree.worktree_path)
+                    if activity is None:
+                        activity = self._new_activity(worktree, event.timestamp)
+                        activities[worktree.worktree_path] = activity
+                    if event.pid is not None and event.pid not in activity.process_ids:
+                        activity.process_ids.append(event.pid)
+                    activity.last_seen = max(activity.last_seen, event.timestamp)
+                    activity.last_activity = max(activity.last_activity, event.timestamp)
+                    activity.activity_score += HOOK_SCORE
+                    activity.evidence.append(
+                        ActivityEvidence(
+                            type=f"hook-{event.phase.lower()}",
+                            pid=event.pid,
+                            cwd=event.cwd,
+                            path=str(path),
+                            command=self._command(event),
+                            process_role="hook",
+                            tool=self._tool(event),
+                            score=HOOK_SCORE,
+                        )
+                    )
+            if not activities:
+                continue
+
+            for activity in activities.values():
+                if observed_at - activity.last_activity <= self.ttl_ms:
+                    activity.state = "active"
+                    flip_at = activity.last_activity + self.ttl_ms + 1
+                    next_change = flip_at if next_change is None else min(next_change, flip_at)
+                else:
+                    activity.state = "idle"
             scans.append(
                 AgentRepositoryScan(
-                    agent_pid=pids[session_key],
-                    session_directory=session_dirs.get(session_key),
+                    agent_pid=self._synthetic_pid(session_key),
+                    session_directory=session_events[0].cwd,
                     worktrees=sorted(activities.values(), key=lambda item: item.worktree_path),
                     scanned_at=observed_at,
+                    state="active" if any(item.state == "active" for item in activities.values()) else "idle",
                 )
             )
-        return scans, oldest_event
+        return scans, next_change
+
+    def _agent_pid(self, data: dict[str, Any]) -> int | None:
+        agent_pid = data.get("agent_pid")
+        if isinstance(agent_pid, int):
+            return agent_pid
+        # The OpenCode plugin runs inside the agent process, so its pid is the agent's.
+        pid = data.get("pid")
+        return pid if data.get("provider") == "opencode" and isinstance(pid, int) else None
+
+    def _session_key(self, event: HookEvent) -> tuple[str, str]:
+        if event.session_id:
+            return (event.provider, event.session_id)
+        if event.agent_pid is not None:
+            return (event.provider, f"pid:{event.agent_pid}")
+        return (event.provider, f"cwd:{event.cwd or 'unknown'}")
 
     def _read_events(self) -> list[HookEvent]:
         if not self.event_path.exists():
@@ -147,6 +196,7 @@ class AgentHookEventReader:
                     session_id=self._session_id(raw),
                     cwd=data.get("cwd") if isinstance(data.get("cwd"), str) else self._raw_string(raw, "cwd"),
                     pid=data.get("pid") if isinstance(data.get("pid"), int) else None,
+                    agent_pid=self._agent_pid(data),
                     timestamp=timestamp,
                     raw=raw,
                 )

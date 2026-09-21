@@ -118,6 +118,82 @@ class AgentHooksTest(unittest.TestCase):
             self.assertEqual(reader.recent_scans(), [])
             self.assertEqual(reader.recent_scans(), [])
 
+    def _write_events(self, path: Path, events: list[dict]) -> None:
+        path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    def _event(self, repo: Path, phase: str, at_ms: int, session: str = "s1", **extra) -> dict:
+        return {"provider": "claude", "phase": phase, "cwd": str(repo), "pid": 1, "timestamp": at_ms, "raw": {"session_id": session}, **extra}
+
+    def test_session_is_active_then_idle_then_gone_on_end_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start)])
+            reader = AgentHookEventReader(event_path=event_path)
+
+            active = reader.recent_scans(now=start + 30_000)
+            self.assertEqual([(scan.state, [w.state for w in scan.worktrees]) for scan in active], [("active", ["active"])])
+
+            idle = reader.recent_scans(now=start + 10 * 60_000)
+            self.assertEqual([(scan.state, [w.state for w in scan.worktrees]) for scan in idle], [("idle", ["idle"])])
+
+            self._write_events(event_path, [self._event(repo, "SessionStart", start), self._event(repo, "SessionEnd", start + 60_000)])
+            self.assertEqual(reader.recent_scans(now=start + 10 * 60_000), [])
+
+    def test_idle_session_is_dropped_after_a_day_and_end_is_per_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start, "a"), self._event(repo, "SessionStart", start, "b"), self._event(repo, "SessionEnd", start + 1000, "a")])
+            reader = AgentHookEventReader(event_path=event_path)
+
+            self.assertEqual(len(reader.recent_scans(now=start + 3_600_000)), 1)
+            self.assertEqual(reader.recent_scans(now=start + 25 * 3_600_000), [])
+
+    def test_session_whose_agent_process_died_is_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start, agent_pid=4242)])
+            reader = AgentHookEventReader(event_path=event_path)
+
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
+                self.assertEqual(reader.recent_scans(now=start + 60_000), [])
+
+    def test_opencode_plugin_pid_is_used_as_agent_pid_and_deleted_ends_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            events = [{"provider": "opencode", "phase": "SessionStart", "cwd": str(repo), "pid": 999, "timestamp": start, "raw": {"cwd": str(repo)}}]
+            self._write_events(event_path, events)
+            reader = AgentHookEventReader(event_path=event_path)
+
+            seen: list[int] = []
+            with patch("git_juggler.agent_hook_events._pid_alive", side_effect=lambda pid: (seen.append(pid), True)[1]):
+                self.assertEqual(len(reader.recent_scans(now=start + 1000)), 1)
+            self.assertEqual(seen, [999])
+
+            events.append({"provider": "opencode", "phase": "session.deleted", "cwd": str(repo), "pid": 999, "timestamp": start + 5000, "raw": {"event": {"type": "session.deleted"}}})
+            self._write_events(event_path, events)
+            self.assertEqual(reader.recent_scans(now=start + 6000), [])
+
+    def test_claude_install_includes_session_end_hook(self) -> None:
+        self.assertIn("SessionEnd", agent_hooks._claude_snippet_dict()["hooks"])
+
 
 if __name__ == "__main__":
     unittest.main()

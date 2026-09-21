@@ -171,6 +171,7 @@ export interface AgentWorktreeActivity {
   last_activity: number;
   evidence: AgentActivityEvidence[];
   activity_score: number;
+  state: "active" | "idle";
 }
 
 export interface AgentRepositoryScan {
@@ -178,6 +179,7 @@ export interface AgentRepositoryScan {
   session_directory: string | null;
   worktrees: AgentWorktreeActivity[];
   scanned_at: number;
+  state: "active" | "idle";
 }
 
 export interface AgentProcessCandidate {

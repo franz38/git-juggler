@@ -703,6 +703,19 @@
   white-space: nowrap;
 }
 
+.agent-state-pill {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  background: rgba(76, 154, 255, 0.18);
+}
+
+.agent-state-pill.idle {
+  background: var(--border);
+  color: var(--text-dim);
+}
+
 .agent-evidence-row {
   display: flex;
   flex-wrap: wrap;
@@ -824,6 +837,12 @@
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 3px rgba(76, 154, 255, 0.18);
+}
+
+.repo-agent-dot.idle {
+  background: var(--text-dim);
+  box-shadow: none;
+  opacity: 0.6;
 }
 
 .repo-branch {
@@ -1128,6 +1147,10 @@
 
 .agent-active-marker {
   pointer-events: none;
+}
+
+.agent-active-marker.idle {
+  opacity: 0.45;
 }
 
 .filter-button {

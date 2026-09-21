@@ -18,6 +18,8 @@ function shortCommit(commit: string): string {
 
 export function AgentActivityPanel() {
   const activeScans = createMemo(() => agentActivity()?.scans.filter((scan) => scan.worktrees.length > 0) ?? []);
+  const runningCount = createMemo(() => activeScans().filter((scan) => scan.state === "active").length);
+  const idleCount = createMemo(() => activeScans().length - runningCount());
   const inactiveAgentCount = createMemo(() => Math.max(0, (agentActivity()?.agents.length ?? 0) - activeScans().length));
 
   onMount(() => {
@@ -63,7 +65,7 @@ export function AgentActivityPanel() {
         {(activity) => (
           <div class="agent-results">
             <div class="agent-summary">
-              {activeScans().length} active agent{activeScans().length === 1 ? "" : "s"}, {activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0)} worktree{activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0) === 1 ? "" : "s"}
+              {runningCount()} active · {idleCount()} idle · {activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0)} worktree{activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0) === 1 ? "" : "s"}
             </div>
             <Show when={inactiveAgentCount() > 0}>
               <div class="agent-empty">{inactiveAgentCount()} hook session{inactiveAgentCount() === 1 ? "" : "s"} with no Git worktree activity hidden</div>
@@ -71,7 +73,7 @@ export function AgentActivityPanel() {
             <For each={activeScans()} fallback={<div class="agent-empty">No active Git worktrees detected</div>}>
               {(scan) => (
                 <div class="agent-scan-card">
-                  <div class="agent-scan-title">Hook session {Math.abs(scan.agent_pid)}</div>
+                  <div class="agent-scan-title">Hook session {Math.abs(scan.agent_pid)}<span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span></div>
                   <For each={activity().agents.filter((agent) => agent.pid === scan.agent_pid)}>
                     {(agent) => <div class="agent-command" title={agent.command_line}>{agent.command_line}</div>}
                   </For>
@@ -86,7 +88,7 @@ export function AgentActivityPanel() {
                           {worktree.branch ?? "detached"} · {shortCommit(worktree.commit)}
                         </div>
                         <div class="agent-worktree-meta">Processes: {worktree.process_ids.join(", ")}</div>
-                        <div class="agent-worktree-meta">Last: {formatTime(worktree.last_activity)}</div>
+                        <div class="agent-worktree-meta">Last: {formatTime(worktree.last_activity)} · {worktree.state}</div>
                         <div class="agent-evidence-row">
                           <For each={[...new Set(worktree.evidence.map((item) => item.type))]}>
                             {(type) => <span class="agent-evidence-pill">{type}</span>}

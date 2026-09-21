@@ -28,6 +28,7 @@ class AgentWorktreeActivity:
     last_activity: int
     evidence: list[ActivityEvidence] = field(default_factory=list)
     activity_score: int = 0
+    state: str = "active"
 
 
 @dataclass(frozen=True)
@@ -36,3 +37,4 @@ class AgentRepositoryScan:
     session_directory: str | None
     worktrees: list[AgentWorktreeActivity]
     scanned_at: int
+    state: str = "active"

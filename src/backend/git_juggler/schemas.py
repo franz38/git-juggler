@@ -187,6 +187,7 @@ class AgentWorktreeActivityResponse(BaseModel):
     last_activity: int
     evidence: list[AgentActivityEvidence] = Field(default_factory=list)
     activity_score: int = 0
+    state: str = "active"
 
 
 class AgentRepositoryScanResponse(BaseModel):
@@ -194,6 +195,7 @@ class AgentRepositoryScanResponse(BaseModel):
     session_directory: str | None = None
     worktrees: list[AgentWorktreeActivityResponse]
     scanned_at: int
+    state: str = "active"
 
 
 class AgentProcessCandidateResponse(BaseModel):

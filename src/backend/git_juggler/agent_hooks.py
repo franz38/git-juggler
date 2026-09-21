@@ -30,9 +30,41 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
+
+
+def _ps(field: str, pid: int) -> str:
+    try:
+        return subprocess.run(["ps", "-o", field + "=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+    except Exception:
+        return ""
+
+
+def find_agent_pid() -> int | None:
+    """Walk up from this hook to the agent process, so git-juggler can tell if
+    it is still alive. Matches the executable itself (never a wrapper shell,
+    which dies right after the hook) and returns None when unsure."""
+    provider = sys.argv[1] if len(sys.argv) > 1 else ""
+    pid = os.getppid()
+    for _ in range(8):
+        if pid <= 1 or not provider:
+            return None
+        parent = _ps("ppid", pid)
+        comm = _ps("comm", pid)
+        if not parent.isdigit() or not comm:
+            return None
+        exe = os.path.basename(comm).lower()
+        if exe == provider or f"/{provider}/" in comm.lower():
+            return pid
+        if exe in ("node", "bun", "deno"):
+            script = next((arg for arg in _ps("args", pid).split()[1:] if not arg.startswith("-")), "")
+            if provider in script.lower():
+                return pid
+        pid = int(parent)
+    return None
 
 
 def main() -> int:
@@ -50,6 +82,7 @@ def main() -> int:
         "phase": phase,
         "cwd": os.getcwd(),
         "pid": os.getpid(),
+        "agent_pid": find_agent_pid(),
         "timestamp": int(time.time() * 1000),
         "raw": raw,
     }
@@ -89,6 +122,7 @@ def _claude_snippet_dict() -> dict:
             "SessionStart": [_claude_hook_entry("SessionStart")],
             "PreToolUse": [_claude_hook_entry("PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
             "PostToolUse": [_claude_hook_entry("PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
+            "SessionEnd": [_claude_hook_entry("SessionEnd")],
         }
     }
 
@@ -170,7 +204,7 @@ def _has_claude_hook(settings: dict) -> bool:
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return False
-    for phase in ("SessionStart", "PreToolUse", "PostToolUse"):
+    for phase in ("SessionStart", "PreToolUse", "PostToolUse", "SessionEnd"):
         entries = hooks.get(phase)
         if not isinstance(entries, list):
             return False

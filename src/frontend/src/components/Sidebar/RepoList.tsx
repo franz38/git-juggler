@@ -122,7 +122,7 @@ function RepoRow(props: {
         <span class="repo-name-line">
           <span class="repo-name">{props.repo.name}</span>
           <Show when={agentActivity()}>
-            {(activity) => <span class="repo-agent-dot" title={`Agent activity: ${activity().process_ids.length} process(es)`} />}
+            {(activity) => <span class="repo-agent-dot" classList={{ idle: activity().state === "idle" }} title={`Agent ${activity().state}`} />}
           </Show>
         </span>
         <Show when={props.repo.current_branch}>

@@ -68,6 +68,7 @@ function formatAgentTooltip(activities: AgentWorktreeActivity[] | undefined): st
     ...activities.map((activity) => {
       const evidenceTypes = [...new Set(activity.evidence.map((evidence) => evidence.type))].join(", ") || "none";
       return [
+        `State: ${activity.state}`,
         `Worktree: ${activity.worktree_path}`,
         `Branch: ${activity.branch ?? "detached"}`,
         `Commit: ${activity.commit.slice(0, 7)}`,
@@ -312,9 +313,11 @@ export function GraphPanel() {
                   </circle>
                 )}
                 {agentActivities()?.length && (
-                  <g class="agent-active-marker">
+                  <g class="agent-active-marker" classList={{ idle: !agentActivities()!.some((activity) => activity.state === "active") }}>
                     <circle cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 7} fill="none" stroke={AGENT_ACTIVE_COLOR} stroke-width="2" stroke-dasharray="4 3">
-                      <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="1.4s" repeatCount="indefinite" />
+                      {agentActivities()!.some((activity) => activity.state === "active") && (
+                        <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="1.4s" repeatCount="indefinite" />
+                      )}
                     </circle>
                   </g>
                 )}
