@@ -4,83 +4,102 @@ export interface LaneInfo {
   column: number;
 }
 
-interface BranchInterval {
+/**
+ * The rows a branch's lane is actually drawn across, as indices into the
+ * chronological (oldest-first) commit list.
+ */
+export interface BranchSpan {
   name: string;
+  /** Oldest row the lane touches (the fork point, once its jog is included). */
   start: number;
+  /** Newest row the lane touches (the merge commit that absorbed it, if any). */
   end: number;
+  /** Row of the branch's own newest commit; how "recent" the branch is. */
+  tip: number;
+}
+
+/**
+ * Computes, per branch, the vertical range its lane is drawn over. That is
+ * wider than the range of its own commits, because of how edges are drawn
+ * (see GraphPanel):
+ *  - a first-parent edge runs down the *child's* lane all the way to the
+ *    parent's row, so a branch's lane reaches down to its fork point;
+ *  - a merge edge jogs sideways out of the merge commit and then runs down the
+ *    *parent's* lane, so a merged branch's lane reaches up to the merge row.
+ * Two branches can only share a column when these ranges don't overlap.
+ */
+export function computeBranchSpans(chronological: CommitSummary[]): Map<string, BranchSpan> {
+  const indexByHash = new Map(chronological.map((commit, index) => [commit.hash, index]));
+  const spans = new Map<string, BranchSpan>();
+
+  chronological.forEach((c, index) => {
+    const existing = spans.get(c.branch);
+    if (existing) {
+      existing.start = Math.min(existing.start, index);
+      existing.end = Math.max(existing.end, index);
+      existing.tip = Math.max(existing.tip, index);
+    } else {
+      spans.set(c.branch, { name: c.branch, start: index, end: index, tip: index });
+    }
+  });
+
+  const extend = (name: string, index: number) => {
+    const span = spans.get(name)!;
+    span.start = Math.min(span.start, index);
+    span.end = Math.max(span.end, index);
+  };
+
+  chronological.forEach((c, index) => {
+    c.parents.forEach((parentHash, parentIdx) => {
+      const parentIndex = indexByHash.get(parentHash);
+      if (parentIndex === undefined) return; // parent outside the loaded history
+      if (parentIdx === 0) {
+        extend(c.branch, parentIndex);
+      } else {
+        extend(chronological[parentIndex].branch, index);
+      }
+    });
+  });
+
+  return spans;
 }
 
 /**
  * Assigns each commit's owning branch a column (lane):
- *  - the checked-out branch (for this repo path) is pinned to column 0
- *  - every other branch that's checked out in *some* worktree of the repo
- *    (`checkedOutBranches`, which includes `currentBranch`) gets its own
- *    permanent column too — it's "live", so it shouldn't visually merge
- *    into a lane some unrelated branch might reuse later
- *  - every other (not-checked-out-anywhere) branch is packed into the
- *    smallest column whose previous occupant's commit range doesn't overlap
- *    its own, so branches that never coexist in time can share an x
- *    position (classic interval-partitioning / "meeting rooms" greedy
- *    algorithm), keeping the graph compact instead of giving every branch a
- *    permanent, unique column.
+ *  - the checked-out branch is pinned to column 0 (the leftmost), and that
+ *    column is reserved for it alone;
+ *  - every other branch is placed newest-first (by the row of its most recent
+ *    commit), each into the leftmost column where it doesn't overlap any
+ *    branch already there. Branches whose drawn ranges never overlap therefore
+ *    share a lane, and the most recently active branches sit closest to the
+ *    checked-out one.
  */
 export function computeColumns(
   chronological: CommitSummary[],
   currentBranch: string | null,
-  checkedOutBranches: string[] = [],
 ): Map<string, LaneInfo> {
-  const indexByHash = new Map(chronological.map((commit, index) => [commit.hash, index]));
-  const intervalByBranch = new Map<string, BranchInterval>();
-  chronological.forEach((c, index) => {
-    const parentIndex = c.refs.stashes.length > 0 && c.parents[0] ? indexByHash.get(c.parents[0]) : undefined;
-    const start = parentIndex === undefined ? index : Math.min(index, parentIndex);
-    const end = parentIndex === undefined ? index : Math.max(index, parentIndex);
-    const existing = intervalByBranch.get(c.branch);
-    if (existing) {
-      existing.start = Math.min(existing.start, start);
-      existing.end = Math.max(existing.end, end);
-    } else {
-      intervalByBranch.set(c.branch, { name: c.branch, start, end });
-    }
-  });
+  const spans = computeBranchSpans(chronological);
+  const current = currentBranch ? spans.get(currentBranch) : undefined;
 
-  const intervals = [...intervalByBranch.values()];
-  const current = currentBranch ? intervals.find((b) => b.name === currentBranch) : undefined;
-  const checkedOutSet = new Set(checkedOutBranches);
-  const otherCheckedOut = intervals
-    .filter((b) => b !== current && checkedOutSet.has(b.name))
-    .sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
-  const rest = intervals
-    .filter((b) => b !== current && !checkedOutSet.has(b.name))
-    .sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
+  const others = [...spans.values()]
+    .filter((span) => span !== current)
+    .sort((a, b) => b.tip - a.tip || a.name.localeCompare(b.name));
 
-  const columnEnds: number[] = [];
+  // columns[i] lists the branches placed in column i; column 0 is reserved
+  // (left empty here) when there is a checked-out branch.
+  const columns: BranchSpan[][] = current ? [[]] : [];
   const columnByBranch = new Map<string, number>();
+  if (current) columnByBranch.set(current.name, 0);
 
-  // A pinned column is never reused by anything else — mark its "end"
-  // unreachably far so the packing check below (`columnEnds[col] <
-  // branch.start`) can never match it.
-  function placePinned(branch: BranchInterval, column?: number): void {
-    const col = column ?? columnEnds.length;
-    columnEnds[col] = Infinity;
-    columnByBranch.set(branch.name, col);
-  }
-
-  function placePacked(branch: BranchInterval): void {
-    for (let col = 0; col < columnEnds.length; col++) {
-      if (columnEnds[col] < branch.start) {
-        columnEnds[col] = branch.end;
-        columnByBranch.set(branch.name, col);
-        return;
-      }
+  for (const branch of others) {
+    let column = current ? 1 : 0;
+    while (column < columns.length && columns[column].some((o) => o.end >= branch.start && branch.end >= o.start)) {
+      column++;
     }
-    columnEnds.push(branch.end);
-    columnByBranch.set(branch.name, columnEnds.length - 1);
+    if (column === columns.length) columns.push([]);
+    columns[column].push(branch);
+    columnByBranch.set(branch.name, column);
   }
-
-  if (current) placePinned(current, 0);
-  for (const branch of otherCheckedOut) placePinned(branch);
-  for (const branch of rest) placePacked(branch);
 
   const lanes = new Map<string, LaneInfo>();
   for (const c of chronological) {

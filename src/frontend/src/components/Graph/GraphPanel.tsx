@@ -3,7 +3,6 @@ import {
   COLLAPSED_ROW_HEIGHT,
   activeRepo,
   agentActivity,
-  checkedOutBranches,
   ciRuns,
   currentBranch,
   fetchingRepos,
@@ -62,7 +61,7 @@ function horizontalFirstPath(x1: number, y1: number, x2: number, y2: number): st
 
 export function GraphPanel() {
   const chronological = createMemo(() => filteredCommits());
-  const lanes = createMemo(() => computeColumns(chronological(), currentBranch(), checkedOutBranches()));
+  const lanes = createMemo(() => computeColumns(chronological(), currentBranch()));
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
   const runningActionsByHash = createMemo(() => {
     const hashes = new Set<string>();
