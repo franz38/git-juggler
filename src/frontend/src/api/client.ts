@@ -1,4 +1,4 @@
-import type { AgentActivityResponse, AgentRepositoryScan, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary } from "./types";
 
 const API_BASE = "/api";
 
@@ -35,12 +35,20 @@ export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/runs`);
 }
 
-export function fetchAgentRepositoryScan(agentPid: number): Promise<AgentRepositoryScan> {
-  return getJson(`${API_BASE}/agents/${encodeURIComponent(String(agentPid))}/worktrees`);
-}
-
 export function fetchAgentActivity(): Promise<AgentActivityResponse> {
   return getJson(`${API_BASE}/agents/activity`);
+}
+
+export function fetchAgentHooks(): Promise<AgentHooksResponse> {
+  return getJson(`${API_BASE}/agents/hooks`);
+}
+
+export async function installAgentHook(provider: "claude" | "opencode"): Promise<AgentHookProviderStatus> {
+  const res = await fetch(`${API_BASE}/agents/hooks/${provider}/install`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`request failed (${res.status}): install ${provider} hooks`);
+  }
+  return res.json() as Promise<AgentHookProviderStatus>;
 }
 
 export function fetchConfig(): Promise<ConfigResponse> {

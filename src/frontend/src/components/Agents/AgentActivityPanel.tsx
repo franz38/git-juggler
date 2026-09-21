@@ -41,7 +41,7 @@ export function AgentActivityPanel() {
         </Show>
       </div>
       <div class="agent-discovery-row">
-        <span>Auto-discovering <span class="mono">claude</span> and <span class="mono">opencode</span> processes</span>
+        <span>Reading hook events from <span class="mono">~/.local/share/git-juggler/agent-events.jsonl</span></span>
       </div>
       <div class="agent-refresh-row">
         <button type="button" disabled={agentActivityLoading()} onClick={() => void refreshAgentActivity()}>
@@ -66,12 +66,12 @@ export function AgentActivityPanel() {
               {activeScans().length} active agent{activeScans().length === 1 ? "" : "s"}, {activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0)} worktree{activeScans().reduce((sum, scan) => sum + scan.worktrees.length, 0) === 1 ? "" : "s"}
             </div>
             <Show when={inactiveAgentCount() > 0}>
-              <div class="agent-empty">{inactiveAgentCount()} discovered agent process{inactiveAgentCount() === 1 ? "" : "es"} with no Git worktree activity hidden</div>
+              <div class="agent-empty">{inactiveAgentCount()} hook session{inactiveAgentCount() === 1 ? "" : "s"} with no Git worktree activity hidden</div>
             </Show>
             <For each={activeScans()} fallback={<div class="agent-empty">No active Git worktrees detected</div>}>
               {(scan) => (
                 <div class="agent-scan-card">
-                  <div class="agent-scan-title">PID {scan.agent_pid}</div>
+                  <div class="agent-scan-title">Hook session {Math.abs(scan.agent_pid)}</div>
                   <For each={activity().agents.filter((agent) => agent.pid === scan.agent_pid)}>
                     {(agent) => <div class="agent-command" title={agent.command_line}>{agent.command_line}</div>}
                   </For>

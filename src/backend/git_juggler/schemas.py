@@ -74,6 +74,21 @@ class BrowseDirectoryResponse(BaseModel):
     entries: list[BrowseEntry]
 
 
+class AgentHookProviderStatusResponse(BaseModel):
+    provider: str
+    installed: bool
+    config_path: str
+    event_path: str
+    snippet: str
+    description: str
+    error: str | None = None
+
+
+class AgentHooksResponse(BaseModel):
+    claude: AgentHookProviderStatusResponse
+    opencode: AgentHookProviderStatusResponse
+
+
 class PersonInfo(BaseModel):
     name: str
     email: str

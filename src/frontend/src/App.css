@@ -406,6 +406,66 @@
   margin: 2px 0 0;
 }
 
+.agent-hooks-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-hook-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.agent-hook-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 12px;
+}
+
+.agent-hook-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-hook-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.agent-hook-status.installed {
+  border-color: rgba(63, 185, 80, 0.45);
+  color: #7ee787;
+}
+
+.agent-hook-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.agent-hook-snippet {
+  max-height: 220px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
 .theme-options {
   display: flex;
   gap: 6px;

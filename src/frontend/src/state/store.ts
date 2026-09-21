@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { browseDirectory, fetchAgentActivity, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, updateConfig } from "../api/client";
-import type { AgentActivityResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
+import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, RepoGroupConfig, RepoSummary } from "../api/types";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
 export const EXPANDED_BASE_HEIGHT = 168;
@@ -296,6 +296,11 @@ const [agentActivityError, setAgentActivityError] = createSignal<string | null>(
 const [agentActivityPolling, setAgentActivityPolling] = createSignal(true);
 export { agentActivity, agentActivityLoading, agentActivityError, agentActivityPolling };
 
+const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(null);
+const [agentHooksLoading, setAgentHooksLoading] = createSignal(false);
+const [agentHooksError, setAgentHooksError] = createSignal<string | null>(null);
+export { agentHooks, agentHooksLoading, agentHooksError };
+
 // When disabled, no agent data is fetched (refreshAgentActivity below
 // no-ops) or shown (AgentActivityPanel isn't rendered at all) anywhere.
 export function setAgentsEnabled(enabled: boolean): void {
@@ -353,6 +358,41 @@ export async function refreshAgentActivity(): Promise<void> {
     setAgentActivityError((e as Error).message);
   } finally {
     setAgentActivityLoading(false);
+  }
+}
+
+export async function refreshAgentHooks(): Promise<void> {
+  if (agentHooksLoading()) return;
+  setAgentHooksLoading(true);
+  setAgentHooksError(null);
+  try {
+    setAgentHooks(await fetchAgentHooks());
+  } catch (e) {
+    setAgentHooksError((e as Error).message);
+  } finally {
+    setAgentHooksLoading(false);
+  }
+}
+
+export async function installAgentHooks(provider: "claude" | "opencode"): Promise<void> {
+  if (agentHooksLoading()) return;
+  setAgentHooksLoading(true);
+  setAgentHooksError(null);
+  try {
+    const status: AgentHookProviderStatus = await installAgentHook(provider);
+    const current = agentHooks();
+    if (!current) {
+      setAgentHooks(await fetchAgentHooks());
+      return;
+    }
+    setAgentHooks({
+      claude: provider === "claude" ? status : current.claude,
+      opencode: provider === "opencode" ? status : current.opencode,
+    });
+  } catch (e) {
+    setAgentHooksError((e as Error).message);
+  } finally {
+    setAgentHooksLoading(false);
   }
 }
 

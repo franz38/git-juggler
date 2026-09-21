@@ -1,8 +1,11 @@
 import { For, Index, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import type { GitHubConfig, JenkinsConfig } from "../../api/types";
+import type { AgentHookProviderStatus, GitHubConfig, JenkinsConfig } from "../../api/types";
 import {
   KEY_BINDING_ACTIONS,
   addRepoPath,
+  agentHooks,
+  agentHooksError,
+  agentHooksLoading,
   agentsEnabled,
   branchColorMode,
   closeMenu,
@@ -11,11 +14,13 @@ import {
   formatKeyBinding,
   githubConfig,
   githubConfigError,
+  installAgentHooks,
   jenkinsConfig,
   jenkinsConfigError,
   keyBindings,
   menuOpen,
   openDirectoryBrowser,
+  refreshAgentHooks,
   removeRepoPath,
   repoPaths,
   repoPathsError,
@@ -51,6 +56,42 @@ const emptyJenkinsConfig: JenkinsConfig = {
   build_limit: 50,
   jobs: [],
 };
+
+function HookSetupCard(props: { title: string; status: AgentHookProviderStatus; onInstall: () => void }) {
+  const [copied, setCopied] = createSignal(false);
+  const copySnippet = async () => {
+    await navigator.clipboard.writeText(props.status.snippet);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div class="agent-hook-card">
+      <div class="agent-hook-card-heading">
+        <div>
+          <div class="menu-setting-label">{props.title}</div>
+          <p class="menu-hint">{props.status.description}</p>
+        </div>
+        <span class={props.status.installed ? "agent-hook-status installed" : "agent-hook-status"}>{props.status.installed ? "Installed" : "Not installed"}</span>
+      </div>
+      <div class="agent-hook-meta">Config: <span class="mono">{props.status.config_path}</span></div>
+      <div class="agent-hook-meta">Events: <span class="mono">{props.status.event_path}</span></div>
+      <Show when={props.status.error}>
+        {(error) => <div class="menu-error">{error()}</div>}
+      </Show>
+      <div class="menu-actions">
+        <button type="button" class="menu-primary-button" disabled={agentHooksLoading()} onClick={props.onInstall}>
+          Auto-install
+        </button>
+        <button type="button" class="menu-secondary-button" onClick={() => void copySnippet()}>
+          {copied() ? "Copied" : "Copy config"}
+        </button>
+      </div>
+      <p class="menu-hint">Manual setup: add this configuration globally, then restart existing agent sessions.</p>
+      <pre class="agent-hook-snippet"><code>{props.status.snippet}</code></pre>
+    </div>
+  );
+}
 
 export function MainMenu() {
   const [activeSection, setActiveSection] = createSignal<Section>("repos");
@@ -102,6 +143,12 @@ export function MainMenu() {
   createEffect(() => {
     const config = githubConfig();
     setGitHubDraft({ ...config, repos: config.repos.map((repo) => ({ ...repo })) });
+  });
+
+  createEffect(() => {
+    if (menuOpen() && activeSection() === "agents" && !agentHooks() && !agentHooksLoading()) {
+      void refreshAgentHooks();
+    }
   });
 
   createEffect(() => {
@@ -520,6 +567,32 @@ export function MainMenu() {
                   onChange={(e) => setAgentsEnabled(e.currentTarget.checked)}
                 />
               </label>
+
+              <div class="agent-hooks-section">
+                <div class="menu-setting-main">
+                  <div class="menu-setting-label">High-confidence hooks</div>
+                  <p class="menu-hint">
+                    Hooks append JSONL events to git-juggler so short-lived tool calls can be attributed to the worktree they actually
+                    touch. Agent activity is sourced from these hook events only.
+                  </p>
+                </div>
+                <div class="menu-actions">
+                  <button type="button" class="menu-secondary-button" disabled={agentHooksLoading()} onClick={() => void refreshAgentHooks()}>
+                    {agentHooksLoading() ? "Loading..." : "Refresh hook status"}
+                  </button>
+                </div>
+                <Show when={agentHooksError()}>
+                  {(error) => <div class="menu-error">{error()}</div>}
+                </Show>
+                <Show when={agentHooks()} fallback={<div class="menu-hint">Open this section to load hook setup status.</div>}>
+                  {(hooks) => (
+                    <div class="agent-hook-grid">
+                      <HookSetupCard title="Claude" status={hooks().claude} onInstall={() => void installAgentHooks("claude")} />
+                      <HookSetupCard title="OpenCode" status={hooks().opencode} onInstall={() => void installAgentHooks("opencode")} />
+                    </div>
+                  )}
+                </Show>
+              </div>
             </Show>
             <Show when={activeSection() === "appearance"}>
               <h3>Appearance</h3>

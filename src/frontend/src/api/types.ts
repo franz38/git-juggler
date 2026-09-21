@@ -202,3 +202,18 @@ export interface AgentActivityResponse {
   scans: AgentRepositoryScan[];
   scanned_at: number;
 }
+
+export interface AgentHookProviderStatus {
+  provider: "claude" | "opencode";
+  installed: boolean;
+  config_path: string;
+  event_path: string;
+  snippet: string;
+  description: string;
+  error: string | null;
+}
+
+export interface AgentHooksResponse {
+  claude: AgentHookProviderStatus;
+  opencode: AgentHookProviderStatus;
+}

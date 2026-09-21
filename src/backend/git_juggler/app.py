@@ -8,22 +8,21 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
-from .agent_tracking import AgentRepositoryTracker
-from .agent_tracking.agent_process_discovery import AgentProcessDiscovery
+from .agent_hook_events import AgentHookEventReader
+from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
 from .agent_tracking.agent_repository_tracker import AgentRepositoryScan
 from .browse import browse_directory
 from .ci import get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
 from .repos import list_repos, resolve_repo_path
-from .schemas import AgentActivityResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
+from .schemas import AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, RepoStatusResponse, RepoSummary
 from .terminal import run_terminal_session
 
 
 def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     app = FastAPI(title="git-juggler")
     app.state.root_path = root_path
-    app.state.agent_trackers = {}
     config.ensure_seeded(root_path)
 
     # Only needed for local dev, when the Vite dev server (a different origin)
@@ -154,30 +153,38 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             scanned_at=scan.scanned_at,
         )
 
-    def _tracker_for_agent(agent_pid: int) -> AgentRepositoryTracker:
-        trackers: dict[int, AgentRepositoryTracker] = app.state.agent_trackers
-        tracker = trackers.get(agent_pid)
-        if tracker is None:
-            tracker = AgentRepositoryTracker()
-            trackers[agent_pid] = tracker
-        return tracker
-
-    @app.get("/api/agents/{agent_pid}/worktrees", response_model=AgentRepositoryScanResponse)
-    def api_agent_worktrees(agent_pid: int) -> AgentRepositoryScanResponse:
-        if agent_pid <= 0:
-            raise HTTPException(status_code=400, detail="agent pid must be positive")
-        return _agent_scan_response(_tracker_for_agent(agent_pid).scan(agent_pid))
+    def _hook_status_response(status) -> AgentHookProviderStatusResponse:
+        return AgentHookProviderStatusResponse(**status.__dict__)
 
     @app.get("/api/agents/activity", response_model=AgentActivityResponse)
     def api_agent_activity() -> AgentActivityResponse:
-        agents = AgentProcessDiscovery().discover()
-        scans = [_agent_scan_response(_tracker_for_agent(agent.pid).scan(agent.pid)) for agent in agents]
+        hook_scans = AgentHookEventReader().recent_scans()
+        scans = [_agent_scan_response(scan) for scan in hook_scans]
         scanned_at = max((scan.scanned_at for scan in scans), default=0)
         return AgentActivityResponse(
-            agents=[agent.__dict__ for agent in agents],
+            agents=[
+                {"pid": scan.agent_pid, "command_line": "hook activity", "matched_pattern": "hook"}
+                for scan in hook_scans
+            ],
             scans=scans,
             scanned_at=scanned_at,
         )
+
+    @app.get("/api/agents/hooks", response_model=AgentHooksResponse)
+    def api_agent_hooks() -> AgentHooksResponse:
+        statuses = hooks_status()
+        return AgentHooksResponse(
+            claude=_hook_status_response(statuses["claude"]),
+            opencode=_hook_status_response(statuses["opencode"]),
+        )
+
+    @app.post("/api/agents/hooks/claude/install", response_model=AgentHookProviderStatusResponse)
+    def api_install_claude_hooks() -> AgentHookProviderStatusResponse:
+        return _hook_status_response(install_claude_hooks())
+
+    @app.post("/api/agents/hooks/opencode/install", response_model=AgentHookProviderStatusResponse)
+    def api_install_opencode_hooks() -> AgentHookProviderStatusResponse:
+        return _hook_status_response(install_opencode_hooks())
 
     @app.websocket("/ws/terminal")
     async def ws_terminal(websocket: WebSocket) -> None:
