@@ -88,10 +88,14 @@ list of things to implement. It is split by a marker line:
 
 When the user asks to implement the todo list (e.g. "implement todo"):
 
-1. Read `todo.txt` and take all the notes after the marker.
+1. Do the whole activity in a dedicated worktree (e.g. `todo`), not in the
+   primary checkout: enter it before touching any code, and commit there.
+   Read `todo.txt` from the primary checkout (it's gitignored, so it isn't
+   present in worktrees) and take all the notes after the marker.
 2. Implement them (following the rest of this file's guidelines).
 3. Move the marker line down so it sits after the notes just implemented
    (i.e. those notes now live above it), leaving any not-implemented notes
-   below it. Edit only the marker's position; don't rewrite the user's notes.
+   below it. Edit only the marker's position; don't rewrite the user's notes. Since `todo.txt` is
+   gitignored, this edit is made on the primary checkout's copy.
 
 If `todo.txt` doesn't exist, create it containing just the marker line.
