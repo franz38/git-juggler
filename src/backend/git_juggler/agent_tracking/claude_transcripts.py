@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from .text import LAST_PROMPT_MAX_CHARS, shorten_prompt
 
 
 CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 TAIL_BYTES = 512 * 1024
 HEAD_BYTES = 64 * 1024
-LAST_PROMPT_MAX_CHARS = 1000
 
 
 @dataclass(frozen=True)
@@ -65,12 +65,6 @@ def _read_chunk(path: Path, tail: bool, size: int) -> list[str]:
         return []
 
 
-def _shorten(text: str) -> str | None:
-    if not text:
-        return None
-    return text if len(text) <= LAST_PROMPT_MAX_CHARS else text[: LAST_PROMPT_MAX_CHARS - 1].rstrip() + "…"
-
-
 def read_transcript_info(path: Path) -> TranscriptInfo:
     """Newest-wins summary of a session transcript.
 
@@ -93,7 +87,7 @@ def read_transcript_info(path: Path) -> TranscriptInfo:
         elif kind == "permission-mode" and isinstance(record.get("permissionMode"), str):
             permission_mode = record["permissionMode"]
         elif kind == "last-prompt" and isinstance(record.get("lastPrompt"), str):
-            last_prompt = _shorten(re.sub(r"\s+", " ", record["lastPrompt"]).strip())
+            last_prompt = shorten_prompt(record["lastPrompt"])
         elif kind == "worktree-state":
             state = record.get("worktreeSession")
             worktree = state if isinstance(state, dict) else None

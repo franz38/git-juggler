@@ -201,6 +201,7 @@ class AgentSessionDetails(BaseModel):
     title: str | None = None
     model: str | None = None
     permission_mode: str | None = None
+    agent: str | None = None
     last_prompt: str | None = None
     worktree_path: str | None = None
     worktree_name: str | None = None

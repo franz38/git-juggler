@@ -115,7 +115,7 @@ class SessionDetailsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            reader = AgentHookEventReader(event_path=events, claude_sessions_dir=sessions, claude_projects_dir=projects)
+            reader = AgentHookEventReader(event_path=events, claude_sessions_dir=sessions, claude_projects_dir=projects, opencode_db_path=None)
 
             with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
                 scan = reader.recent_scans()[0]

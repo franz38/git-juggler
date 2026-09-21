@@ -185,6 +185,7 @@ export interface AgentSessionDetails {
   title: string | null;
   model: string | null;
   permission_mode: string | null;
+  agent: string | null;
   last_prompt: string | null;
   worktree_path: string | null;
   worktree_name: string | null;

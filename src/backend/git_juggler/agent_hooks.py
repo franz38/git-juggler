@@ -98,7 +98,9 @@ def claude_snippet() -> str:
     return json.dumps(_claude_snippet_dict(), indent=2)
 
 
-OPENCODE_PLUGIN = f'''// git-juggler global activity hook. Managed by git-juggler.
+OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v2"
+
+OPENCODE_PLUGIN = f'''// git-juggler global activity hook. Managed by git-juggler. {OPENCODE_PLUGIN_MARKER}
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -113,9 +115,10 @@ function append(phase, payload = {{}}) {{
       phase,
       cwd: payload.cwd,
       pid: process.pid,
+      agent_pid: process.pid,
       timestamp: Date.now(),
       raw: payload,
-    }}) + "\n")
+    }}) + "\\n")
   }} catch {{
     // Hooks must never interrupt an agent action.
   }}
@@ -125,10 +128,10 @@ export const GitJugglerPlugin = async (ctx) => {{
   append("SessionStart", {{ cwd: ctx.directory, worktree: ctx.worktree }})
   return {{
     "tool.execute.before": async (input, output) => {{
-      append("PreToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, tool: input.tool, args: output.args }})
+      append("PreToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID, tool: input.tool, args: output.args }})
     }},
     "tool.execute.after": async (input, output) => {{
-      append("PostToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, tool: input.tool, args: output.args, result: output.result }})
+      append("PostToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID, tool: input.tool, args: output.args, result: output.result }})
     }},
     event: async (input) => {{
       if (input.event?.type?.startsWith("session.")) {{
@@ -205,7 +208,9 @@ def opencode_status() -> HookProviderStatus:
     error = None
     installed = False
     try:
-        installed = OPENCODE_PLUGIN_PATH.exists() and "GitJugglerPlugin" in OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
+        text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8") if OPENCODE_PLUGIN_PATH.exists() else ""
+        # The marker rules out plugins installed before session ids were recorded.
+        installed = "GitJugglerPlugin" in text and OPENCODE_PLUGIN_MARKER in text
     except OSError as exc:
         error = str(exc)
     return HookProviderStatus(

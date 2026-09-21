@@ -17,6 +17,7 @@ from .agent_tracking.activity_models import ActivityEvidence, AgentRepositorySca
 from .agent_tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
 from .agent_tracking.claude_transcripts import CLAUDE_PROJECTS_DIR, TranscriptInfo, find_transcript, read_transcript_info, transcript_signature
 from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
+from .agent_tracking.opencode_sessions import OPENCODE_DB_PATH, OpenCodeSession, db_signature, read_session
 
 
 HOOK_ACTIVITY_TTL_MS = 120_000
@@ -53,11 +54,13 @@ def _pid_alive(pid: int) -> bool:
 
 
 class AgentHookEventReader:
-    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR, claude_projects_dir: Path | None = CLAUDE_PROJECTS_DIR) -> None:
+    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR, claude_projects_dir: Path | None = CLAUDE_PROJECTS_DIR, opencode_db_path: Path | None = OPENCODE_DB_PATH) -> None:
         self.event_path = event_path
         # None disables the Claude session registry (hooks-only behaviour).
         self.claude_sessions_dir = claude_sessions_dir
         self.claude_projects_dir = claude_projects_dir
+        self.opencode_db_path = opencode_db_path
+        self._opencode_cache: dict[str, tuple[tuple, OpenCodeSession | None]] = {}
         self._transcript_paths: dict[str, Path] = {}
         self._transcript_cache: dict[Path, tuple[tuple[int, int], TranscriptInfo]] = {}
         self.git_resolver = git_resolver or GitResolver()
@@ -72,7 +75,8 @@ class AgentHookEventReader:
 
         A worktree is "active" while its latest event is within the TTL and
         "idle" afterwards; the session disappears on its end hook (or when
-        its process is gone). For Claude, ~/.claude/sessions is authoritative
+        its process is gone). For OpenCode, its database supplies the row (a
+        missing or archived one means closed), busy/idle and the details. For Claude, ~/.claude/sessions is authoritative
         when present: a session with no card there is closed, the card's pid
         is the real process, and its busy/idle status overrides the timer.
 
@@ -82,7 +86,7 @@ class AgentHookEventReader:
         always recomputes.
         """
         observed_at = now or int(time.time() * 1000)
-        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir), self._transcripts_signature())
+        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir), self._transcripts_signature(), db_signature(self.opencode_db_path))
         with self._lock:
             if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
                 return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
@@ -128,6 +132,7 @@ class AgentHookEventReader:
                 sessions.setdefault(self._session_key(event), []).append(event)
 
         registry = read_registry(self.claude_sessions_dir)
+        opencode_signature = db_signature(self.opencode_db_path)
         scans: list[AgentRepositoryScan] = []
         next_change: int | None = None
         for session_key, session_events in sessions.items():
@@ -138,15 +143,26 @@ class AgentHookEventReader:
             provider = session_key[0]
             session_id = session_events[-1].session_id
             card: ClaudeSession | None = None
+            opencode_session: OpenCodeSession | None = None
+            busy: bool | None = None  # what the agent itself reports, when it does
             if provider == "claude" and registry is not None and session_id:
                 card = registry.get(session_id)
                 if card is None or not _pid_alive(card.pid):
                     continue
                 process_pid: int | None = card.pid
+                busy = card.status == "busy" if card.status in ("busy", "idle") else None
             else:
                 process_pid = next((event.agent_pid for event in reversed(session_events) if event.agent_pid is not None), None)
                 if process_pid is not None and not _pid_alive(process_pid):
                     continue
+                if provider == "opencode" and opencode_signature is not None:
+                    if not session_id:
+                        continue  # the plugin's start event: an instance, not yet a session
+                    opencode_session = self._opencode_session(session_id, opencode_signature)
+                    # Deleted, archived, or a sub-agent's session (its parent is what the user sees).
+                    if opencode_session is None or opencode_session.archived or opencode_session.is_child:
+                        continue
+                    busy = opencode_session.busy
 
             activities: dict[str, AgentWorktreeActivity] = {}
             for event in session_events[-SESSION_EVENT_LIMIT:]:
@@ -185,13 +201,17 @@ class AgentHookEventReader:
                     next_change = flip_at if next_change is None else min(next_change, flip_at)
                 else:
                     activity.state = "idle"
-            if card is not None and card.status == "idle":
+            if busy is False:
                 for activity in activities.values():
                     activity.state = "idle"
-            elif card is not None and card.status == "busy":
+            elif busy is True:
                 # Working right now: the most recently touched worktree is where.
                 max(activities.values(), key=lambda item: item.last_activity).state = "active"
-            details = self._session_details(card, session_id) if card is not None and session_id else None
+            details: SessionDetails | None = None
+            if card is not None and session_id:
+                details = self._session_details(card, session_id)
+            elif opencode_session is not None:
+                details = self._opencode_details(opencode_session)
             if details is not None and details.worktree_path:
                 # The worktree the session itself declares (Claude's worktree-state record).
                 declared = self.git_resolver.resolve_path(details.worktree_path)
@@ -207,7 +227,7 @@ class AgentHookEventReader:
                     provider=provider,
                     session_id=session_id,
                     process_pid=process_pid,
-                    name=card.name if card is not None else None,
+                    name=card.name if card is not None else (opencode_session.title if opencode_session is not None else None),
                     details=details,
                 )
             )
@@ -233,6 +253,27 @@ class AgentHookEventReader:
             worktree_path=transcript.worktree_path,
             worktree_name=transcript.worktree_name,
             worktree_branch=transcript.worktree_branch,
+        )
+
+    def _opencode_session(self, session_id: str, signature: tuple) -> OpenCodeSession | None:
+        cached = self._opencode_cache.get(session_id)
+        if cached is None or cached[0] != signature:
+            cached = (signature, read_session(self.opencode_db_path, session_id))
+            self._opencode_cache[session_id] = cached
+        return cached[1]
+
+    def _opencode_details(self, session: OpenCodeSession) -> SessionDetails:
+        return SessionDetails(
+            started_at=session.time_created,
+            status_updated_at=session.time_updated,
+            version=session.version,
+            title=session.title,
+            model=session.model,
+            agent=session.agent,
+            last_prompt=session.last_prompt,
+            # The directory the session runs in; its worktree becomes the "home" one.
+            worktree_path=session.directory,
+            worktree_name=Path(session.directory).name if session.directory else None,
         )
 
     def _session_key(self, event: HookEvent) -> tuple[str, str]:
@@ -355,7 +396,7 @@ class AgentHookEventReader:
         return None
 
     def _session_id(self, raw: dict[str, Any]) -> str | None:
-        for key in ("session_id", "sessionId"):
+        for key in ("session_id", "sessionId", "sessionID"):
             value = raw.get(key)
             if isinstance(value, str):
                 return value
@@ -364,6 +405,15 @@ class AgentHookEventReader:
             session = event.get("sessionID") or event.get("session_id") or event.get("sessionId")
             if isinstance(session, str):
                 return session
+            # OpenCode session.* events: {type, properties: {sessionID | info: {id}}}
+            properties = event.get("properties")
+            if isinstance(properties, dict):
+                session = properties.get("sessionID")
+                if not isinstance(session, str) and isinstance(event.get("type"), str) and event["type"].startswith("session."):
+                    info = properties.get("info")
+                    session = info.get("id") if isinstance(info, dict) else None
+                if isinstance(session, str):
+                    return session
         return None
 
     def _raw_string(self, raw: dict[str, Any], key: str) -> str | None:

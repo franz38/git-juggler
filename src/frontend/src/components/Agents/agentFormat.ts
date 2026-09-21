@@ -31,11 +31,13 @@ export function sessionIdentity(scan: AgentRepositoryScan): string {
 }
 
 // "claude-sonnet-5 · auto · bg · started 2h ago · idle for 14m · v2.1.278"
+// (OpenCode: "gpt-5.5 · build · started 2h ago · idle for 14m · v1.18.31")
 export function sessionDetailsLine(scan: AgentRepositoryScan): string {
   const details = scan.details;
   if (!details) return "";
   return [
     details.model,
+    details.agent,
     details.permission_mode,
     details.kind,
     details.started_at ? `started ${formatAge(details.started_at)} ago` : null,
