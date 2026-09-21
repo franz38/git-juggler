@@ -772,6 +772,8 @@
   font-size: 11px;
   font-style: italic;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .agent-hover-worktree {

@@ -30,7 +30,7 @@ class TranscriptInfoTest(unittest.TestCase):
                     {"type": "ai-title", "aiTitle": "new title"},
                     {"type": "permission-mode", "permissionMode": "auto"},
                     {"type": "assistant", "message": {"model": "model-b"}},
-                    {"type": "last-prompt", "lastPrompt": "hello\n   world " + "x" * 500},
+                    {"type": "last-prompt", "lastPrompt": "hello\n   world " + "x" * 2000},
                 ),
                 encoding="utf-8",
             )

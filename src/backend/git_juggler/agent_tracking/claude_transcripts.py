@@ -11,7 +11,7 @@ CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 TAIL_BYTES = 512 * 1024
 HEAD_BYTES = 64 * 1024
-LAST_PROMPT_MAX_CHARS = 120
+LAST_PROMPT_MAX_CHARS = 1000
 
 
 @dataclass(frozen=True)
