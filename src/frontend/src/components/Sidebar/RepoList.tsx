@@ -168,10 +168,10 @@ function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) 
   const isPinned = () => pinnedRepos().has(props.state.repo.path);
 
   async function createGroupForRepo(): Promise<void> {
+    props.onClose();
     const name = window.prompt("New group name");
     if (!name) return;
     await createRepoGroup(name, props.state.repo.path);
-    props.onClose();
   }
 
   return (
@@ -186,6 +186,7 @@ function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) 
           class="repo-bookmark-menu-item"
           onClick={() => {
             void setRepoPinned(props.state.repo.path, !isPinned());
+            props.onClose();
           }}
         >
           <span>{isPinned() ? "✓" : ""}</span>
@@ -202,6 +203,7 @@ function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) 
                   class="repo-bookmark-menu-item"
                   onClick={() => {
                     void setRepoInGroup(group.id, props.state.repo.path, !inGroup());
+                    props.onClose();
                   }}
                 >
                   <span>{inGroup() ? "✓" : ""}</span>
