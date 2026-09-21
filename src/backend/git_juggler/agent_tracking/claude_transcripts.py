@@ -65,6 +65,12 @@ def _read_chunk(path: Path, tail: bool, size: int) -> list[str]:
         return []
 
 
+def _shorten(text: str) -> str | None:
+    if not text:
+        return None
+    return text if len(text) <= LAST_PROMPT_MAX_CHARS else text[: LAST_PROMPT_MAX_CHARS - 1].rstrip() + "…"
+
+
 def read_transcript_info(path: Path) -> TranscriptInfo:
     """Newest-wins summary of a session transcript.
 
@@ -87,7 +93,7 @@ def read_transcript_info(path: Path) -> TranscriptInfo:
         elif kind == "permission-mode" and isinstance(record.get("permissionMode"), str):
             permission_mode = record["permissionMode"]
         elif kind == "last-prompt" and isinstance(record.get("lastPrompt"), str):
-            last_prompt = re.sub(r"\s+", " ", record["lastPrompt"]).strip()[:LAST_PROMPT_MAX_CHARS] or None
+            last_prompt = _shorten(re.sub(r"\s+", " ", record["lastPrompt"]).strip())
         elif kind == "worktree-state":
             state = record.get("worktreeSession")
             worktree = state if isinstance(state, dict) else None

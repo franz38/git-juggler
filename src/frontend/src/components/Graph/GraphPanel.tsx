@@ -1,9 +1,8 @@
-import { For, createMemo } from "solid-js";
-import type { AgentWorktreeActivity } from "../../api/types";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   COLLAPSED_ROW_HEIGHT,
   activeRepo,
-  agentActivityByRepositoryId,
+  agentActivity,
   checkedOutBranches,
   ciRuns,
   currentBranch,
@@ -20,6 +19,7 @@ import {
   uncommittedRowHeight,
   upstreamCommit,
 } from "../../state/store";
+import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
 import { colorForBranch, TAG_COLOR } from "./branchColor";
 import { computeColumns } from "./computeColumns";
 
@@ -60,26 +60,6 @@ function horizontalFirstPath(x1: number, y1: number, x2: number, y2: number): st
   return `M ${x1},${y1} L ${x2 - sign * radius},${y1} Q ${x2},${y1} ${x2},${y1 + radius} L ${x2},${y2}`;
 }
 
-function formatAgentTooltip(activities: AgentWorktreeActivity[] | undefined): string {
-  if (!activities?.length) return "Agent activity";
-  const processCount = activities.reduce((sum, activity) => sum + activity.process_ids.length, 0);
-  return [
-    `Agent activity: ${processCount} process(es)`,
-    ...activities.map((activity) => {
-      const evidenceTypes = [...new Set(activity.evidence.map((evidence) => evidence.type))].join(", ") || "none";
-      return [
-        `State: ${activity.state}`,
-        `Worktree: ${activity.worktree_path}`,
-        `Branch: ${activity.branch ?? "detached"}`,
-        `Commit: ${activity.commit.slice(0, 7)}`,
-        `PIDs: ${activity.process_ids.join(", ") || "none"}`,
-        `Score: ${activity.activity_score}`,
-        `Evidence: ${evidenceTypes}`,
-      ].join("\n");
-    }),
-  ].join("\n\n");
-}
-
 export function GraphPanel() {
   const chronological = createMemo(() => filteredCommits());
   const lanes = createMemo(() => computeColumns(chronological(), currentBranch(), checkedOutBranches()));
@@ -91,18 +71,31 @@ export function GraphPanel() {
     }
     return hashes;
   });
-  const agentActivitiesByHash = createMemo(() => {
+  const agentEntriesByHash = createMemo(() => {
     const repoId = activeRepo();
     const repo = repoId ? repos().find((item) => item.id === repoId) : undefined;
-    const byHash = new Map<string, AgentWorktreeActivity[]>();
+    const byHash = new Map<string, AgentHoverEntry[]>();
     if (!repo) return byHash;
-    for (const activity of agentActivityByRepositoryId().get(repo.repository_id) ?? []) {
-      if (!commitByHash().has(activity.commit)) continue;
-      const items = byHash.get(activity.commit) ?? [];
-      items.push(activity);
-      byHash.set(activity.commit, items);
+    for (const scan of agentActivity()?.scans ?? []) {
+      for (const activity of scan.worktrees) {
+        if (activity.repository_id !== repo.repository_id || !commitByHash().has(activity.commit)) continue;
+        const items = byHash.get(activity.commit) ?? [];
+        items.push({ scan, activity });
+        byHash.set(activity.commit, items);
+      }
     }
     return byHash;
+  });
+  const [hoveredAgentCommit, setHoveredAgentCommit] = createSignal<{ hash: string; anchor: DOMRect } | null>(null);
+  const hoveredEntries = () => {
+    const hovered = hoveredAgentCommit();
+    return hovered ? agentEntriesByHash().get(hovered.hash) ?? [] : [];
+  };
+  // The card is positioned from the commit's on-screen rect, so scrolling would strand it.
+  onMount(() => {
+    const clear = () => setHoveredAgentCommit(null);
+    window.addEventListener("scroll", clear, true);
+    onCleanup(() => window.removeEventListener("scroll", clear, true));
   });
 
   const isFetching = createMemo(() => {
@@ -248,6 +241,7 @@ export function GraphPanel() {
   });
 
   return (
+    <>
     <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayout().total}px` }}>
       {hasDirtyGhost() && headCommit() && (
         <g class="dirty-ghost">
@@ -284,10 +278,14 @@ export function GraphPanel() {
         <For each={rowLayout().order}>
           {(c) => {
             const isCheckedOut = () => headCommit() === c.hash;
-            const agentActivities = () => agentActivitiesByHash().get(c.hash);
+            const agentEntries = () => agentEntriesByHash().get(c.hash);
+            const hasActiveAgent = () => agentEntries()?.some((entry) => entry.activity.state === "active") ?? false;
             return (
-              <g>
-                {agentActivities()?.length && <title>{formatAgentTooltip(agentActivities())}</title>}
+              <g
+                onMouseEnter={(e) => agentEntries()?.length && setHoveredAgentCommit({ hash: c.hash, anchor: e.currentTarget.getBoundingClientRect() })}
+                onMouseLeave={() => setHoveredAgentCommit((current) => (current?.hash === c.hash ? null : current))}
+              >
+                {agentEntries()?.length && <circle class="agent-hover-target" cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 9} fill="transparent" />}
                 <circle
                   cx={xFor(c.hash)}
                   cy={yFor(c.hash)}
@@ -312,10 +310,10 @@ export function GraphPanel() {
                     <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="0.9s" repeatCount="indefinite" />
                   </circle>
                 )}
-                {agentActivities()?.length && (
-                  <g class="agent-active-marker" classList={{ idle: !agentActivities()!.some((activity) => activity.state === "active") }}>
+                {agentEntries()?.length && (
+                  <g class="agent-active-marker" classList={{ idle: !hasActiveAgent() }}>
                     <circle cx={xFor(c.hash)} cy={yFor(c.hash)} r={DOT_RADIUS + 7} fill="none" stroke={AGENT_ACTIVE_COLOR} stroke-width="2" stroke-dasharray="4 3">
-                      {agentActivities()!.some((activity) => activity.state === "active") && (
+                      {hasActiveAgent() && (
                         <animateTransform attributeName="transform" type="rotate" from={`0 ${xFor(c.hash)} ${yFor(c.hash)}`} to={`360 ${xFor(c.hash)} ${yFor(c.hash)}`} dur="1.4s" repeatCount="indefinite" />
                       )}
                     </circle>
@@ -328,5 +326,13 @@ export function GraphPanel() {
         </For>
       </g>
     </svg>
+    <Show when={hoveredAgentCommit()}>
+      {(hovered) => (
+        <Show when={hoveredEntries().length > 0}>
+          <AgentHoverCard entries={hoveredEntries()} anchor={hovered().anchor} />
+        </Show>
+      )}
+    </Show>
+    </>
   );
 }

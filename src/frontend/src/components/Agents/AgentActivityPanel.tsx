@@ -7,21 +7,7 @@ import {
   refreshAgentActivity,
   setAgentActivityPollingEnabled,
 } from "../../state/store";
-
-function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function formatAge(ms: number): string {
-  const minutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
-}
-
-function shortCommit(commit: string): string {
-  return commit.slice(0, 8);
-}
+import { formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
 
 export function AgentActivityPanel() {
   const activeScans = createMemo(() => agentActivity()?.scans.filter((scan) => scan.worktrees.length > 0) ?? []);
@@ -81,29 +67,12 @@ export function AgentActivityPanel() {
               {(scan) => (
                 <div class="agent-scan-card">
                   <div class="agent-scan-title" title={scan.details?.last_prompt ? `Last prompt: ${scan.details.last_prompt}` : (scan.session_id ?? undefined)}>
-                    {scan.details?.title ?? scan.name ?? scan.session_id?.slice(0, 8) ?? `session ${Math.abs(scan.agent_pid)}`}
+                    {sessionTitle(scan)}
                     <span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span>
                   </div>
-                  <div class="agent-worktree-meta">
-                    {scan.provider || "agent"}
-                    {scan.process_pid !== null ? ` · pid ${scan.process_pid}` : ""}
-                    {scan.session_id ? ` · ${scan.session_id.slice(0, 8)}` : ""}
-                  </div>
-                  <Show when={scan.details}>
-                    {(details) => (
-                      <div class="agent-worktree-meta">
-                        {[
-                          details().model,
-                          details().permission_mode,
-                          details().kind,
-                          details().started_at ? `started ${formatAge(details().started_at!)} ago` : null,
-                          details().status_updated_at ? `${scan.state} for ${formatAge(details().status_updated_at!)}` : null,
-                          details().version ? `v${details().version}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </div>
-                    )}
+                  <div class="agent-worktree-meta">{sessionIdentity(scan)}</div>
+                  <Show when={sessionDetailsLine(scan)}>
+                    <div class="agent-worktree-meta">{sessionDetailsLine(scan)}</div>
                   </Show>
                   <For each={activity().agents.filter((agent) => agent.pid === scan.agent_pid)}>
                     {(agent) => <div class="agent-command" title={agent.command_line}>{agent.command_line}</div>}

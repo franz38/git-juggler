@@ -41,6 +41,7 @@ class TranscriptInfoTest(unittest.TestCase):
             self.assertEqual((info.worktree_path, info.worktree_name, info.worktree_branch), ("/w/wt", "wt", "feat"))
             self.assertTrue(info.last_prompt.startswith("hello world x"))
             self.assertEqual(len(info.last_prompt), claude_transcripts.LAST_PROMPT_MAX_CHARS)
+            self.assertTrue(info.last_prompt.endswith("…"))
 
     def test_reads_only_head_and_tail_of_a_huge_file_and_survives_cut_lines(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
