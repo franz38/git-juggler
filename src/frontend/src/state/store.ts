@@ -58,6 +58,7 @@ function loadTabsState(): PersistedTabsState {
 
 const restoredTabsState = loadTabsState();
 const [repos, setRepos] = createSignal<RepoSummary[]>([]);
+const [reposLoading, setReposLoading] = createSignal(false);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
@@ -96,7 +97,7 @@ export function reportRowHeight(hash: string, height: number): void {
   }
 }
 
-export { repos, tabs, activeRepo };
+export { repos, reposLoading, tabs, activeRepo };
 
 // --- Repos sidebar -------------------------------------------------------
 
@@ -129,10 +130,13 @@ export function setSidebarWidth(width: number): void {
 }
 
 export async function loadRepos(): Promise<void> {
+  setReposLoading(true);
   try {
     setRepos(await fetchRepos());
   } catch {
     // The sidebar just stays empty; nowhere good to surface this yet.
+  } finally {
+    setReposLoading(false);
   }
 }
 

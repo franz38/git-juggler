@@ -18,6 +18,7 @@ import {
   pinnedRepos,
   repoGroups,
   repos,
+  reposLoading,
   setRepoInGroup,
   setRepoPinned,
 } from "../../state/store";
@@ -463,6 +464,9 @@ export function RepoList() {
           ⋯
         </button>
       </div>
+      <Show when={reposLoading()}>
+        <div class="repo-empty">Scanning for repos…</div>
+      </Show>
       <Show when={pinned().length > 0}>
         <h2>Pinned</h2>
         <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}</For>
@@ -576,7 +580,7 @@ export function RepoList() {
         </For>
       </div>
       <h2>Repositories</h2>
-      <For each={unpinned()} fallback={<div class="repo-empty">No git repos found</div>}>
+      <For each={unpinned()} fallback={<Show when={!reposLoading()}><div class="repo-empty">No git repos found</div></Show>}>
         {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}
       </For>
       <Show when={bookmarkMenu()}>{(state) => <BookmarkMenu state={state()} onClose={() => setBookmarkMenu(null)} />}</Show>
