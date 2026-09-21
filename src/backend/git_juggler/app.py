@@ -154,6 +154,10 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             ],
             scanned_at=scan.scanned_at,
             state=scan.state,
+            provider=scan.provider,
+            session_id=scan.session_id,
+            process_pid=scan.process_pid,
+            name=scan.name,
         )
 
     def _hook_status_response(status) -> AgentHookProviderStatusResponse:

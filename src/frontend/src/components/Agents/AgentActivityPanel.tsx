@@ -73,7 +73,15 @@ export function AgentActivityPanel() {
             <For each={activeScans()} fallback={<div class="agent-empty">No active Git worktrees detected</div>}>
               {(scan) => (
                 <div class="agent-scan-card">
-                  <div class="agent-scan-title">Hook session {Math.abs(scan.agent_pid)}<span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span></div>
+                  <div class="agent-scan-title" title={scan.session_id ?? undefined}>
+                    {scan.name ?? scan.session_id?.slice(0, 8) ?? `session ${Math.abs(scan.agent_pid)}`}
+                    <span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span>
+                  </div>
+                  <div class="agent-worktree-meta">
+                    {scan.provider || "agent"}
+                    {scan.process_pid !== null ? ` · pid ${scan.process_pid}` : ""}
+                    {scan.session_id ? ` · ${scan.session_id.slice(0, 8)}` : ""}
+                  </div>
                   <For each={activity().agents.filter((agent) => agent.pid === scan.agent_pid)}>
                     {(agent) => <div class="agent-command" title={agent.command_line}>{agent.command_line}</div>}
                   </For>

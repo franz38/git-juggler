@@ -78,7 +78,7 @@ class AgentHooksTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            scans = AgentHookEventReader(event_path=event_path).recent_scans()
+            scans = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None).recent_scans()
 
             self.assertEqual(len(scans), 1)
             self.assertEqual([Path(activity.worktree_path).name for activity in scans[0].worktrees], ["repo-feature"])
@@ -97,7 +97,7 @@ class AgentHooksTest(unittest.TestCase):
                 return json.dumps({"provider": "claude", "phase": "SessionStart", "cwd": str(repo), "pid": 1, "timestamp": int(time.time() * 1000), "raw": {"session_id": session}}) + "\n"
 
             event_path.write_text(event("s1"), encoding="utf-8")
-            reader = AgentHookEventReader(event_path=event_path)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None)
             calls: list[str] = []
             original = reader.git_resolver._resolve_uncached
             reader.git_resolver._resolve_uncached = lambda d: (calls.append(str(d)), original(d))[1]  # type: ignore[method-assign]
@@ -114,7 +114,7 @@ class AgentHooksTest(unittest.TestCase):
 
     def test_missing_events_file_yields_no_scans(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            reader = AgentHookEventReader(event_path=Path(directory) / "none.jsonl")
+            reader = AgentHookEventReader(event_path=Path(directory) / "none.jsonl", claude_sessions_dir=None)
             self.assertEqual(reader.recent_scans(), [])
             self.assertEqual(reader.recent_scans(), [])
 
@@ -132,7 +132,7 @@ class AgentHooksTest(unittest.TestCase):
             event_path = root / "events.jsonl"
             start = 1_000_000_000_000
             self._write_events(event_path, [self._event(repo, "SessionStart", start)])
-            reader = AgentHookEventReader(event_path=event_path)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None)
 
             active = reader.recent_scans(now=start + 30_000)
             self.assertEqual([(scan.state, [w.state for w in scan.worktrees]) for scan in active], [("active", ["active"])])
@@ -151,20 +151,20 @@ class AgentHooksTest(unittest.TestCase):
             event_path = root / "events.jsonl"
             start = 1_000_000_000_000
             self._write_events(event_path, [self._event(repo, "SessionStart", start, "a"), self._event(repo, "SessionStart", start, "b"), self._event(repo, "SessionEnd", start + 1000, "a")])
-            reader = AgentHookEventReader(event_path=event_path)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None)
 
             self.assertEqual(len(reader.recent_scans(now=start + 3_600_000)), 1)
             self.assertEqual(reader.recent_scans(now=start + 25 * 3_600_000), [])
 
-    def test_session_whose_agent_process_died_is_dropped(self) -> None:
+    def test_opencode_session_whose_process_died_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             repo = root / "repo"
             self._init_repo(repo)
             event_path = root / "events.jsonl"
             start = 1_000_000_000_000
-            self._write_events(event_path, [self._event(repo, "SessionStart", start, agent_pid=4242)])
-            reader = AgentHookEventReader(event_path=event_path)
+            self._write_events(event_path, [{"provider": "opencode", "phase": "SessionStart", "cwd": str(repo), "pid": 4242, "timestamp": start, "raw": {"cwd": str(repo)}}])
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None)
 
             with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
                 self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
@@ -180,7 +180,7 @@ class AgentHooksTest(unittest.TestCase):
             start = 1_000_000_000_000
             events = [{"provider": "opencode", "phase": "SessionStart", "cwd": str(repo), "pid": 999, "timestamp": start, "raw": {"cwd": str(repo)}}]
             self._write_events(event_path, events)
-            reader = AgentHookEventReader(event_path=event_path)
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None)
 
             seen: list[int] = []
             with patch("git_juggler.agent_hook_events._pid_alive", side_effect=lambda pid: (seen.append(pid), True)[1]):
@@ -193,6 +193,71 @@ class AgentHooksTest(unittest.TestCase):
 
     def test_claude_install_includes_session_end_hook(self) -> None:
         self.assertIn("SessionEnd", agent_hooks._claude_snippet_dict()["hooks"])
+
+    def _card(self, directory: Path, pid: int, session_id: str, status: str = "idle", name: str | None = "my session") -> None:
+        (directory / f"{pid}.json").write_text(json.dumps({"pid": pid, "sessionId": session_id, "status": status, "kind": "bg", "name": name, "cwd": "/x"}), encoding="utf-8")
+        (directory / f"{pid}.deadbeef.key").write_text("secret-not-json", encoding="utf-8")
+
+    def test_claude_registry_gives_real_pid_name_status_and_closes_missing_sessions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            sessions = root / "sessions"
+            sessions.mkdir()
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start, "open"), self._event(repo, "SessionStart", start, "gone")])
+            self._card(sessions, 111, "open", status="busy")
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions)
+
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                # 10 minutes after the last event: the timer alone says idle, but Claude says busy.
+                scans = reader.recent_scans(now=start + 10 * 60_000)
+
+            self.assertEqual(len(scans), 1)
+            scan = scans[0]
+            self.assertEqual((scan.provider, scan.session_id, scan.process_pid, scan.name), ("claude", "open", 111, "my session"))
+            self.assertEqual((scan.state, [w.state for w in scan.worktrees]), ("active", ["active"]))
+
+            self._card(sessions, 111, "open", status="idle")
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                scan = reader.recent_scans(now=start + 30_000)[0]
+            self.assertEqual((scan.state, [w.state for w in scan.worktrees]), ("idle", ["idle"]))
+
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
+                self.assertEqual(reader.recent_scans(now=start + 30_000), [])
+
+    def test_claude_registry_change_invalidates_cached_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            sessions = root / "sessions"
+            sessions.mkdir()
+            event_path = root / "events.jsonl"
+            self._write_events(event_path, [self._event(repo, "SessionStart", int(time.time() * 1000))])
+            self._card(sessions, 111, "s1", status="busy")
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions)
+
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                self.assertEqual(reader.recent_scans()[0].state, "active")
+                self._card(sessions, 111, "s1", status="idle")
+                self.assertEqual(reader.recent_scans()[0].state, "idle")
+                (sessions / "111.json").unlink()
+                self.assertEqual(reader.recent_scans(), [])
+
+    def test_missing_registry_falls_back_to_hooks_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start)])
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=root / "does-not-exist")
+
+            self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
 
 
 if __name__ == "__main__":

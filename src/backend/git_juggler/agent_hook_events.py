@@ -14,6 +14,7 @@ from typing import Any
 
 from .agent_hooks import EVENT_PATH
 from .agent_tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity
+from .agent_tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
 from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
 
 
@@ -51,12 +52,14 @@ def _pid_alive(pid: int) -> bool:
 
 
 class AgentHookEventReader:
-    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS) -> None:
+    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR) -> None:
         self.event_path = event_path
+        # None disables the Claude session registry (hooks-only behaviour).
+        self.claude_sessions_dir = claude_sessions_dir
         self.git_resolver = git_resolver or GitResolver()
         self.ttl_ms = ttl_ms
         self._lock = threading.Lock()
-        self._cached_signature: tuple[int, int] | None = None
+        self._cached_signature: tuple | None = None
         self._cached_scans: list[AgentRepositoryScan] = []
         self._cached_valid_until = 0
 
@@ -65,13 +68,17 @@ class AgentHookEventReader:
 
         A worktree is "active" while its latest event is within the TTL and
         "idle" afterwards; the session disappears on its end hook (or when
-        its process is gone). The endpoint is polled every second, so the result is reused while the
-        events file is unchanged (mtime + size) and nothing in it has aged out
-        or could have moved branch/commit (git resolver TTL). An explicit `now`
+        its process is gone). For Claude, ~/.claude/sessions is authoritative
+        when present: a session with no card there is closed, the card's pid
+        is the real process, and its busy/idle status overrides the timer.
+
+        The endpoint is polled every second, so the result is reused while the
+        events file and the registry are unchanged and nothing could have aged
+        out or moved branch/commit (git resolver TTL). An explicit `now`
         always recomputes.
         """
         observed_at = now or int(time.time() * 1000)
-        signature = self._file_signature()
+        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir))
         with self._lock:
             if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
                 return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
@@ -96,6 +103,7 @@ class AgentHookEventReader:
             if observed_at - event.timestamp <= IDLE_SESSION_MAX_MS:
                 sessions.setdefault(self._session_key(event), []).append(event)
 
+        registry = read_registry(self.claude_sessions_dir)
         scans: list[AgentRepositoryScan] = []
         next_change: int | None = None
         for session_key, session_events in sessions.items():
@@ -103,9 +111,18 @@ class AgentHookEventReader:
             # however long it has been quiet.
             if session_events[-1].phase.lower() in END_PHASES:
                 continue
-            agent_pid = next((event.agent_pid for event in reversed(session_events) if event.agent_pid is not None), None)
-            if agent_pid is not None and not _pid_alive(agent_pid):
-                continue
+            provider = session_key[0]
+            session_id = session_events[-1].session_id
+            card: ClaudeSession | None = None
+            if provider == "claude" and registry is not None and session_id:
+                card = registry.get(session_id)
+                if card is None or not _pid_alive(card.pid):
+                    continue
+                process_pid: int | None = card.pid
+            else:
+                process_pid = next((event.agent_pid for event in reversed(session_events) if event.agent_pid is not None), None)
+                if process_pid is not None and not _pid_alive(process_pid):
+                    continue
 
             activities: dict[str, AgentWorktreeActivity] = {}
             for event in session_events[-SESSION_EVENT_LIMIT:]:
@@ -144,6 +161,12 @@ class AgentHookEventReader:
                     next_change = flip_at if next_change is None else min(next_change, flip_at)
                 else:
                     activity.state = "idle"
+            if card is not None and card.status == "idle":
+                for activity in activities.values():
+                    activity.state = "idle"
+            elif card is not None and card.status == "busy":
+                # Working right now: the most recently touched worktree is where.
+                max(activities.values(), key=lambda item: item.last_activity).state = "active"
             scans.append(
                 AgentRepositoryScan(
                     agent_pid=self._synthetic_pid(session_key),
@@ -151,14 +174,15 @@ class AgentHookEventReader:
                     worktrees=sorted(activities.values(), key=lambda item: item.worktree_path),
                     scanned_at=observed_at,
                     state="active" if any(item.state == "active" for item in activities.values()) else "idle",
+                    provider=provider,
+                    session_id=session_id,
+                    process_pid=process_pid,
+                    name=card.name if card is not None else None,
                 )
             )
         return scans, next_change
 
     def _agent_pid(self, data: dict[str, Any]) -> int | None:
-        agent_pid = data.get("agent_pid")
-        if isinstance(agent_pid, int):
-            return agent_pid
         # The OpenCode plugin runs inside the agent process, so its pid is the agent's.
         pid = data.get("pid")
         return pid if data.get("provider") == "opencode" and isinstance(pid, int) else None

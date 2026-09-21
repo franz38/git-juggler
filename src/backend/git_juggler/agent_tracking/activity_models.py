@@ -38,3 +38,7 @@ class AgentRepositoryScan:
     worktrees: list[AgentWorktreeActivity]
     scanned_at: int
     state: str = "active"
+    provider: str = ""
+    session_id: str | None = None
+    process_pid: int | None = None
+    name: str | None = None

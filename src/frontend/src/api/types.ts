@@ -181,6 +181,10 @@ export interface AgentRepositoryScan {
   worktrees: AgentWorktreeActivity[];
   scanned_at: number;
   state: "active" | "idle";
+  provider: string;
+  session_id: string | null;
+  process_pid: number | null;
+  name: string | null;
 }
 
 export interface AgentProcessCandidate {
