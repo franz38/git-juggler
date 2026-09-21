@@ -73,3 +73,25 @@ commit, a tag (`v0.1.0`), and a stash, with a clean working tree.
 Never run `git push` (including to a branch, a fork, or opening a PR) until
 the user has explicitly agreed to it in that conversation. Committing
 locally is fine; pushing is not, until they say so.
+
+## todo.txt: notes queue
+
+`todo.txt` (repo root, gitignored — never commit it) is the user's plain-text
+list of things to implement. It is split by a marker line:
+
+```
+--------------- IMPLEMENTED ----------------
+```
+
+- Everything **before** the marker is already implemented.
+- Everything **after** the marker is still to do.
+
+When the user asks to implement the todo list (e.g. "implement todo"):
+
+1. Read `todo.txt` and take all the notes after the marker.
+2. Implement them (following the rest of this file's guidelines).
+3. Move the marker line down so it sits after the notes just implemented
+   (i.e. those notes now live above it), leaving any not-implemented notes
+   below it. Edit only the marker's position; don't rewrite the user's notes.
+
+If `todo.txt` doesn't exist, create it containing just the marker line.
