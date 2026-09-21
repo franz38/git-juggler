@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { AgentRepositoryScan, AgentWorktreeActivity } from "../../api/types";
+import { agentShowWorktrees } from "../../state/store";
 import { formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
 
 export interface AgentHoverEntry {
@@ -68,25 +69,27 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
               <Show when={scan.details?.last_prompt}>
                 <div class="agent-hover-prompt">“{scan.details!.last_prompt}”</div>
               </Show>
-              <For each={activities}>
-                {(activity) => (
-                  <div class="agent-hover-worktree">
-                    <div class="agent-hover-worktree-title">
-                      <span>{activity.worktree_path.split("/").pop() || activity.worktree_path}</span>
-                      <Show when={activity.is_home}>
-                        <span class="agent-state-pill" title="The worktree this session was started in">home</span>
+              <Show when={agentShowWorktrees()}>
+                <For each={activities}>
+                  {(activity) => (
+                    <div class="agent-hover-worktree">
+                      <div class="agent-hover-worktree-title">
+                        <span>{activity.worktree_path.split("/").pop() || activity.worktree_path}</span>
+                        <Show when={activity.is_home}>
+                          <span class="agent-state-pill" title="The worktree this session was started in">home</span>
+                        </Show>
+                        <span class="agent-state-pill" classList={{ idle: activity.state === "idle" }}>{activity.state}</span>
+                      </div>
+                      <div class="agent-hover-meta">
+                        {activity.branch ?? "detached"} · {shortCommit(activity.commit)} · last {formatTime(activity.last_activity)}
+                      </div>
+                      <Show when={lastToolUse(activity)}>
+                        <div class="agent-hover-meta agent-hover-mono">{lastToolUse(activity)}</div>
                       </Show>
-                      <span class="agent-state-pill" classList={{ idle: activity.state === "idle" }}>{activity.state}</span>
                     </div>
-                    <div class="agent-hover-meta">
-                      {activity.branch ?? "detached"} · {shortCommit(activity.commit)} · last {formatTime(activity.last_activity)}
-                    </div>
-                    <Show when={lastToolUse(activity)}>
-                      <div class="agent-hover-meta agent-hover-mono">{lastToolUse(activity)}</div>
-                    </Show>
-                  </div>
-                )}
-              </For>
+                  )}
+                </For>
+              </Show>
             </div>
           )}
         </For>
