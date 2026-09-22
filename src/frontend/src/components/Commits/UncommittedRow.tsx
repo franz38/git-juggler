@@ -6,6 +6,8 @@ import {
   activeRepo,
   reportRowHeight,
   runInTerminal,
+  scheduleCommitRefresh,
+  scheduleGraphRefresh,
   toggleUncommittedExpanded,
   uncommittedExpanded,
 } from "../../state/store";
@@ -41,12 +43,18 @@ export function UncommittedRow(props: { files: FileChange[] }) {
     const repo = activeRepo();
     if (!repo || !canRunAction()) return;
     runInTerminal(repo, `git add -- ${selectedPathArgs()} && git commit -m ${shellQuote(message().trim())}`);
+    // The terminal also detects commits typed directly by the user (see
+    // TerminalPanel), but we already know for certain one just happened
+    // here, so schedule the refresh directly rather than relying on that
+    // heuristic.
+    scheduleCommitRefresh(repo);
   };
 
   const runStash = () => {
     const repo = activeRepo();
     if (!repo || !canRunAction()) return;
     runInTerminal(repo, `git stash push -u -m ${shellQuote(message().trim())} -- ${selectedPathArgs()}`);
+    scheduleGraphRefresh(repo);
   };
 
   onMount(() => {
