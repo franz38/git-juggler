@@ -1,6 +1,6 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, onCleanup } from "solid-js";
 import { BUILTIN_DARK, BUILTIN_LIGHT, type AppTheme } from "../../lib/appTheme";
-import { installedThemes, setThemeId, themeId } from "../../state/themes";
+import { installedThemes, previewTheme, setThemeId, themeId } from "../../state/themes";
 
 type Quick = { id: string; label: string; kind: "dark" | "light" | "system"; theme: AppTheme };
 
@@ -19,22 +19,21 @@ function prefersDark(): boolean {
 // more — filtering, importing, browsing every installed VS Code theme — is
 // the full ThemePicker's job, in Settings > Appearance.
 export function ThemeQuickPicks() {
+  // A hover/keyboard preview must never outlive the picker.
+  onCleanup(() => previewTheme(null));
+
   const activeQuickId = createMemo(() => {
     if (themeId() === BUILTIN_DARK.id) return BUILTIN_DARK.id;
     if (themeId() === BUILTIN_LIGHT.id) return BUILTIN_LIGHT.id;
     return null;
   });
 
-  const pick = (quick: Quick) => {
-    if (quick.kind === "system") {
-      setThemeId(prefersDark() ? BUILTIN_DARK.id : BUILTIN_LIGHT.id);
-    } else {
-      setThemeId(quick.id);
-    }
-  };
+  const resolvedId = (quick: Quick) => (quick.kind === "system" ? (prefersDark() ? BUILTIN_DARK.id : BUILTIN_LIGHT.id) : quick.id);
+
+  const pick = (quick: Quick) => setThemeId(resolvedId(quick));
 
   return (
-    <div class="theme-quickpicks">
+    <div class="theme-quickpicks" onMouseLeave={() => previewTheme(null)}>
       <div class="theme-quickpick-grid">
         <For each={QUICK_PICKS}>
           {(quick) => (
@@ -43,6 +42,8 @@ export function ThemeQuickPicks() {
               class="theme-quickpick-card"
               classList={{ active: activeQuickId() === quick.id }}
               onClick={() => pick(quick)}
+              onMouseEnter={() => previewTheme(resolvedId(quick))}
+              onMouseLeave={() => previewTheme(null)}
             >
               <span
                 class="theme-quickpick-preview"
@@ -70,6 +71,8 @@ export function ThemeQuickPicks() {
                   classList={{ active: themeId() === t.id }}
                   title={t.name}
                   onClick={() => setThemeId(t.id)}
+                  onMouseEnter={() => previewTheme(t.id)}
+                  onMouseLeave={() => previewTheme(null)}
                 >
                   <span
                     class="theme-quickpick-mini-preview"
