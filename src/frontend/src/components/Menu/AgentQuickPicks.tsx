@@ -11,12 +11,12 @@ import {
 
 type Provider = "claude" | "opencode";
 
-const AGENTS: { provider: Provider; label: string; initial: string }[] = [
-  { provider: "claude", label: "Claude Code", initial: "C" },
-  { provider: "opencode", label: "opencode", initial: "O" },
+const AGENTS: { provider: Provider; label: string; logo: string }[] = [
+  { provider: "claude", label: "Claude Code", logo: "/agent-logos/claude.png" },
+  { provider: "opencode", label: "opencode", logo: "/agent-logos/opencode.webp" },
 ];
 
-function AgentCard(props: { label: string; initial: string; status: AgentHookProviderStatus | undefined; onStart: () => void }) {
+function AgentCard(props: { label: string; logo: string; status: AgentHookProviderStatus | undefined; onStart: () => void }) {
   const [manualOpen, setManualOpen] = createSignal(false);
   const [copied, setCopied] = createSignal(false);
   const installed = () => props.status?.installed ?? false;
@@ -32,7 +32,9 @@ function AgentCard(props: { label: string; initial: string; status: AgentHookPro
   return (
     <div class="agent-quickpick-card">
       <div class="agent-quickpick-heading">
-        <span class="agent-quickpick-logo">{props.initial}</span>
+        <span class="agent-quickpick-logo">
+          <img src={props.logo} alt="" width="16" height="16" />
+        </span>
         <span class="menu-setting-label">{props.label}</span>
       </div>
       <Show when={props.status?.error}>{(error) => <div class="menu-error">{error()}</div>}</Show>
@@ -107,7 +109,7 @@ export function AgentQuickPicks() {
           {(agent) => (
             <AgentCard
               label={agent.label}
-              initial={agent.initial}
+              logo={agent.logo}
               status={agentHooks()?.[agent.provider]}
               onStart={() => startTracking(agent.provider)}
             />
