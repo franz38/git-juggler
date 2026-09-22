@@ -2457,7 +2457,13 @@
 .theme-quickpick-mini-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  align-content: start;
   gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
 }
 
 .theme-quickpick-mini-card {
