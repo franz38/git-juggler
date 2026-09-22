@@ -50,8 +50,9 @@
   inset: 0;
   background: var(--shadow);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 12vh;
   z-index: 110;
 }
 
