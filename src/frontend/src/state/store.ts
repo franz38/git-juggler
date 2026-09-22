@@ -1043,6 +1043,40 @@ export function toggleMenu(): void {
   else openMenu();
 }
 
+// --- First-run welcome wizard ------------------------------------------
+
+// Per-browser, like the other localStorage-backed settings above: whether
+// this browser has already been through (or dismissed) the welcome wizard.
+// Not synced through preferences — a fresh browser against an
+// already-configured backend still gets its own one-time welcome.
+const ONBOARDING_COMPLETE_KEY = "git-juggler:onboardingComplete";
+
+function loadOnboardingComplete(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+// Starts open for a browser that's never finished (or skipped) it.
+const [welcomeWizardOpen, setWelcomeWizardOpen] = createSignal(!loadOnboardingComplete());
+export { welcomeWizardOpen };
+
+export function openWelcomeWizard(): void {
+  setWelcomeWizardOpen(true);
+  void loadConfig();
+}
+
+export function closeWelcomeWizard(): void {
+  setWelcomeWizardOpen(false);
+  try {
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, "true");
+  } catch {
+    // Not critical — worst case the wizard reappears next launch.
+  }
+}
+
 const [repoPaths, setRepoPaths] = createSignal<string[]>([]);
 const [repoPathsError, setRepoPathsError] = createSignal<string | null>(null);
 export { repoPaths, repoPathsError };
