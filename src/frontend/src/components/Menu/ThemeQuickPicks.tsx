@@ -58,23 +58,30 @@ export function ThemeQuickPicks() {
       </div>
 
       <Show when={installedThemes().length > 0}>
-        <div class="theme-quickpick-editor-row">
-          <div>
-            <div class="menu-setting-label">Or use one of your editor themes</div>
-            <p class="menu-hint">{installedThemes().length} found — searchable in Appearance later.</p>
+        <div class="theme-quickpick-editor-section">
+          <div class="menu-setting-label">Or use one of your editor themes</div>
+          <p class="menu-hint">{installedThemes().length} found — searchable in Appearance later.</p>
+          <div class="theme-quickpick-mini-grid">
+            <For each={installedThemes()}>
+              {(t) => (
+                <button
+                  type="button"
+                  class="theme-quickpick-mini-card"
+                  classList={{ active: themeId() === t.id }}
+                  title={t.name}
+                  onClick={() => setThemeId(t.id)}
+                >
+                  <span
+                    class="theme-quickpick-mini-preview"
+                    style={{ background: t.vars["--bg"], "border-color": t.vars["--border"] }}
+                  >
+                    <span class="theme-quickpick-mini-bar" style={{ background: t.vars["--accent"] }} />
+                  </span>
+                  <span class="theme-quickpick-mini-label">{t.name}</span>
+                </button>
+              )}
+            </For>
           </div>
-          <select
-            class="theme-quickpick-select"
-            value=""
-            onChange={(e) => {
-              const id = e.currentTarget.value;
-              if (id) setThemeId(id);
-              e.currentTarget.value = "";
-            }}
-          >
-            <option value="">Browse installed themes…</option>
-            <For each={installedThemes()}>{(t) => <option value={t.id}>{t.name}</option>}</For>
-          </select>
         </div>
       </Show>
     </div>

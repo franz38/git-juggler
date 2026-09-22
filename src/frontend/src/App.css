@@ -2288,7 +2288,8 @@
   position: relative;
   flex-direction: column;
   width: 560px;
-  max-height: 80vh;
+  height: 620px;
+  max-height: 85vh;
 }
 
 .welcome-close {
@@ -2447,30 +2448,65 @@
   text-align: left;
 }
 
-.theme-quickpick-editor-row {
+.theme-quickpick-editor-section {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.theme-quickpick-select {
-  flex: 0 0 auto;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  padding: 5px 8px;
+.theme-quickpick-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
 }
 
-.theme-quickpick-select:focus {
-  outline: none;
+.theme-quickpick-mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px;
+  cursor: pointer;
+}
+
+.theme-quickpick-mini-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.theme-quickpick-mini-card.active {
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.theme-quickpick-mini-preview {
+  display: flex;
+  align-items: flex-end;
+  height: 20px;
+  border: 1px solid;
+  border-radius: 3px;
+  padding: 3px;
+}
+
+.theme-quickpick-mini-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.theme-quickpick-mini-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theme-quickpick-mini-card.active .theme-quickpick-mini-label {
+  color: var(--text-h);
 }
 
 /* --- Welcome wizard: agent quick picks ------------------------------ */
@@ -2511,10 +2547,15 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
+  background: #ffffff;
+  border: 1px solid var(--border);
+}
+
+.agent-quickpick-logo img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .agent-quickpick-actions {
