@@ -14,6 +14,7 @@ import {
   repoPaths,
   repoPathsError,
   resetKeyBinding,
+  resetOnboarding,
   saveExcludedPaths,
   setBranchColorMode,
   setKeyBinding,
@@ -25,9 +26,9 @@ import { GitHubSettings } from "./GitHubSettings";
 import { JenkinsSettings } from "./JenkinsSettings";
 import { ThemePicker } from "./ThemePicker";
 
-type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings";
+type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
 
-const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings"];
+const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings", "configuration"];
 
 export function MainMenu() {
   const [activeSection, setActiveSection] = createSignal<Section>("repos");
@@ -139,6 +140,13 @@ export function MainMenu() {
               onClick={() => setActiveSection("keybindings")}
             >
               Key bindings
+            </div>
+            <div
+              class="menu-section-item"
+              classList={{ active: activeSection() === "configuration" }}
+              onClick={() => setActiveSection("configuration")}
+            >
+              Configuration
             </div>
           </div>
           <div class="menu-content">
@@ -271,6 +279,28 @@ export function MainMenu() {
                     </div>
                   )}
                 </For>
+              </div>
+            </Show>
+            <Show when={activeSection() === "configuration"}>
+              <h3>Configuration</h3>
+              <div class="menu-setting">
+                <div class="menu-setting-main">
+                  <div class="menu-setting-label">Reset onboarding</div>
+                  <p class="menu-hint">
+                    Marks the welcome wizard (theme, agents, CI/CD) as not completed and reopens it right away. Shared across
+                    every browser — repo paths, integrations, theme and key bindings are left untouched.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="menu-secondary-button"
+                  onClick={() => {
+                    resetOnboarding();
+                    closeMenu();
+                  }}
+                >
+                  Reset
+                </button>
               </div>
             </Show>
           </div>

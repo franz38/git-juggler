@@ -86,3 +86,15 @@ def test_unknown_patch_keys_are_ignored():
     config.update_preferences({"theme_id": "x", "not_a_setting": 1})
 
     assert "not_a_setting" not in json.loads(config.CONFIG_PATH.read_text())["preferences"]
+
+
+def test_onboarding_complete_is_centralized_like_any_other_preference():
+    assert config.load_preferences().onboarding_complete is None
+
+    result = config.update_preferences(patch(onboarding_complete=True))
+    assert result.onboarding_complete is True
+
+    # A reset (e.g. from the Configuration menu) flips it back to False, not
+    # back to unset -- distinguishing "never onboarded" from "explicitly reset".
+    result = config.update_preferences(patch(onboarding_complete=False))
+    assert result.onboarding_complete is False

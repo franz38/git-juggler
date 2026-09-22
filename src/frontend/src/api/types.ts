@@ -17,6 +17,7 @@ export interface Preferences {
   agent_show_worktrees?: boolean | null;
   agent_poll_seconds?: number | null;
   key_bindings?: Record<string, KeyBindingPreference> | null;
+  onboarding_complete?: boolean | null;
 }
 
 export interface ThemesResponse {

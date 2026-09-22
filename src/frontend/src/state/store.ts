@@ -1045,36 +1045,28 @@ export function toggleMenu(): void {
 
 // --- First-run welcome wizard ------------------------------------------
 
-// Per-browser, like the other localStorage-backed settings above: whether
-// this browser has already been through (or dismissed) the welcome wizard.
-// Not synced through preferences — a fresh browser against an
-// already-configured backend still gets its own one-time welcome.
-const ONBOARDING_COMPLETE_KEY = "git-juggler:onboardingComplete";
+// Centralized (via the backend's Preferences, like theme/agents/etc. below),
+// not per-browser: once any browser finishes or skips the wizard, it's done
+// for everyone talking to this backend. `null` means "not loaded yet" (the
+// preferences fetch hasn't answered), and the wizard stays hidden rather than
+// flashing on screen while that's unknown — see applyRemotePreferences.
+const [onboardingComplete, setOnboardingCompleteSignal] = createSignal<boolean | null>(null);
+export const welcomeWizardOpen = createMemo(() => onboardingComplete() === false);
 
-function loadOnboardingComplete(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDING_COMPLETE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-// Starts open for a browser that's never finished (or skipped) it.
-const [welcomeWizardOpen, setWelcomeWizardOpen] = createSignal(!loadOnboardingComplete());
-export { welcomeWizardOpen };
-
-export function openWelcomeWizard(): void {
-  setWelcomeWizardOpen(true);
-  void loadConfig();
+function setOnboardingComplete(complete: boolean): void {
+  setOnboardingCompleteSignal(complete);
+  savePreference({ onboarding_complete: complete });
 }
 
 export function closeWelcomeWizard(): void {
-  setWelcomeWizardOpen(false);
-  try {
-    localStorage.setItem(ONBOARDING_COMPLETE_KEY, "true");
-  } catch {
-    // Not critical — worst case the wizard reappears next launch.
-  }
+  setOnboardingComplete(true);
+}
+
+// Used by the menu's Configuration section: marks onboarding as not done
+// (for every browser) and reopens the wizard right away in this one.
+export function resetOnboarding(): void {
+  setOnboardingComplete(false);
+  void loadConfig();
 }
 
 const [repoPaths, setRepoPaths] = createSignal<string[]>([]);
@@ -1875,6 +1867,10 @@ export function applyRemotePreferences(remote: Preferences): Preferences {
   } else if (isStoredLocally(KEY_BINDINGS_KEY)) {
     seed.key_bindings = keyBindings();
   }
+
+  // Centralized only — no local fallback: unset on the backend means nobody
+  // has been through it yet, so it's still everyone's first run.
+  setOnboardingCompleteSignal(typeof remote.onboarding_complete === "boolean" ? remote.onboarding_complete : false);
 
   return seed;
 }
