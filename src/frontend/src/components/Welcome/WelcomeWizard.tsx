@@ -2,12 +2,11 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import { closeWelcomeWizard, loadConfig, welcomeWizardOpen } from "../../state/store";
 import { isPreviewingTheme } from "../../state/themes";
 import { AgentsSettings } from "../Menu/AgentsSettings";
-import { GitHubSettings } from "../Menu/GitHubSettings";
-import { JenkinsSettings } from "../Menu/JenkinsSettings";
-import { ThemePicker } from "../Menu/ThemePicker";
+import { RepoPathsSettings } from "../Menu/RepoPathsSettings";
+import { ThemeQuickPicks } from "../Menu/ThemeQuickPicks";
 
 type Step = {
-  id: "theme" | "agents" | "cicd";
+  id: "theme" | "repos" | "agents";
   label: string;
   title: string;
   description: string;
@@ -16,29 +15,30 @@ type Step = {
 const STEPS: Step[] = [
   {
     id: "theme",
-    label: "Theme",
-    title: "Pick a theme",
-    description: "Purely visual — you can change this any time from the main menu's Appearance section.",
+    label: "Appearance",
+    title: "How should it look?",
+    description: "Your VS Code themes are all available later in Appearance.",
+  },
+  {
+    id: "repos",
+    label: "Repositories",
+    title: "Where are your repos?",
+    description: "Repos are found among the immediate children of each path below.",
   },
   {
     id: "agents",
     label: "Agents",
-    title: "Agent activity detection",
+    title: "Track coding agents?",
     description:
-      "git-juggler can detect local Claude Code and opencode sessions and show what they're doing across your repos. Turn it on and, for the most accurate results, install the hooks below.",
-  },
-  {
-    id: "cicd",
-    label: "CI/CD",
-    title: "Connect your CI",
-    description: "Wire up GitHub Actions and/or Jenkins so build and workflow status shows up alongside your branches.",
+      "git-juggler can detect local Claude Code and opencode sessions and show what they're doing across your repos. Nothing is tracked by default.",
   },
 ];
 
-// First-run wizard: a short, three-step tour (theme, agents, CI/CD) shown
-// once per browser. Each step embeds the same settings components used in
-// the main menu, so anything set here is just... the real setting, already
-// saved — "Finish" only marks onboarding as seen, there's nothing to submit.
+// First-run wizard: a short, three-step tour (appearance, repositories,
+// agents) shown once per browser. Each step embeds the same settings
+// components used in the main menu, so anything set here is just... the real
+// setting, already saved — "Finish" only marks onboarding as seen, there's
+// nothing to submit.
 export function WelcomeWizard() {
   const [stepIndex, setStepIndex] = createSignal(0);
   const step = () => STEPS[stepIndex()];
@@ -62,42 +62,33 @@ export function WelcomeWizard() {
           </div>
           <div class="welcome-header">
             <h2>Welcome to git-juggler</h2>
-            <p class="menu-hint">A quick, skippable setup — three steps.</p>
-            <div class="welcome-progress">
+            <p class="menu-hint">Three quick picks. Everything else lives in Settings.</p>
+            <div class="welcome-progress-bar">
               <For each={STEPS}>
-                {(s, index) => (
-                  <div
-                    class="welcome-progress-step"
-                    classList={{ active: index() === stepIndex(), done: index() < stepIndex() }}
-                    onClick={() => setStepIndex(index())}
-                  >
-                    <span class="welcome-progress-dot">{index() < stepIndex() ? "✓" : index() + 1}</span>
-                    <span class="welcome-progress-label">{s.label}</span>
-                  </div>
-                )}
+                {(_s, index) => <div class="welcome-progress-segment" classList={{ filled: index() <= stepIndex() }} />}
               </For>
+            </div>
+            <div class="welcome-progress-caption">
+              Step {stepIndex() + 1} of {STEPS.length} &middot; {step().label.toUpperCase()}
             </div>
           </div>
           <div class="welcome-body">
             <h3>{step().title}</h3>
             <p class="menu-hint">{step().description}</p>
             <Show when={step().id === "theme"}>
-              <ThemePicker />
+              <ThemeQuickPicks />
+            </Show>
+            <Show when={step().id === "repos"}>
+              <RepoPathsSettings />
             </Show>
             <Show when={step().id === "agents"}>
               <AgentsSettings />
             </Show>
-            <Show when={step().id === "cicd"}>
-              <div class="menu-subheading">GitHub Actions</div>
-              <GitHubSettings />
-              <div class="menu-subheading">Jenkins</div>
-              <JenkinsSettings />
-            </Show>
           </div>
           <div class="welcome-footer">
-            <button type="button" class="menu-secondary-button" onClick={() => closeWelcomeWizard()}>
+            <span class="welcome-skip" onClick={() => closeWelcomeWizard()}>
               Skip setup
-            </button>
+            </span>
             <div class="welcome-footer-nav">
               <Show when={stepIndex() > 0}>
                 <button type="button" class="menu-secondary-button" onClick={goBack}>

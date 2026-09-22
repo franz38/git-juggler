@@ -1,21 +1,13 @@
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import {
   KEY_BINDING_ACTIONS,
-  addRepoPath,
   branchColorMode,
   closeMenu,
-  excludedPaths,
-  excludedPathsError,
   formatKeyBinding,
   keyBindings,
   menuOpen,
-  openDirectoryBrowser,
-  removeRepoPath,
-  repoPaths,
-  repoPathsError,
   resetKeyBinding,
   resetOnboarding,
-  saveExcludedPaths,
   setBranchColorMode,
   setKeyBinding,
 } from "../../state/store";
@@ -24,6 +16,7 @@ import { isPreviewingTheme } from "../../state/themes";
 import { AgentsSettings } from "./AgentsSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { JenkinsSettings } from "./JenkinsSettings";
+import { RepoPathsSettings } from "./RepoPathsSettings";
 import { ThemePicker } from "./ThemePicker";
 
 type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
@@ -32,7 +25,6 @@ const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "a
 
 export function MainMenu() {
   const [activeSection, setActiveSection] = createSignal<Section>("repos");
-  const [newPath, setNewPath] = createSignal("");
   const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
 
   // Captures the next real keypress (ignoring bare modifier taps) and binds
@@ -74,25 +66,6 @@ export function MainMenu() {
     window.addEventListener("keydown", handleMenuKeydown);
     onCleanup(() => window.removeEventListener("keydown", handleMenuKeydown));
   });
-
-  const [excludedPathsDraft, setExcludedPathsDraft] = createSignal("");
-  createEffect(() => {
-    setExcludedPathsDraft(excludedPaths().join(", "));
-  });
-  const handleSaveExcludedPaths = () => {
-    const next = excludedPathsDraft()
-      .split(",")
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
-    void saveExcludedPaths(next);
-  };
-
-  const handleAdd = () => {
-    const path = newPath().trim();
-    if (!path) return;
-    void addRepoPath(path);
-    setNewPath("");
-  };
 
   return (
     <Show when={menuOpen()}>
@@ -153,56 +126,7 @@ export function MainMenu() {
             <Show when={activeSection() === "repos"}>
               <h3>Search paths</h3>
               <p class="menu-hint">Repos are found among the immediate children of each path below.</p>
-              <div class="menu-path-list">
-                <For each={repoPaths()} fallback={<div class="menu-empty">No paths configured</div>}>
-                  {(path) => (
-                    <div class="menu-path-row">
-                      <span class="menu-path-text">{path}</span>
-                      <span class="menu-path-remove" onClick={() => void removeRepoPath(path)}>
-                        &times;
-                      </span>
-                    </div>
-                  )}
-                </For>
-              </div>
-              <div class="menu-add-path">
-                <input
-                  type="text"
-                  placeholder="/absolute/path/to/projects"
-                  value={newPath()}
-                  onInput={(e) => setNewPath(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAdd();
-                  }}
-                />
-                <button
-                  type="button"
-                  class="menu-secondary-button"
-                  onClick={() => openDirectoryBrowser((path) => setNewPath(path))}
-                >
-                  Explore
-                </button>
-                <button type="button" class="menu-add-button" onClick={handleAdd}>
-                  Add
-                </button>
-              </div>
-              <Show when={repoPathsError()}>
-                <div class="menu-error">{repoPathsError()}</div>
-              </Show>
-              <label class="menu-field">
-                <span>Excluded paths</span>
-                <input
-                  type="text"
-                  placeholder=".claude"
-                  value={excludedPathsDraft()}
-                  onInput={(e) => setExcludedPathsDraft(e.currentTarget.value)}
-                  onBlur={handleSaveExcludedPaths}
-                />
-              </label>
-              <p class="menu-hint">Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes.</p>
-              <Show when={excludedPathsError()}>
-                <div class="menu-error">{excludedPathsError()}</div>
-              </Show>
+              <RepoPathsSettings />
             </Show>
             <Show when={activeSection() === "github"}>
               <h3>GitHub Actions</h3>
@@ -287,7 +211,7 @@ export function MainMenu() {
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Reset onboarding</div>
                   <p class="menu-hint">
-                    Marks the welcome wizard (theme, agents, CI/CD) as not completed and reopens it right away. Shared across
+                    Marks the welcome wizard (appearance, repositories, agents) as not completed and reopens it right away. Shared across
                     every browser — repo paths, integrations, theme and key bindings are left untouched.
                   </p>
                 </div>
