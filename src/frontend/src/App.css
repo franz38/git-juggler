@@ -2281,3 +2281,123 @@
   padding-left: 12px;
   color: var(--text);
 }
+
+/* --- Welcome wizard ------------------------------------------------- */
+
+.welcome-dialog {
+  position: relative;
+  flex-direction: column;
+  width: 560px;
+  max-height: 80vh;
+}
+
+.welcome-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.welcome-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-h);
+}
+
+.welcome-header {
+  flex: 0 0 auto;
+  padding: 20px 24px 0;
+}
+
+.welcome-header h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--text-h);
+}
+
+.welcome-progress {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0 0;
+}
+
+.welcome-progress-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.welcome-progress-step.active {
+  border-bottom-color: var(--accent);
+  color: var(--text-h);
+}
+
+.welcome-progress-step.done {
+  color: var(--text);
+}
+
+.welcome-progress-dot {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+}
+
+.welcome-progress-step.active .welcome-progress-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.welcome-progress-step.done .welcome-progress-dot {
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
+}
+
+.welcome-progress-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+.welcome-body h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.welcome-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.welcome-footer-nav {
+  display: flex;
+  gap: 8px;
+}

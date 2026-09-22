@@ -15,12 +15,14 @@ import { SearchBox } from "./components/Search/SearchBox";
 import { TabsBar } from "./components/Tabs/TabsBar";
 import { TerminalPanel } from "./components/Terminal/TerminalPanel";
 import { DeleteTagModal } from "./components/Tags/DeleteTagModal";
+import { WelcomeWizard } from "./components/Welcome/WelcomeWizard";
 import {
   activeRepo,
   activateAdjacentTab,
   agentPollSeconds,
   agentsEnabled,
   closeMenu,
+  closeWelcomeWizard,
   keyBindings,
   loadActiveTabGraph,
   matchesKeyBinding,
@@ -38,6 +40,7 @@ import {
   terminalOpen,
   toggleMenu,
   toggleTerminalOpen,
+  welcomeWizardOpen,
 } from "./state/store";
 import { loadPreferences } from "./state/preferences";
 import { activeTheme, loadThemes } from "./state/themes";
@@ -107,6 +110,8 @@ function App() {
         toggleMenu();
       } else if (e.key === "Escape" && menuOpen()) {
         closeMenu();
+      } else if (e.key === "Escape" && welcomeWizardOpen()) {
+        closeWelcomeWizard();
       }
     };
     window.addEventListener("keydown", handleKeydown);
@@ -145,6 +150,7 @@ function App() {
 
   return (
     <div class="app">
+      <WelcomeWizard />
       <MainMenu />
       <BranchContextMenu />
       <CommitContextMenu />

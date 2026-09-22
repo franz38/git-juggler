@@ -1,0 +1,164 @@
+import { Index, Show, createEffect, createSignal } from "solid-js";
+import type { JenkinsConfig } from "../../api/types";
+import { jenkinsConfig, jenkinsConfigError, saveJenkinsConfig } from "../../state/store";
+
+const emptyJenkinsConfig: JenkinsConfig = {
+  enabled: true,
+  base_url: "",
+  username: "",
+  api_token_env: "JENKINS_API_TOKEN",
+  build_limit: 50,
+  jobs: [],
+};
+
+// The "Jenkins" settings: connection details plus per-repo job mappings.
+// Keeps its own draft (synced from the saved config), committed on "Save
+// Jenkins settings".
+export function JenkinsSettings() {
+  const [draft, setDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
+
+  createEffect(() => {
+    const config = jenkinsConfig();
+    setDraft({ ...config, jobs: config.jobs.map((job) => ({ ...job })) });
+  });
+
+  const update = <K extends keyof JenkinsConfig>(key: K, value: JenkinsConfig[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateJob = (index: number, key: "repo_path" | "job_url", value: string) => {
+    setDraft((current) => ({
+      ...current,
+      jobs: current.jobs.map((job, i) => (i === index ? { ...job, [key]: value } : job)),
+    }));
+  };
+
+  const addJob = () => {
+    setDraft((current) => ({
+      ...current,
+      jobs: [...current.jobs, { repo_path: "", job_url: "" }],
+    }));
+  };
+
+  const removeJob = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      jobs: current.jobs.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSave = () => {
+    void saveJenkinsConfig({
+      ...draft(),
+      base_url: draft().base_url.trim(),
+      username: draft().username.trim(),
+      api_token_env: draft().api_token_env.trim() || "JENKINS_API_TOKEN",
+      build_limit: Math.max(1, Math.min(Number(draft().build_limit) || 50, 500)),
+      jobs: draft().jobs
+        .map((job) => ({ repo_path: job.repo_path.trim(), job_url: job.job_url.trim() }))
+        .filter((job) => job.repo_path && job.job_url),
+    });
+  };
+
+  return (
+    <>
+      <p class="menu-hint">Jenkins builds are matched to commits from configured job URLs.</p>
+
+      <div class="menu-notice">
+        Jenkins API token is not stored by git-juggler. Set <span class="mono">{draft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the backend.
+      </div>
+
+      <label class="menu-switch-row">
+        <span>
+          <span class="menu-setting-label">Enable Jenkins integration</span>
+          <span class="menu-hint">When disabled, Jenkins build status is not requested or shown.</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={draft().enabled}
+          onChange={(e) => update("enabled", e.currentTarget.checked)}
+        />
+      </label>
+
+      <label class="menu-field">
+        <span>Jenkins base URL</span>
+        <input
+          type="text"
+          placeholder="https://jenkins.example.com"
+          value={draft().base_url}
+          onInput={(e) => update("base_url", e.currentTarget.value)}
+        />
+      </label>
+
+      <label class="menu-field">
+        <span>Username</span>
+        <input
+          type="text"
+          value={draft().username}
+          onInput={(e) => update("username", e.currentTarget.value)}
+        />
+      </label>
+
+      <label class="menu-field">
+        <span>Token env var</span>
+        <input
+          type="text"
+          value={draft().api_token_env}
+          onInput={(e) => update("api_token_env", e.currentTarget.value)}
+        />
+      </label>
+
+      <label class="menu-field">
+        <span>Build limit per job</span>
+        <input
+          type="number"
+          min="1"
+          max="500"
+          value={draft().build_limit}
+          onInput={(e) => update("build_limit", Number(e.currentTarget.value))}
+        />
+      </label>
+
+      <div class="menu-subheading">Job mappings</div>
+      <p class="menu-hint">Map each local repo to one or more Jenkins job URLs.</p>
+      <div class="github-repo-mappings">
+        <Show when={draft().jobs.length > 0} fallback={<div class="menu-empty">No Jenkins jobs configured</div>}>
+          <Index each={draft().jobs}>
+            {(job, index) => (
+              <div class="github-repo-row">
+                <input
+                  type="text"
+                  placeholder="/absolute/path/to/repo"
+                  value={job().repo_path}
+                  onInput={(e) => updateJob(index, "repo_path", e.currentTarget.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="https://jenkins.example.com/job/my-pipeline/job/main"
+                  value={job().job_url}
+                  onInput={(e) => updateJob(index, "job_url", e.currentTarget.value)}
+                />
+                <button type="button" class="menu-secondary-button" onClick={() => removeJob(index)}>
+                  Remove
+                </button>
+              </div>
+            )}
+          </Index>
+        </Show>
+      </div>
+
+      <div class="menu-actions">
+        <button type="button" class="menu-secondary-button" onClick={addJob}>
+          Add job
+        </button>
+        <button type="button" class="menu-primary-button" onClick={handleSave}>
+          Save Jenkins settings
+        </button>
+      </div>
+
+      <Show when={jenkinsConfigError()}>
+        <div class="menu-error">{jenkinsConfigError()}</div>
+      </Show>
+    </>
+  );
+}

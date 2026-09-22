@@ -27,6 +27,7 @@ class Preferences(BaseModel):
     agent_show_worktrees: bool | None = None
     agent_poll_seconds: int | None = Field(default=None, ge=1, le=3600)
     key_bindings: dict[str, KeyBindingPreference] | None = Field(default=None, max_length=32)
+    onboarding_complete: bool | None = None
 
 
 class VscodeTheme(BaseModel):
