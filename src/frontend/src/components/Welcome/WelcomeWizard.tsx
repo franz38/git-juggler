@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { closeWelcomeWizard, loadConfig, welcomeWizardOpen } from "../../state/store";
 import { isPreviewingTheme } from "../../state/themes";
-import { AgentsSettings } from "../Menu/AgentsSettings";
+import { AgentQuickPicks } from "../Menu/AgentQuickPicks";
 import { RepoPathsSettings } from "../Menu/RepoPathsSettings";
 import { ThemeQuickPicks } from "../Menu/ThemeQuickPicks";
 
@@ -82,7 +82,7 @@ export function WelcomeWizard() {
               <RepoPathsSettings />
             </Show>
             <Show when={step().id === "agents"}>
-              <AgentsSettings />
+              <AgentQuickPicks />
             </Show>
           </div>
           <div class="welcome-footer">

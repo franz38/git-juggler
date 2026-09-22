@@ -2472,3 +2472,64 @@
   outline: none;
   border-color: var(--accent);
 }
+
+/* --- Welcome wizard: agent quick picks ------------------------------ */
+
+.agent-quickpicks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-quickpick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.agent-quickpick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.agent-quickpick-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-quickpick-logo {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-quickpick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-quickpick-tracking {
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-quickpick-manual {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
