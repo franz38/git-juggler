@@ -2320,58 +2320,28 @@
   color: var(--text-h);
 }
 
-.welcome-progress {
+.welcome-progress-bar {
   display: flex;
-  gap: 4px;
-  margin: 14px 0 0;
-}
-
-.welcome-progress-step {
-  flex: 1;
-  display: flex;
-  align-items: center;
   gap: 6px;
-  padding: 8px 4px;
-  border-bottom: 2px solid var(--border);
-  color: var(--text-dim);
-  font-size: 12px;
-  cursor: pointer;
+  margin: 14px 0 8px;
 }
 
-.welcome-progress-step.active {
-  border-bottom-color: var(--accent);
-  color: var(--text-h);
-}
-
-.welcome-progress-step.done {
-  color: var(--text);
-}
-
-.welcome-progress-dot {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
-  text-align: center;
+.welcome-progress-segment {
+  flex: 1;
+  height: 3px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  font-size: 10px;
+  background: var(--border);
 }
 
-.welcome-progress-step.active .welcome-progress-dot {
-  border-color: var(--accent);
-  color: var(--accent);
+.welcome-progress-segment.filled {
+  background: var(--accent);
 }
 
-.welcome-progress-step.done .welcome-progress-dot {
-  border-color: color-mix(in srgb, var(--success) 45%, transparent);
-  color: var(--success);
-}
-
-.welcome-progress-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.welcome-progress-caption {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 .welcome-body {
@@ -2400,4 +2370,105 @@
 .welcome-footer-nav {
   display: flex;
   gap: 8px;
+}
+
+.welcome-skip {
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.welcome-skip:hover {
+  color: var(--text-h);
+  text-decoration: underline;
+}
+
+/* --- Welcome wizard: theme quick picks ------------------------------ */
+
+.theme-quickpicks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.theme-quickpick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.theme-quickpick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.theme-quickpick-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.theme-quickpick-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.theme-quickpick-preview {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 44px;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.theme-quickpick-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.theme-quickpick-chip {
+  width: 16px;
+  height: 4px;
+  border-radius: 999px;
+  opacity: 0.7;
+}
+
+.theme-quickpick-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-h);
+  text-align: left;
+}
+
+.theme-quickpick-editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.theme-quickpick-select {
+  flex: 0 0 auto;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.theme-quickpick-select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
