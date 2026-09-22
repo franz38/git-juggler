@@ -8,6 +8,7 @@ import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
 import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
+import { CommandPalette } from "./components/CommandPalette/CommandPalette";
 import { DirectoryBrowserModal } from "./components/Menu/DirectoryBrowserModal";
 import { MainMenu } from "./components/Menu/MainMenu";
 import { Sidebar } from "./components/Sidebar/Sidebar";
@@ -21,8 +22,10 @@ import {
   activateAdjacentTab,
   agentPollSeconds,
   agentsEnabled,
+  closeCommandPalette,
   closeMenu,
   closeWelcomeWizard,
+  commandPaletteOpen,
   keyBindings,
   loadActiveTabGraph,
   matchesKeyBinding,
@@ -38,6 +41,7 @@ import {
   tabs,
   terminalHeight,
   terminalOpen,
+  toggleCommandPalette,
   toggleMenu,
   toggleTerminalOpen,
   welcomeWizardOpen,
@@ -108,6 +112,11 @@ function App() {
       } else if (matchesKeyBinding(e, bindings.toggleMenu)) {
         e.preventDefault();
         toggleMenu();
+      } else if (matchesKeyBinding(e, bindings.commandPalette)) {
+        e.preventDefault();
+        toggleCommandPalette();
+      } else if (e.key === "Escape" && commandPaletteOpen()) {
+        closeCommandPalette();
       } else if (e.key === "Escape" && menuOpen()) {
         closeMenu();
       } else if (e.key === "Escape" && welcomeWizardOpen()) {
@@ -152,6 +161,7 @@ function App() {
     <div class="app">
       <WelcomeWizard />
       <MainMenu />
+      <CommandPalette />
       <BranchContextMenu />
       <CommitContextMenu />
       <CreateTagModal />

@@ -205,18 +205,20 @@ export interface KeyBinding {
   alt: boolean;
 }
 
-export type KeyBindingAction = "nextTab" | "prevTab" | "toggleMenu";
+export type KeyBindingAction = "nextTab" | "prevTab" | "toggleMenu" | "commandPalette";
 
 export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
   { id: "nextTab", label: "Next tab" },
   { id: "prevTab", label: "Previous tab" },
   { id: "toggleMenu", label: "Open/close main menu" },
+  { id: "commandPalette", label: "Open command palette (search settings & repos)" },
 ];
 
 const DEFAULT_KEY_BINDINGS: Record<KeyBindingAction, KeyBinding> = {
   nextTab: { key: "ArrowRight", mod: true, shift: true, alt: false },
   prevTab: { key: "ArrowLeft", mod: true, shift: true, alt: false },
   toggleMenu: { key: "p", mod: true, shift: false, alt: false },
+  commandPalette: { key: "p", mod: true, shift: true, alt: false },
 };
 
 const KEY_BINDINGS_KEY = "git-juggler:keyBindings";
@@ -1026,10 +1028,25 @@ export const matchingHashes = createMemo<Set<string>>(() => {
 
 // --- Settings (Cmd/Ctrl+P main menu) ---------------------------------------
 
+export type MenuSection = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
+
+export const MENU_SECTION_ORDER: MenuSection[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings", "configuration"];
+
 const [menuOpen, setMenuOpen] = createSignal(false);
 export { menuOpen };
 
-export function openMenu(): void {
+// Which section the main menu shows. Lives here (rather than as local state
+// inside MainMenu) so the command palette can jump straight to a section
+// without MainMenu needing to know anything about the palette.
+const [menuSection, setMenuSectionSignal] = createSignal<MenuSection>("repos");
+export { menuSection };
+
+export function setMenuSection(section: MenuSection): void {
+  setMenuSectionSignal(section);
+}
+
+export function openMenu(section?: MenuSection): void {
+  if (section) setMenuSectionSignal(section);
   setMenuOpen(true);
   void loadConfig();
 }
@@ -1041,6 +1058,24 @@ export function closeMenu(): void {
 export function toggleMenu(): void {
   if (menuOpen()) closeMenu();
   else openMenu();
+}
+
+// --- Command palette (Cmd/Ctrl+Shift+P) -------------------------------------
+
+const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+export { commandPaletteOpen };
+
+export function openCommandPalette(): void {
+  setCommandPaletteOpen(true);
+}
+
+export function closeCommandPalette(): void {
+  setCommandPaletteOpen(false);
+}
+
+export function toggleCommandPalette(): void {
+  if (commandPaletteOpen()) closeCommandPalette();
+  else openCommandPalette();
 }
 
 // --- First-run welcome wizard ------------------------------------------

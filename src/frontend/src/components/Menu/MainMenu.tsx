@@ -1,15 +1,18 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import {
   KEY_BINDING_ACTIONS,
+  MENU_SECTION_ORDER,
   branchColorMode,
   closeMenu,
   formatKeyBinding,
   keyBindings,
   menuOpen,
+  menuSection as activeSection,
   resetKeyBinding,
   resetOnboarding,
   setBranchColorMode,
   setKeyBinding,
+  setMenuSection as setActiveSection,
 } from "../../state/store";
 import type { BranchColorMode, KeyBindingAction } from "../../state/store";
 import { isPreviewingTheme } from "../../state/themes";
@@ -19,12 +22,7 @@ import { JenkinsSettings } from "./JenkinsSettings";
 import { RepoPathsSettings } from "./RepoPathsSettings";
 import { ThemePicker } from "./ThemePicker";
 
-type Section = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
-
-const SECTION_ORDER: Section[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings", "configuration"];
-
 export function MainMenu() {
-  const [activeSection, setActiveSection] = createSignal<Section>("repos");
   const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
 
   // Captures the next real keypress (ignoring bare modifier taps) and binds
@@ -55,12 +53,12 @@ export function MainMenu() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const idx = SECTION_ORDER.indexOf(activeSection());
-        setActiveSection(SECTION_ORDER[Math.min(idx + 1, SECTION_ORDER.length - 1)]);
+        const idx = MENU_SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(MENU_SECTION_ORDER[Math.min(idx + 1, MENU_SECTION_ORDER.length - 1)]);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        const idx = SECTION_ORDER.indexOf(activeSection());
-        setActiveSection(SECTION_ORDER[Math.max(idx - 1, 0)]);
+        const idx = MENU_SECTION_ORDER.indexOf(activeSection());
+        setActiveSection(MENU_SECTION_ORDER[Math.max(idx - 1, 0)]);
       }
     };
     window.addEventListener("keydown", handleMenuKeydown);
