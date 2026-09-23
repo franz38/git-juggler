@@ -350,7 +350,7 @@ class AgentHookEventReader:
         for index, arg in enumerate(args[:-1]):
             if arg in {"cd", "-C", "--prefix"}:
                 paths.append(self._resolve_path(args[index + 1], cwd))
-        for match in re.finditer(r"(?:^|\s)(/[^\s;&|]+)", command):
+        for match in re.finditer(r"(?:^|\s)(/[^\s;&|]+|[A-Za-z]:\\[^\s;&|]+)", command):
             paths.append(Path(match.group(1)).expanduser())
         return paths
 
@@ -371,7 +371,7 @@ class AgentHookEventReader:
                 for child in value:
                     visit(child, key)
             elif isinstance(value, str) and key.lower() in {"path", "filepath", "file_path", "old_string", "new_string"}:
-                if "/" in value or value.startswith("."):
+                if "/" in value or "\\" in value or value.startswith("."):
                     paths.append(value)
 
         visit(raw)

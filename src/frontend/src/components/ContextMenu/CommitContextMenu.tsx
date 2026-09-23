@@ -11,13 +11,12 @@ import {
   runInTerminal,
   scheduleCiRefreshAfterPush,
   scheduleGraphRefresh,
+  shellQuote,
   startPush,
+  upstreamBranch,
   upstreamCommit,
+  upstreamRemote,
 } from "../../state/store";
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
 
 function copyText(value: string): void {
   if (navigator.clipboard) {
@@ -105,12 +104,11 @@ export function CommitContextMenu() {
   const handlePushUpToHere = () => {
     const menu = contextMenu();
     const repo = activeRepo();
-    if (!menu || !repo || !canPushUpToHere()) return;
+    const remote = upstreamRemote();
+    const branch = upstreamBranch();
+    if (!menu || !repo || !canPushUpToHere() || !remote || !branch) return;
     startPush(repo, menu.hash);
-    runInTerminal(
-      repo,
-      `upstream=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}) && remote=\${upstream%%/*} && branch=\${upstream#*/} && git push "$remote" ${menu.hash}:"refs/heads/$branch"`,
-    );
+    runInTerminal(repo, `git push ${shellQuote(remote)} ${shellQuote(`${menu.hash}:refs/heads/${branch}`)}`);
     scheduleCiRefreshAfterPush(repo);
     closeContextMenu();
   };

@@ -1,10 +1,6 @@
 import { Show } from "solid-js";
 import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
-import { activeRepo, closeTagContextMenu, openDeleteTagModal, runInTerminal, scheduleGraphRefresh, tagContextMenu } from "../../state/store";
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
+import { activeRepo, closeTagContextMenu, openDeleteTagModal, runInTerminal, scheduleGraphRefresh, shellQuote, tagContextMenu } from "../../state/store";
 
 export function TagContextMenu() {
   let panelRef: HTMLDivElement | undefined;

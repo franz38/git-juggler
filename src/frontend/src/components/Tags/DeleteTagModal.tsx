@@ -1,9 +1,5 @@
 import { Show, createSignal } from "solid-js";
-import { activeRepo, closeDeleteTagModal, deleteTagModal, runInTerminal, scheduleGraphRefresh } from "../../state/store";
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
+import { activeRepo, closeDeleteTagModal, deleteTagModal, runInTerminal, scheduleGraphRefresh, shellQuote } from "../../state/store";
 
 export function DeleteTagModal() {
   const [deleteRemote, setDeleteRemote] = createSignal(false);

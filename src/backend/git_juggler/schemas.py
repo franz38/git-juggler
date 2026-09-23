@@ -92,6 +92,11 @@ class ConfigResponse(BaseModel):
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
     github: GitHubConfig | None = None
     jenkins: JenkinsConfig | None = None
+    # The shell run_terminal_session actually spawns (see terminal.py) --
+    # server-derived from sys.platform, not user-configurable. The frontend
+    # needs this to know how to quote arguments for commands it sends through
+    # the terminal (POSIX single-quoting is meaningless to cmd.exe).
+    terminal_shell: Literal["posix", "cmd"] = "posix"
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -165,6 +170,8 @@ class GraphResponse(BaseModel):
     current_branch: str | None = None
     head_commit: str | None = None
     upstream_commit: str | None = None
+    upstream_remote: str | None = None
+    upstream_branch: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
     checked_out_branches: list[str] = Field(default_factory=list)
@@ -174,6 +181,8 @@ class RepoStatusResponse(BaseModel):
     current_branch: str | None = None
     head_commit: str | None = None
     upstream_commit: str | None = None
+    upstream_remote: str | None = None
+    upstream_branch: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
     refs_signature: str = ""

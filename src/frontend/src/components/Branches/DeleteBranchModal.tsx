@@ -1,9 +1,5 @@
 import { Show, createMemo, createSignal } from "solid-js";
-import { activeRepo, closeDeleteBranchModal, commits, deleteBranchModal, runInTerminal, scheduleGraphRefresh } from "../../state/store";
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
+import { activeRepo, closeDeleteBranchModal, commits, deleteBranchModal, runInTerminal, scheduleGraphRefresh, shellQuote } from "../../state/store";
 
 function remoteParts(remoteBranch: string): { remote: string; branch: string } | null {
   const slash = remoteBranch.indexOf("/");

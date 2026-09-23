@@ -10,12 +10,38 @@ chain here (the browser can't read those files) and hand the frontend a plain
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
 from .schemas import VscodeTheme
 
 _HOME = Path.home()
+_LOCAL_APPDATA = os.environ.get("LOCALAPPDATA")
+_PROGRAM_FILES = os.environ.get("ProgramFiles")
+
+
+def _windows_builtin_extension_roots() -> list[Path]:
+    """Built-in-theme roots for the user-scope and machine-scope Windows
+    installers. Most installs put extensions directly under
+    ``resources/app``, but some updates nest an extra content-hash directory
+    (e.g. ``Microsoft VS Code/7debcd0e2a/resources/app/extensions``,
+    referenced by that install's own ``bin/code.cmd`` launcher) -- so both
+    the direct path and a one-level-deep glob are checked."""
+    roots: list[Path] = []
+    install_roots: list[Path] = []
+    if _LOCAL_APPDATA:
+        install_roots.append(Path(_LOCAL_APPDATA) / "Programs" / "Microsoft VS Code")
+    if _PROGRAM_FILES:
+        install_roots.append(Path(_PROGRAM_FILES) / "Microsoft VS Code")
+    for install_root in install_roots:
+        roots.append(install_root / "resources" / "app" / "extensions")
+        try:
+            roots.extend(install_root.glob("*/resources/app/extensions"))
+        except OSError:
+            pass
+    return roots
+
 
 # Directories that contain one sub-directory per extension.
 EXTENSION_ROOTS: list[Path] = [
@@ -25,6 +51,7 @@ EXTENSION_ROOTS: list[Path] = [
     Path("/Applications/Visual Studio Code.app/Contents/Resources/app/extensions"),
     Path("/usr/share/code/resources/app/extensions"),
     Path("/usr/lib/code/extensions"),
+    *_windows_builtin_extension_roots(),
 ]
 
 _MAX_INCLUDE_DEPTH = 8

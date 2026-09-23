@@ -2,7 +2,7 @@ import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { browseDirectory, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, installAgentHook, updateConfig } from "../api/client";
-import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary } from "../api/types";
+import type { AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
@@ -32,6 +32,8 @@ interface RepoState {
   checkedOutBranches: string[];
   headCommit: string | null;
   upstreamCommit: string | null;
+  upstreamRemote: string | null;
+  upstreamBranch: string | null;
   refsSignature: string | null;
   isDirty: boolean;
   uncommittedFiles: FileChange[];
@@ -576,6 +578,8 @@ function ensureRepoState(name: string): void {
       checkedOutBranches: [],
       headCommit: null,
       upstreamCommit: null,
+      upstreamRemote: null,
+      upstreamBranch: null,
       refsSignature: null,
       isDirty: false,
       uncommittedFiles: [],
@@ -601,6 +605,8 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
+    setRepoStates(name, "upstreamRemote", data.upstream_remote);
+    setRepoStates(name, "upstreamBranch", data.upstream_branch);
     // Re-seeded by the next status poll.
     setRepoStates(name, "refsSignature", null);
     setRepoStates(name, "isDirty", data.is_dirty);
@@ -652,6 +658,8 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
       return;
     }
     setRepoStates(repoId, "upstreamCommit", status.upstream_commit);
+    setRepoStates(repoId, "upstreamRemote", status.upstream_remote);
+    setRepoStates(repoId, "upstreamBranch", status.upstream_branch);
     setRepoStates(repoId, "isDirty", status.is_dirty);
     setRepoStates(repoId, "uncommittedFiles", status.uncommitted_files);
   } catch {
@@ -876,6 +884,16 @@ export const upstreamCommit = createMemo<string | null>(() => {
   return name ? repoStates[name]?.upstreamCommit ?? null : null;
 });
 
+export const upstreamRemote = createMemo<string | null>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.upstreamRemote ?? null : null;
+});
+
+export const upstreamBranch = createMemo<string | null>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.upstreamBranch ?? null : null;
+});
+
 export const isDirty = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.isDirty ?? false : false;
@@ -1045,6 +1063,12 @@ const [repoPaths, setRepoPaths] = createSignal<string[]>([]);
 const [repoPathsError, setRepoPathsError] = createSignal<string | null>(null);
 export { repoPaths, repoPathsError };
 
+// Which shell run_terminal_session actually spawns on the backend (see
+// terminal.py) -- posix until /api/config says otherwise, since that's the
+// correct default for the very first render before the initial fetch lands.
+const [terminalShell, setTerminalShell] = createSignal<TerminalShell>("posix");
+export { terminalShell };
+
 const [excludedPaths, setExcludedPaths] = createSignal<string[]>([]);
 const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(null);
 export { excludedPaths, excludedPathsError };
@@ -1144,6 +1168,7 @@ export async function loadConfig(): Promise<void> {
     setExcludedPaths(data.excluded_paths);
     applyGitHubConfig(data.github);
     applyJenkinsConfig(data.jenkins);
+    setTerminalShell(data.terminal_shell);
     setRepoPathsError(null);
     setExcludedPathsError(null);
     setGitHubConfigError(null);
@@ -1360,8 +1385,48 @@ export function closeCreateTagModal(): void {
   setCreateTagModal(null);
 }
 
-function shellQuote(value: string): string {
+// Quotes a value for safe inclusion in a command string sent to the
+// terminal. Branches on which shell the backend actually spawns
+// (terminalShell(), from /api/config -- see terminal.py): POSIX shells get
+// the classic single-quote escape, cmd.exe (Windows -- see terminal.py's
+// _run_windows_session) gets Windows argv-quoting instead, since single
+// quotes are meaningless to it.
+export function shellQuote(value: string): string {
+  return terminalShell() === "cmd" ? quoteForCmd(value) : quoteForPosix(value);
+}
+
+function quoteForPosix(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+// Reproduces the escaping Windows' CommandLineToArgvW (used by every normal
+// Windows console app, including git.exe, to split its own command line
+// back into argv) expects: wrap in double quotes, and double any run of
+// backslashes that immediately precedes a quote (either an embedded one or
+// the closing one) so it isn't read as escaping that quote. Wrapping in
+// quotes also protects the value from cmd.exe's own command-separator
+// parsing (&, |, <, >). Note: cmd.exe still expands %VAR% inside double
+// quotes at an interactive prompt (batch-file-only tricks like %% don't
+// apply here) -- a literal % in a value is an inherent cmd.exe limitation,
+// not something this function can route around.
+function quoteForCmd(value: string): string {
+  let result = '"';
+  let backslashes = 0;
+  for (const ch of value) {
+    if (ch === "\\") {
+      backslashes++;
+      continue;
+    }
+    if (ch === '"') {
+      result += "\\".repeat(backslashes * 2 + 1) + '"';
+      backslashes = 0;
+      continue;
+    }
+    result += "\\".repeat(backslashes) + ch;
+    backslashes = 0;
+  }
+  result += "\\".repeat(backslashes * 2) + '"';
+  return result;
 }
 
 const TAG_COMMAND_TIMEOUT_MS = 15000;

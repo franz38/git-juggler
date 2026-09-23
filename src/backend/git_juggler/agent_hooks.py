@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,7 +66,15 @@ if __name__ == "__main__":
 
 
 def _recorder_command(provider: str, phase: str) -> str:
-    return f"python3 {json.dumps(str(RECORDER_PATH))} {provider} {phase}"
+    # RECORDER_PATH and sys.executable are embedded as plain text here, not via
+    # json.dumps(): the whole settings dict is JSON-serialized once when written
+    # to disk, and that's the only escaping this string should go through.
+    # Pre-escaping it (e.g. with json.dumps) would double-escape backslashes on
+    # Windows paths, so the round-tripped command would never match
+    # str(RECORDER_PATH) again. sys.executable (rather than a bare "python3",
+    # which isn't a valid command on plenty of Windows setups) is used so the
+    # hook always runs with an interpreter known to exist on this machine.
+    return f'"{sys.executable}" "{RECORDER_PATH}" {provider} {phase}'
 
 
 def _claude_hook_entry(phase: str, matcher: str | None = None) -> dict:

@@ -6,6 +6,7 @@ import {
   activeRepo,
   reportRowHeight,
   runInTerminal,
+  shellQuote,
   toggleUncommittedExpanded,
   uncommittedExpanded,
 } from "../../state/store";
@@ -13,10 +14,6 @@ import {
 function statusLabel(status: string): string {
   if (status === "untracked") return "U";
   return status[0]?.toUpperCase() ?? "M";
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
 export function UncommittedRow(props: { files: FileChange[] }) {
