@@ -888,19 +888,52 @@ export function clearBranchFilters(): void {
 
 const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
 
-export const filteredCommits = createMemo<CommitSummary[]>(() => {
+// Commits that survive the branch filter but are hidden by the row filters
+// (author / comment / has-tag). The graph bridges these with dashed edges
+// instead of leaving a gap; branch-hidden commits are not bridged.
+const rowFilterHiddenHashes = createMemo<Set<string>>(() => {
   const authors = authorFilter();
   const comment = commentFilter().trim().toLowerCase();
   const tagged = tagFilter();
   const visibleByBranch = visibleBranchHashes();
-  return commits().filter((commit) => {
-    if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
-    if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
-    if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
-    if (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
-    return true;
-  });
+  const hidden = new Set<string>();
+  for (const commit of commits()) {
+    if (visibleByBranch && !visibleByBranch.has(commit.hash)) continue;
+    if (
+      (authors.length > 0 && !authors.includes(commit.author.name)) ||
+      (comment && !commit.subject.toLowerCase().includes(comment)) ||
+      (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes"))
+    ) {
+      hidden.add(commit.hash);
+    }
+  }
+  return hidden;
 });
+
+export const filteredCommits = createMemo<CommitSummary[]>(() => {
+  const visibleByBranch = visibleBranchHashes();
+  const hidden = rowFilterHiddenHashes();
+  return commits().filter((commit) => (!visibleByBranch || visibleByBranch.has(commit.hash)) && !hidden.has(commit.hash));
+});
+
+const commitsByHash = createMemo(() => new Map(commits().map((c) => [c.hash, c])));
+
+// Follows first parents from `parentHash` through commits hidden by the row
+// filters to the nearest visible ancestor. `skipped` is false when the parent
+// itself is visible (a normal, solid edge); null when no visible ancestor exists.
+export function resolveVisibleParent(parentHash: string, visible: Map<string, CommitSummary>): { hash: string; skipped: boolean } | null {
+  if (visible.has(parentHash)) return { hash: parentHash, skipped: false };
+  const hidden = rowFilterHiddenHashes();
+  const all = commitsByHash();
+  const seen = new Set<string>();
+  let cursor: string | undefined = parentHash;
+  while (cursor && hidden.has(cursor) && !seen.has(cursor)) {
+    seen.add(cursor);
+    cursor = all.get(cursor)?.parents[0];
+    if (cursor && visible.has(cursor)) return { hash: cursor, skipped: true };
+  }
+  return null;
+}
 
 export const currentBranch = createMemo<string | null>(() => {
   const name = activeRepo();

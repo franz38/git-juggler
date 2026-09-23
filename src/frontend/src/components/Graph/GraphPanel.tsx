@@ -10,6 +10,7 @@ import {
   headCommit,
   openContextMenu,
   pushingTargetCommits,
+  resolveVisibleParent,
   pushingRepos,
   repos,
   rowLayout,
@@ -37,6 +38,8 @@ interface Edge {
   d: string;
   color: string;
   isPushing: boolean;
+  /** Bridges commits hidden by the row filters, so it isn't a direct parent/child link. */
+  dashed: boolean;
 }
 
 // Straight down the child's lane, then a slightly rounded elbow into a
@@ -222,18 +225,21 @@ export function GraphPanel() {
     const segs: Edge[] = [];
     for (const c of chronological()) {
       c.parents.forEach((parentHash, idx) => {
-        const parent = byHash.get(parentHash);
-        if (!parent) return; // parent outside the loaded history, ignore
+        // Parent outside the loaded history (or with no visible ancestor): ignore.
+        const resolved = resolveVisibleParent(parentHash, byHash);
+        if (!resolved) return;
+        const parent = byHash.get(resolved.hash)!;
         const x1 = xFor(c.hash);
         const y1 = yFor(c.hash);
-        const x2 = xFor(parentHash);
-        const y2 = yFor(parentHash);
+        const x2 = xFor(resolved.hash);
+        const y2 = yFor(resolved.hash);
         const isMergeEdge = idx > 0;
         segs.push({
-          key: `${c.hash}-${parentHash}`,
+          key: `${c.hash}-${resolved.hash}`,
+          dashed: resolved.skipped,
           d: isMergeEdge ? horizontalFirstPath(x1, y1, x2, y2) : verticalFirstPath(x1, y1, x2, y2),
           color: isMergeEdge ? colorForBranch(parent.branch) : colorForBranch(c.branch),
-          isPushing: pushingEdges().has(`${c.hash}-${parentHash}`),
+          isPushing: pushingEdges().has(`${c.hash}-${resolved.hash}`),
         });
       });
     }
@@ -278,7 +284,7 @@ export function GraphPanel() {
       <g class="fetch-band-shift" style={{ transform: `translateY(${fetchBandHeight()}px)` }}>
         <For each={edges()}>
           {(seg) => (
-            <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" />
+            <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" stroke-dasharray={seg.dashed ? "2 4" : undefined} />
           )}
         </For>
         <For each={rowLayout().order}>
