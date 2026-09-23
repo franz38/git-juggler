@@ -15,6 +15,9 @@ import {
   setBranchSince,
   setCommentFilter,
   setSearchQuery,
+  setTagFilter,
+  tagFilter,
+  type TagFilter,
 } from "../../state/store";
 import { MultiSelect } from "./MultiSelect";
 
@@ -22,7 +25,7 @@ export function SearchBox() {
   // Only one of the two popovers (commit filter / branch visibility) is open at a time.
   const [openPanel, setOpenPanel] = createSignal<"filter" | "branches" | null>(null);
   const togglePanel = (panel: "filter" | "branches") => setOpenPanel((current) => (current === panel ? null : panel));
-  const activeFilterCount = () => (authorFilter().length > 0 ? 1 : 0) + (commentFilter().trim().length > 0 ? 1 : 0);
+  const activeFilterCount = () => (authorFilter().length > 0 ? 1 : 0) + (commentFilter().trim().length > 0 ? 1 : 0) + (tagFilter() !== "unset" ? 1 : 0);
   const activeBranchFilterCount = () => (branchFilter().length > 0 ? 1 : 0) + (branchSince() ? 1 : 0);
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -90,6 +93,14 @@ export function SearchBox() {
             <span>Author</span>
             <MultiSelect options={commitAuthors()} selected={authorFilter()} onChange={setAuthorFilter} placeholder="All authors" />
           </div>
+          <label class="filter-field">
+            <span>Has tag</span>
+            <select value={tagFilter()} onChange={(e) => setTagFilter(e.currentTarget.value as TagFilter)}>
+              <option value="unset">Unset</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
           <button type="button" class="filter-clear-button" onClick={() => setAuthorFilter([])}>
             Clear authors
           </button>

@@ -1618,7 +1618,8 @@
   white-space: nowrap;
 }
 
-.filter-field input {
+.filter-field input,
+.filter-field select {
   min-width: 0;
   background: var(--input-bg);
   border: 1px solid var(--border);
@@ -1629,7 +1630,8 @@
   padding: 5px 7px;
 }
 
-.filter-field input:focus {
+.filter-field input:focus,
+.filter-field select:focus {
   outline: none;
   border-color: var(--accent);
 }

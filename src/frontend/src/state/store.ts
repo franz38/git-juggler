@@ -823,7 +823,14 @@ export const commits = createMemo<CommitSummary[]>(() => {
 
 const [authorFilter, setAuthorFilterSignal] = createSignal<string[]>([]);
 const [commentFilter, setCommentFilterSignal] = createSignal("");
-export { authorFilter, commentFilter };
+// "unset" = don't filter on tags; "yes" = only tagged commits; "no" = only untagged ones.
+export type TagFilter = "unset" | "yes" | "no";
+const [tagFilter, setTagFilterSignal] = createSignal<TagFilter>("unset");
+export { authorFilter, commentFilter, tagFilter };
+
+export function setTagFilter(value: TagFilter): void {
+  setTagFilterSignal(value);
+}
 
 export function setAuthorFilter(authors: string[]): void {
   setAuthorFilterSignal(authors);
@@ -884,11 +891,13 @@ const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHa
 export const filteredCommits = createMemo<CommitSummary[]>(() => {
   const authors = authorFilter();
   const comment = commentFilter().trim().toLowerCase();
+  const tagged = tagFilter();
   const visibleByBranch = visibleBranchHashes();
   return commits().filter((commit) => {
     if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
     if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
     if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
+    if (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
     return true;
   });
 });
