@@ -15,8 +15,8 @@ from .browse import browse_directory
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
 from .git_data import get_graph, get_repo_status
-from .repos import list_repos, resolve_repo_path
-from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .repos import get_scan_progress, list_repos, resolve_repo_path
+from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -44,6 +44,10 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos", response_model=list[RepoSummary])
     def api_list_repos() -> list[RepoSummary]:
         return list_repos(config.load_repo_paths())
+
+    @app.get("/api/repos/scan-progress", response_model=RepoScanProgress)
+    def api_repos_scan_progress() -> RepoScanProgress:
+        return RepoScanProgress(**get_scan_progress())
 
     @app.get("/api/browse", response_model=BrowseDirectoryResponse)
     def api_browse(path: str | None = None) -> BrowseDirectoryResponse:

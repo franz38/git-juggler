@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, updateConfig } from "../api/client";
+import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -66,6 +66,7 @@ function loadTabsState(): PersistedTabsState {
 const restoredTabsState = loadTabsState();
 const [repos, setRepos] = createSignal<RepoSummary[]>([]);
 const [reposLoading, setReposLoading] = createSignal(false);
+const [reposFound, setReposFound] = createSignal(0);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
@@ -104,7 +105,7 @@ export function reportRowHeight(hash: string, height: number): void {
   }
 }
 
-export { repos, reposLoading, tabs, activeRepo };
+export { repos, reposLoading, reposFound, tabs, activeRepo };
 
 // --- Repos sidebar -------------------------------------------------------
 
@@ -138,11 +139,21 @@ export function setSidebarWidth(width: number): void {
 
 export async function loadRepos(): Promise<void> {
   setReposLoading(true);
+  setReposFound(0);
+  // Polls the same "how far along is the scan" state the backend already
+  // tracks while list_repos() runs, so the sidebar can show a live count
+  // instead of a static "Scanning…" line.
+  const progressPoll = window.setInterval(() => {
+    void fetchRepoScanProgress()
+      .then((progress) => setReposFound(progress.found))
+      .catch(() => {});
+  }, 150);
   try {
     setRepos(await fetchRepos());
   } catch {
     // The sidebar just stays empty; nowhere good to surface this yet.
   } finally {
+    window.clearInterval(progressPoll);
     setReposLoading(false);
   }
 }

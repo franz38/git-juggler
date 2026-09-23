@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from git_juggler.repos import list_repos
+from git_juggler.repos import get_scan_progress, list_repos
 
 
 class RepoListTest(unittest.TestCase):
@@ -71,6 +71,18 @@ class RepoListTest(unittest.TestCase):
             summaries = {repo_summary.name: repo_summary for repo_summary in list_repos([root])}
 
             self.assertEqual(summaries["repo"].current_branch, expected_branch)
+
+    def test_scan_progress_reflects_repos_found_and_resets_scanning(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._init_repo(root / "repo-a")
+            self._init_repo(root / "repo-b")
+
+            list_repos([root])
+            progress = get_scan_progress()
+
+            self.assertEqual(progress["found"], 2)
+            self.assertFalse(progress["scanning"])
 
 
 if __name__ == "__main__":

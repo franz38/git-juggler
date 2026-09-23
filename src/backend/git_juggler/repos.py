@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 from pathlib import Path
 
 from git import Repo
 
 from .git_utils import get_current_branch
 from .schemas import RepoSummary
+
+# Lets the frontend poll a live "N found" count while list_repos() is
+# scanning — a single global tracker, not per-scan, since only one scan
+# realistically runs at a time; it's a cosmetic progress indicator, not
+# something correctness depends on.
+_scan_progress_lock = threading.Lock()
+_scan_progress: dict[str, object] = {"found": 0, "scanning": False}
+
+
+def get_scan_progress() -> dict[str, object]:
+    with _scan_progress_lock:
+        return dict(_scan_progress)
 
 
 def root_key(root: Path) -> str:
@@ -100,34 +113,43 @@ def _scan_repo_via_gitpython(path: Path) -> tuple[str | None, str]:
 
 def list_repos(roots: list[Path]) -> list[RepoSummary]:
     """Scan the immediate children of each root for git repos. No recursion."""
-    repos: list[RepoSummary] = []
-    for root in roots:
-        if not root.is_dir():
-            continue
-        key = root_key(root)
-        with os.scandir(root) as it:
-            for entry in it:
-                if not entry.is_dir(follow_symlinks=False):
-                    continue
-                path = Path(entry.path)
-                if not (path / ".git").exists():
-                    continue
-                try:
-                    current_branch, repository_id = _scan_repo_fast(path)
-                except Exception:
+    with _scan_progress_lock:
+        _scan_progress["scanning"] = True
+        _scan_progress["found"] = 0
+    try:
+        repos: list[RepoSummary] = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            key = root_key(root)
+            with os.scandir(root) as it:
+                for entry in it:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    path = Path(entry.path)
+                    if not (path / ".git").exists():
+                        continue
                     try:
-                        current_branch, repository_id = _scan_repo_via_gitpython(path)
+                        current_branch, repository_id = _scan_repo_fast(path)
                     except Exception:
-                        current_branch = None
-                        repository_id = str((path / ".git").resolve())
-                repos.append(
-                    RepoSummary(
-                        id=f"{key}::{entry.name}",
-                        name=entry.name,
-                        path=str(path.resolve()),
-                        repository_id=repository_id,
-                        current_branch=current_branch,
+                        try:
+                            current_branch, repository_id = _scan_repo_via_gitpython(path)
+                        except Exception:
+                            current_branch = None
+                            repository_id = str((path / ".git").resolve())
+                    repos.append(
+                        RepoSummary(
+                            id=f"{key}::{entry.name}",
+                            name=entry.name,
+                            path=str(path.resolve()),
+                            repository_id=repository_id,
+                            current_branch=current_branch,
+                        )
                     )
-                )
-    repos.sort(key=lambda r: r.name.lower())
-    return repos
+                    with _scan_progress_lock:
+                        _scan_progress["found"] = len(repos)
+        repos.sort(key=lambda r: r.name.lower())
+        return repos
+    finally:
+        with _scan_progress_lock:
+            _scan_progress["scanning"] = False

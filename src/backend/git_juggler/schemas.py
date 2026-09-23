@@ -52,6 +52,11 @@ class RepoSummary(BaseModel):
     current_branch: str | None = None
 
 
+class RepoScanProgress(BaseModel):
+    found: int
+    scanning: bool
+
+
 class GitHubRepoConfig(BaseModel):
     repo_path: str
     owner: str
