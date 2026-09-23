@@ -122,19 +122,19 @@ export function MainMenu() {
           </div>
           <div class="menu-content">
             <Show when={activeSection() === "repos"}>
-              <h3>Repos</h3>
+
               <RepoPathsSettings />
             </Show>
             <Show when={activeSection() === "github"}>
-              <h3>GitHub Actions</h3>
+
               <GitHubSettings />
             </Show>
             <Show when={activeSection() === "jenkins"}>
-              <h3>Jenkins</h3>
+
               <JenkinsSettings />
             </Show>
             <Show when={activeSection() === "agents"}>
-              <h3>Agents</h3>
+
               <p class="menu-hint">
                 Detects local coding-agent processes (Claude Code, opencode) and the worktrees they're active in, shown as badges in
                 the sidebar and commit graph.
@@ -142,8 +142,6 @@ export function MainMenu() {
               <AgentsSettings />
             </Show>
             <Show when={activeSection() === "appearance"}>
-              <h3>Appearance</h3>
-
               <div class="menu-setting menu-setting-stacked">
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Theme</div>
@@ -169,7 +167,7 @@ export function MainMenu() {
               </div>
             </Show>
             <Show when={activeSection() === "keybindings"}>
-              <h3>Key bindings</h3>
+
               <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>
               <div class="menu-path-list">
                 <For each={KEY_BINDING_ACTIONS}>
@@ -203,7 +201,7 @@ export function MainMenu() {
               </div>
             </Show>
             <Show when={activeSection() === "configuration"}>
-              <h3>Configuration</h3>
+
               <div class="menu-setting">
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Reset onboarding</div>

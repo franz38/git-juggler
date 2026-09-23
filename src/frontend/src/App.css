@@ -27,7 +27,9 @@
   display: flex;
   width: 640px;
   max-width: calc(100vw - 32px);
-  max-height: 60vh;
+  height: 60vh;
+  min-height: 360px;
+  max-height: calc(100vh - 32px);
   background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -147,12 +149,6 @@
   min-width: 0;
   padding: 20px 24px;
   overflow-y: auto;
-}
-
-.menu-content h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: var(--text-h);
 }
 
 .menu-hint {
