@@ -79,7 +79,9 @@ export function WelcomeWizard() {
               <ThemeQuickPicks />
             </Show>
             <Show when={step().id === "repos"}>
-              <RepoPathsSettings />
+              <div class="menu-section">
+                <RepoPathsSettings />
+              </div>
             </Show>
             <Show when={step().id === "agents"}>
               <AgentQuickPicks />

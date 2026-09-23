@@ -119,7 +119,8 @@ export function JenkinsSettings() {
         />
       </label>
 
-      <div class="menu-subheading">Job mappings</div>
+      <div class="menu-field">
+      <span>Job mappings</span>
       <p class="menu-hint">Map each local repo to one or more Jenkins job URLs.</p>
       <div class="github-repo-mappings">
         <Show when={draft().jobs.length > 0} fallback={<div class="menu-empty">No Jenkins jobs configured</div>}>
@@ -145,6 +146,7 @@ export function JenkinsSettings() {
             )}
           </Index>
         </Show>
+      </div>
       </div>
 
       <div class="menu-actions">

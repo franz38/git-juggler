@@ -121,20 +121,17 @@ export function MainMenu() {
             </div>
           </div>
           <div class="menu-content">
+            <div class="menu-section">
             <Show when={activeSection() === "repos"}>
-
               <RepoPathsSettings />
             </Show>
             <Show when={activeSection() === "github"}>
-
               <GitHubSettings />
             </Show>
             <Show when={activeSection() === "jenkins"}>
-
               <JenkinsSettings />
             </Show>
             <Show when={activeSection() === "agents"}>
-
               <p class="menu-hint">
                 Detects local coding-agent processes (Claude Code, opencode) and the worktrees they're active in, shown as badges in
                 the sidebar and commit graph.
@@ -167,7 +164,6 @@ export function MainMenu() {
               </div>
             </Show>
             <Show when={activeSection() === "keybindings"}>
-
               <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>
               <div class="menu-path-list">
                 <For each={KEY_BINDING_ACTIONS}>
@@ -201,7 +197,6 @@ export function MainMenu() {
               </div>
             </Show>
             <Show when={activeSection() === "configuration"}>
-
               <div class="menu-setting">
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Reset onboarding</div>
@@ -222,6 +217,7 @@ export function MainMenu() {
                 </button>
               </div>
             </Show>
+            </div>
           </div>
         </div>
       </div>

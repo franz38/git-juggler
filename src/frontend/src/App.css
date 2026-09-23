@@ -151,6 +151,18 @@
   overflow-y: auto;
 }
 
+/* One vertical rhythm for every section: direct children are spaced by the
+   gap alone, so individual controls don't carry their own outer margins. */
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.menu-section > * {
+  margin: 0;
+}
+
 .menu-hint {
   margin: 0 0 16px;
   font-size: 12px;
@@ -443,12 +455,6 @@
   color: var(--danger-fg);
 }
 
-.menu-subheading {
-  margin: 16px 0 4px;
-  font-size: 13px;
-  color: var(--text-h);
-}
-
 .github-repo-mappings {
   display: flex;
   flex-direction: column;
@@ -500,12 +506,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.menu-setting:last-child {
-  border-bottom: none;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .menu-setting-main {
@@ -522,9 +526,17 @@
 }
 
 .agent-hooks-section {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-hooks-section > .menu-actions {
+  margin-top: 0;
+}
+
+.agent-hooks-section .menu-setting-main .menu-hint {
+  margin: 2px 0 0;
 }
 
 .agent-hook-grid {
@@ -608,6 +620,9 @@
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
+  padding: 0;
+  background: none;
+  border: none;
 }
 
 .theme-picker {
