@@ -57,7 +57,14 @@ def _stash_infos(repo: Repo) -> list[StashInfo]:
     return stashes
 
 
-def _current_upstream_commit(repo: Repo) -> str | None:
+@dataclass
+class _UpstreamInfo:
+    commit: str
+    remote: str
+    branch: str
+
+
+def _current_upstream(repo: Repo) -> _UpstreamInfo | None:
     try:
         upstream = repo.active_branch.tracking_branch()
     except TypeError:
@@ -65,7 +72,7 @@ def _current_upstream_commit(repo: Repo) -> str | None:
     if upstream is None:
         return None
     try:
-        return upstream.commit.hexsha
+        return _UpstreamInfo(commit=upstream.commit.hexsha, remote=upstream.remote_name, branch=upstream.remote_head)
     except Exception:
         return None
 
@@ -141,10 +148,13 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
     except Exception:
         head_commit = None
     uncommitted_files = _uncommitted_files(repo, config.load_excluded_paths())
+    upstream = _current_upstream(repo)
     return RepoStatusResponse(
         current_branch=get_current_branch(repo),
         head_commit=head_commit,
-        upstream_commit=_current_upstream_commit(repo),
+        upstream_commit=upstream.commit if upstream else None,
+        upstream_remote=upstream.remote if upstream else None,
+        upstream_branch=upstream.branch if upstream else None,
         is_dirty=bool(uncommitted_files),
         uncommitted_files=uncommitted_files,
         refs_signature=_refs_signature(repo),
@@ -154,7 +164,9 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
 def get_graph(
     repo_path: Path,
 ) -> tuple[
-    list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange], list[str], str
+    
+    list[CommitSummary], list[str], str | None, str | None, str | None, str | None, str | None, bool, list[FileChange], list[str], str
+
 ]:
     repo = Repo(repo_path)
     heads = list(repo.heads)
@@ -164,6 +176,8 @@ def get_graph(
     checked_out_branches = get_worktree_branches(repo)
     status = get_repo_status(repo_path)
     upstream_commit = status.upstream_commit
+    upstream_remote = status.upstream_remote
+    upstream_branch = status.upstream_branch
     is_dirty = status.is_dirty
     uncommitted_files = status.uncommitted_files
     refs_signature = status.refs_signature
@@ -174,15 +188,26 @@ def get_graph(
 
     if not heads:
         return (
+            (
             [],
+           
             [],
+           
             current_branch,
+           
             head_commit,
+           
             upstream_commit,
+           
+            upstream_remote,
+            upstream_branch,
             is_dirty,
+           
             uncommitted_files,
+           
             checked_out_branches,
             refs_signature,
+        ),
         )
 
     tags_by_commit: dict[str, list[str]] = {}
@@ -302,6 +327,8 @@ def get_graph(
         current_branch,
         head_commit,
         upstream_commit,
+        upstream_remote,
+        upstream_branch,
         is_dirty,
         uncommitted_files,
         checked_out_branches,

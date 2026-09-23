@@ -1,5 +1,11 @@
 import type { AgentRepositoryScan } from "../../api/types";
 
+// worktree_path comes straight from the OS (git/Claude/OpenCode all report it
+// in native form), so on Windows it's backslash-separated -- split on both.
+export function pathBasename(path: string): string {
+  return path.split(/[/\\]/).pop() || path;
+}
+
 export function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }

@@ -1,6 +1,6 @@
 import { For, Show, createMemo } from "solid-js";
 import { agentActivity, agentActivityError, agentShowWorktrees } from "../../state/store";
-import { compareSessions, formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
+import { compareSessions, formatTime, pathBasename, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
 
 export function AgentActivityPanel() {
   const activeScans = createMemo(() =>
@@ -55,7 +55,7 @@ export function AgentActivityPanel() {
                       {(worktree) => (
                         <div class="agent-worktree-card" classList={{ active: worktree.state === "active" }} title={worktree.worktree_path}>
                           <div class="agent-worktree-title">
-                            {worktree.worktree_path.split("/").pop() || worktree.worktree_path}
+                            {pathBasename(worktree.worktree_path)}
                             <Show when={worktree.is_home}>
                               <span class="agent-state-pill" title="The worktree this session was started in">home</span>
                             </Show>

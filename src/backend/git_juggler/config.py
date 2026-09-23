@@ -15,7 +15,7 @@ def _load_raw() -> dict:
     if not CONFIG_PATH.exists():
         return {}
     try:
-        data = json.loads(CONFIG_PATH.read_text())
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -24,7 +24,7 @@ def _load_raw() -> dict:
 def _save_raw(data: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     tmp_path = CONFIG_PATH.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(data, indent=2))
+    tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     tmp_path.replace(CONFIG_PATH)
 
 

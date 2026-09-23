@@ -38,6 +38,8 @@ export interface RepoScanProgress {
   scanning: boolean;
 }
 
+export type TerminalShell = "posix" | "cmd";
+
 export interface ConfigResponse {
   repo_paths: string[];
   pinned_repo_paths: string[];
@@ -45,6 +47,7 @@ export interface ConfigResponse {
   excluded_paths: string[];
   github: GitHubConfig | null;
   jenkins: JenkinsConfig | null;
+  terminal_shell: TerminalShell;
 }
 
 export interface ConfigUpdateRequest {
@@ -132,6 +135,8 @@ export interface GraphResponse {
   current_branch: string | null;
   head_commit: string | null;
   upstream_commit: string | null;
+  upstream_remote: string | null;
+  upstream_branch: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
   checked_out_branches: string[];
@@ -142,6 +147,8 @@ export interface RepoStatusResponse {
   current_branch: string | null;
   head_commit: string | null;
   upstream_commit: string | null;
+  upstream_remote: string | null;
+  upstream_branch: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
   refs_signature: string;

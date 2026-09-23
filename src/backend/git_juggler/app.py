@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -53,6 +54,8 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     def api_browse(path: str | None = None) -> BrowseDirectoryResponse:
         return browse_directory(path)
 
+    terminal_shell = "cmd" if sys.platform == "win32" else "posix"
+
     def _current_config() -> ConfigResponse:
         return ConfigResponse(
             repo_paths=[str(p) for p in config.load_repo_paths()],
@@ -61,6 +64,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             excluded_paths=config.load_excluded_paths(),
             github=config.load_github_config(),
             jenkins=config.load_jenkins_config(),
+            terminal_shell=terminal_shell,
         )
 
     @app.get("/api/config", response_model=ConfigResponse)
@@ -130,13 +134,26 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
     def api_graph(repo_id: str) -> GraphResponse:
         path = _resolve_repo_path(repo_id)
-        commits, branches, current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files, checked_out_branches, refs_signature = get_graph(path)
+        (
+            commits,
+            branches,
+            current_branch,
+            head_commit,
+            upstream_commit,
+            upstream_remote,
+            upstream_branch,
+            is_dirty,
+            uncommitted_files,
+            checked_out_branches, refs_signature,
+        ) = get_graph(path)
         return GraphResponse(
             commits=commits,
             branches=branches,
             current_branch=current_branch,
             head_commit=head_commit,
             upstream_commit=upstream_commit,
+            upstream_remote=upstream_remote,
+            upstream_branch=upstream_branch,
             is_dirty=is_dirty,
             uncommitted_files=uncommitted_files,
             checked_out_branches=checked_out_branches,

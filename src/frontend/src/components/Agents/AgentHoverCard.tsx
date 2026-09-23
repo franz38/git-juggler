@@ -2,7 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { AgentRepositoryScan, AgentWorktreeActivity } from "../../api/types";
 import { agentShowWorktrees } from "../../state/store";
-import { formatTime, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
+import { formatTime, pathBasename, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
 
 export interface AgentHoverEntry {
   scan: AgentRepositoryScan;
@@ -74,7 +74,7 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
                   {(activity) => (
                     <div class="agent-hover-worktree" classList={{ active: activity.state === "active" }}>
                       <div class="agent-hover-worktree-title">
-                        <span>{activity.worktree_path.split("/").pop() || activity.worktree_path}</span>
+                        <span>{pathBasename(activity.worktree_path)}</span>
                         <Show when={activity.is_home}>
                           <span class="agent-state-pill" title="The worktree this session was started in">home</span>
                         </Show>
