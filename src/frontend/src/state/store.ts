@@ -605,8 +605,15 @@ async function loadGraphInto(name: string): Promise<void> {
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
     setRepoStates(name, "upstreamCommit", data.upstream_commit);
-    // Re-seeded by the next status poll.
-    setRepoStates(name, "refsSignature", null);
+    // Seeded from this same response (not left null for the next status poll
+    // to fill in): if we nulled it, the first poll after a refresh would just
+    // adopt whatever refs_signature it sees as the new baseline without ever
+    // comparing it to what's on screen. That silently swallows any ref change
+    // that lands between this refresh and that poll -- e.g. a `git push`
+    // whose remote-tracking ref updates a moment after we decided the push
+    // was done and refreshed too early, so the origin badge would never
+    // move until a manual reload.
+    setRepoStates(name, "refsSignature", data.refs_signature);
     setRepoStates(name, "isDirty", data.is_dirty);
     setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
     void loadCiRunsInto(name);
