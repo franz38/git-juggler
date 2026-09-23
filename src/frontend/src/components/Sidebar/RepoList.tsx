@@ -17,6 +17,7 @@ import {
   pinnedRepos,
   repoGroups,
   repos,
+  reposFound,
   reposLoading,
   setRepoInGroup,
   setRepoPinned,
@@ -462,7 +463,7 @@ export function RepoList() {
         </button>
       </div>
       <Show when={reposLoading()}>
-        <div class="repo-empty">Scanning for repos…</div>
+        <div class="repo-empty">Looking for repos: {reposFound()} found…</div>
       </Show>
       <Show when={pinned().length > 0}>
         <h2>Pinned</h2>

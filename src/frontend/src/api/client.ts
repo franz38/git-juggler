@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -13,6 +13,10 @@ async function getJson<T>(url: string): Promise<T> {
 
 export function fetchRepos(): Promise<RepoSummary[]> {
   return getJson(`${API_BASE}/repos`);
+}
+
+export function fetchRepoScanProgress(): Promise<RepoScanProgress> {
+  return getJson(`${API_BASE}/repos/scan-progress`);
 }
 
 export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse> {

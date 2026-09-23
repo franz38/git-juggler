@@ -33,6 +33,11 @@ export interface RepoSummary {
   current_branch: string | null;
 }
 
+export interface RepoScanProgress {
+  found: number;
+  scanning: boolean;
+}
+
 export interface ConfigResponse {
   repo_paths: string[];
   pinned_repo_paths: string[];
