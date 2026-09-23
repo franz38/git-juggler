@@ -282,9 +282,19 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+/* Field labels share the setting-label style used by every other setting. */
+.menu-field > span:first-child {
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.menu-field .menu-hint {
+  margin: 0 0 3px;
 }
 
 .menu-field input,
@@ -438,9 +448,8 @@
 }
 
 .menu-subheading {
-  margin: 16px 0 8px;
-  font-size: 12px;
-  font-weight: 600;
+  margin: 16px 0 4px;
+  font-size: 13px;
   color: var(--text-h);
 }
 

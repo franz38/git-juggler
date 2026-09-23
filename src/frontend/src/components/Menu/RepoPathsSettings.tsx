@@ -41,7 +41,7 @@ export function RepoPathsSettings() {
     <>
       <div class="menu-field">
         <span>Search paths</span>
-      </div>
+        <p class="menu-hint">Repos are found among the immediate children of each path below.</p>
       <div class="menu-path-list">
         <For each={repoPaths()} fallback={<div class="menu-empty">No paths configured</div>}>
           {(path) => (
@@ -74,8 +74,10 @@ export function RepoPathsSettings() {
       <Show when={repoPathsError()}>
         <div class="menu-error">{repoPathsError()}</div>
       </Show>
+      </div>
       <label class="menu-field">
         <span>Excluded paths</span>
+        <p class="menu-hint">Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes.</p>
         <input
           type="text"
           placeholder=".claude"
@@ -84,7 +86,6 @@ export function RepoPathsSettings() {
           onBlur={handleSaveExcludedPaths}
         />
       </label>
-      <p class="menu-hint">Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes.</p>
       <Show when={excludedPathsError()}>
         <div class="menu-error">{excludedPathsError()}</div>
       </Show>

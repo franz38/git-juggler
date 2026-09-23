@@ -211,7 +211,7 @@ export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
   { id: "nextTab", label: "Next tab" },
   { id: "prevTab", label: "Previous tab" },
   { id: "toggleMenu", label: "Open/close main menu" },
-  { id: "commandPalette", label: "Open command palette (search settings & repos)" },
+  { id: "commandPalette", label: "Open command palette" },
 ];
 
 const DEFAULT_KEY_BINDINGS: Record<KeyBindingAction, KeyBinding> = {

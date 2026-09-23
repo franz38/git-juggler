@@ -123,7 +123,6 @@ export function MainMenu() {
           <div class="menu-content">
             <Show when={activeSection() === "repos"}>
               <h3>Repos</h3>
-              <p class="menu-hint">Repos are found among the immediate children of each path below.</p>
               <RepoPathsSettings />
             </Show>
             <Show when={activeSection() === "github"}>
@@ -176,7 +175,7 @@ export function MainMenu() {
                 <For each={KEY_BINDING_ACTIONS}>
                   {(action) => (
                     <div class="menu-path-row">
-                      <span class="menu-path-text">{action.label}</span>
+                      <span class="menu-setting-label">{action.label}</span>
                       <span class="keybinding-value">
                         {recordingAction() === action.id ? "Press a key…" : formatKeyBinding(keyBindings()[action.id])}
                       </span>
