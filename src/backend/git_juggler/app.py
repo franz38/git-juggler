@@ -126,7 +126,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
     def api_graph(repo_id: str) -> GraphResponse:
         path = _resolve_repo_path(repo_id)
-        commits, branches, current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files, checked_out_branches = get_graph(path)
+        commits, branches, current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files, checked_out_branches, refs_signature = get_graph(path)
         return GraphResponse(
             commits=commits,
             branches=branches,
@@ -136,6 +136,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             is_dirty=is_dirty,
             uncommitted_files=uncommitted_files,
             checked_out_branches=checked_out_branches,
+            refs_signature=refs_signature,
         )
 
     @app.get("/api/repos/{repo_id}/status", response_model=RepoStatusResponse)
@@ -154,7 +155,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
     def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:
         path = _resolve_repo_path(repo_id)
-        commits, _, _, _, _, _, _, _ = get_graph(path)
+        commits, _, _, _, _, _, _, _, _ = get_graph(path)
         return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
 
     # Stages (GitHub jobs / Jenkins pipeline stages) of one run. `run_id` is the

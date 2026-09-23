@@ -130,6 +130,7 @@ export interface GraphResponse {
   is_dirty: boolean;
   uncommitted_files: FileChange[];
   checked_out_branches: string[];
+  refs_signature: string;
 }
 
 export interface RepoStatusResponse {

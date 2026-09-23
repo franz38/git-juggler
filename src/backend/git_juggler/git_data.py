@@ -153,7 +153,9 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
 
 def get_graph(
     repo_path: Path,
-) -> tuple[list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange], list[str]]:
+) -> tuple[
+    list[CommitSummary], list[str], str | None, str | None, str | None, bool, list[FileChange], list[str], str
+]:
     repo = Repo(repo_path)
     heads = list(repo.heads)
     remote_refs = [ref for remote in repo.remotes for ref in remote.refs]
@@ -164,13 +166,24 @@ def get_graph(
     upstream_commit = status.upstream_commit
     is_dirty = status.is_dirty
     uncommitted_files = status.uncommitted_files
+    refs_signature = status.refs_signature
     try:
         head_commit = repo.head.commit.hexsha
     except Exception:
         head_commit = None
 
     if not heads:
-        return [], [], current_branch, head_commit, upstream_commit, is_dirty, uncommitted_files, checked_out_branches
+        return (
+            [],
+            [],
+            current_branch,
+            head_commit,
+            upstream_commit,
+            is_dirty,
+            uncommitted_files,
+            checked_out_branches,
+            refs_signature,
+        )
 
     tags_by_commit: dict[str, list[str]] = {}
     for t in tags:
@@ -292,4 +305,5 @@ def get_graph(
         is_dirty,
         uncommitted_files,
         checked_out_branches,
+        refs_signature,
     )

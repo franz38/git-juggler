@@ -169,6 +169,7 @@ class GraphResponse(BaseModel):
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
     checked_out_branches: list[str] = Field(default_factory=list)
+    refs_signature: str = ""
 
 
 class RepoStatusResponse(BaseModel):
