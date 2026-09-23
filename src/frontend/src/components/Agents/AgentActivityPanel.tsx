@@ -35,7 +35,7 @@ export function AgentActivityPanel() {
             </Show>
             <For each={activeScans()} fallback={<div class="agent-empty">No active Git worktrees detected</div>}>
               {(scan) => (
-                <div class="agent-scan-card">
+                <div class="agent-scan-card" classList={{ active: scan.state === "active" }}>
                   <div class="agent-scan-title" title={scan.details?.last_prompt ? `Last prompt: ${scan.details.last_prompt}` : (scan.session_id ?? undefined)}>
                     {sessionTitle(scan)}
                     <span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span>
@@ -53,7 +53,7 @@ export function AgentActivityPanel() {
                   <Show when={agentShowWorktrees()}>
                     <For each={scan.worktrees} fallback={<div class="agent-empty">No Git worktrees detected</div>}>
                       {(worktree) => (
-                        <div class="agent-worktree-card" title={worktree.worktree_path}>
+                        <div class="agent-worktree-card" classList={{ active: worktree.state === "active" }} title={worktree.worktree_path}>
                           <div class="agent-worktree-title">
                             {worktree.worktree_path.split("/").pop() || worktree.worktree_path}
                             <Show when={worktree.is_home}>

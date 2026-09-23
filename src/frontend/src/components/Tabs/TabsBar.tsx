@@ -2,8 +2,8 @@ import { For, Show, createSignal } from "solid-js";
 import { flipTranslate } from "../../lib/flip";
 import {
   activateTab,
-  activeAgentSessionsByRepositoryId,
   activeRepo,
+  agentSessionCountsByRepositoryId,
   agentsEnabled,
   closeTab,
   moveTab,
@@ -12,14 +12,15 @@ import {
   repoCurrentBranch,
   repos,
   tabs,
+  type AgentSessionCounts,
 } from "../../state/store";
 
-// Active agent sessions working in this tab's repository (0 when agent
-// detection is off), for the badge next to the tab name.
-function activeAgentCount(tabId: string): number {
-  if (!agentsEnabled()) return 0;
+// Agent sessions working in this tab's repository (none when agent detection
+// is off), for the badge next to the tab name.
+function agentCounts(tabId: string): AgentSessionCounts {
+  if (!agentsEnabled()) return { total: 0, active: 0 };
   const repositoryId = repos().find((repo) => repo.id === tabId)?.repository_id;
-  return repositoryId ? activeAgentSessionsByRepositoryId().get(repositoryId) ?? 0 : 0;
+  return (repositoryId && agentSessionCountsByRepositoryId().get(repositoryId)) || { total: 0, active: 0 };
 }
 
 export function TabsBar() {
@@ -137,9 +138,13 @@ export function TabsBar() {
                 <span class="tab-branch">{repoCurrentBranch(tab.id)}</span>
               </Show>
             </span>
-            <Show when={activeAgentCount(tab.id) > 0}>
-              <span class="tab-agent-badge" title={`${activeAgentCount(tab.id)} active agent session${activeAgentCount(tab.id) === 1 ? "" : "s"}`}>
-                {activeAgentCount(tab.id)}
+            <Show when={agentCounts(tab.id).total > 0}>
+              <span
+                class="tab-agent-badge"
+                classList={{ idle: agentCounts(tab.id).active === 0 }}
+                title={`${agentCounts(tab.id).active} of ${agentCounts(tab.id).total} agent session${agentCounts(tab.id).total === 1 ? "" : "s"} active`}
+              >
+                {agentCounts(tab.id).total}
               </span>
             </Show>
             <span

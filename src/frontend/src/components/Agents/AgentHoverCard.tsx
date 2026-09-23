@@ -57,7 +57,7 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
       <div ref={el} class="agent-hover-card" style={{ left: `${left()}px`, top: `${top()}px`, width: `${CARD_WIDTH}px` }}>
         <For each={sessions()}>
           {([scan, activities]) => (
-            <div class="agent-hover-session">
+            <div class="agent-hover-session" classList={{ active: scan.state === "active" }}>
               <div class="agent-hover-title">
                 <span>{sessionTitle(scan)}</span>
                 <span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span>
@@ -72,7 +72,7 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
               <Show when={agentShowWorktrees()}>
                 <For each={activities}>
                   {(activity) => (
-                    <div class="agent-hover-worktree">
+                    <div class="agent-hover-worktree" classList={{ active: activity.state === "active" }}>
                       <div class="agent-hover-worktree-title">
                         <span>{activity.worktree_path.split("/").pop() || activity.worktree_path}</span>
                         <Show when={activity.is_home}>
