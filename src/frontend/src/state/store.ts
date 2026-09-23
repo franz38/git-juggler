@@ -413,14 +413,24 @@ export const agentActivityByRepositoryId = createMemo<Map<string, AgentWorktreeA
   return byRepository;
 });
 
-// Number of active agent sessions touching each repository (keyed by
-// repository_id), for the badges on the repo tabs.
-export const activeAgentSessionsByRepositoryId = createMemo<Map<string, number>>(() => {
-  const counts = new Map<string, number>();
+export interface AgentSessionCounts {
+  total: number;
+  active: number;
+}
+
+// Number of agent sessions touching each repository (keyed by repository_id),
+// for the badges on the repo tabs: total sessions, and how many of those are
+// active (vs. idle) — the badge is shown whenever there's at least one
+// session, active or not, but colored by whether any of them is active.
+export const agentSessionCountsByRepositoryId = createMemo<Map<string, AgentSessionCounts>>(() => {
+  const counts = new Map<string, AgentSessionCounts>();
   for (const scan of agentActivity()?.scans ?? []) {
-    if (scan.state !== "active") continue;
+    if (scan.worktrees.length === 0) continue;
     for (const repositoryId of new Set(scan.worktrees.map((worktree) => worktree.repository_id))) {
-      counts.set(repositoryId, (counts.get(repositoryId) ?? 0) + 1);
+      const existing = counts.get(repositoryId) ?? { total: 0, active: 0 };
+      existing.total += 1;
+      if (scan.state === "active") existing.active += 1;
+      counts.set(repositoryId, existing);
     }
   }
   return counts;

@@ -9,7 +9,8 @@ import { RepoList } from "./RepoList";
 // keeps its filter text and scroll position, and the agents/pipelines panels
 // stay mounted (their polling is driven from App).
 export function Sidebar() {
-  const activeAgentCount = createMemo(() => (agentActivity()?.scans ?? []).filter((scan) => scan.state === "active").length);
+  const agentSessions = createMemo(() => (agentActivity()?.scans ?? []).filter((scan) => scan.worktrees.length > 0));
+  const activeAgentCount = createMemo(() => agentSessions().filter((scan) => scan.state === "active").length);
   const runningPipelineCount = createMemo(() => pipelines().length);
 
   return (
@@ -37,9 +38,13 @@ export function Sidebar() {
           <Show when={agentsEnabled()}>
             <button type="button" role="tab" class="sidebar-tab" classList={{ active: sidebarTab() === "agents" }} aria-selected={sidebarTab() === "agents"} onClick={() => setSidebarTab("agents")}>
               Agents
-              <Show when={activeAgentCount() > 0}>
-                <span class="sidebar-tab-badge" title={`${activeAgentCount()} active agent session${activeAgentCount() === 1 ? "" : "s"}`}>
-                  {activeAgentCount()}
+              <Show when={agentSessions().length > 0}>
+                <span
+                  class="sidebar-tab-badge"
+                  classList={{ idle: activeAgentCount() === 0 }}
+                  title={`${activeAgentCount()} of ${agentSessions().length} agent session${agentSessions().length === 1 ? "" : "s"} active`}
+                >
+                  {agentSessions().length}
                 </span>
               </Show>
             </button>
