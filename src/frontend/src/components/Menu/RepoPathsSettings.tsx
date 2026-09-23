@@ -39,6 +39,9 @@ export function RepoPathsSettings() {
 
   return (
     <>
+      <div class="menu-field">
+        <span>Search paths</span>
+      </div>
       <div class="menu-path-list">
         <For each={repoPaths()} fallback={<div class="menu-empty">No paths configured</div>}>
           {(path) => (

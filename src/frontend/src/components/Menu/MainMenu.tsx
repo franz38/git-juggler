@@ -122,7 +122,7 @@ export function MainMenu() {
           </div>
           <div class="menu-content">
             <Show when={activeSection() === "repos"}>
-              <h3>Search paths</h3>
+              <h3>Repos</h3>
               <p class="menu-hint">Repos are found among the immediate children of each path below.</p>
               <RepoPathsSettings />
             </Show>
