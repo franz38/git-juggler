@@ -17,9 +17,9 @@ import {
   setSearchQuery,
   setTagFilter,
   tagFilter,
-  type TagFilter,
 } from "../../state/store";
 import { MultiSelect } from "./MultiSelect";
+import { TriSwitch } from "./TriSwitch";
 
 export function SearchBox() {
   // Only one of the two popovers (commit filter / branch visibility) is open at a time.
@@ -93,14 +93,10 @@ export function SearchBox() {
             <span>Author</span>
             <MultiSelect options={commitAuthors()} selected={authorFilter()} onChange={setAuthorFilter} placeholder="All authors" />
           </div>
-          <label class="filter-field">
+          <div class="filter-field">
             <span>Has tag</span>
-            <select value={tagFilter()} onChange={(e) => setTagFilter(e.currentTarget.value as TagFilter)}>
-              <option value="unset">Unset</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </label>
+            <TriSwitch value={tagFilter()} onChange={setTagFilter} labels={{ unset: "Any" }} />
+          </div>
           <button type="button" class="filter-clear-button" onClick={() => setAuthorFilter([])}>
             Clear authors
           </button>
