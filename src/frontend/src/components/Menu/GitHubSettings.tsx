@@ -1,5 +1,7 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
 import type { GitHubConfig } from "../../api/types";
+import { TextField } from "../inputs/TextField";
+import { ToggleField } from "../inputs/ToggleField";
 import { githubConfig, githubConfigError, saveGitHubConfig } from "../../state/store";
 
 const emptyGitHubConfig: GitHubConfig = {
@@ -65,47 +67,23 @@ export function GitHubSettings() {
         GitHub token is not stored by git-juggler. Set <span class="mono">{draft().token_env || "GITHUB_TOKEN"}</span> before starting the backend.
       </div>
 
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Enable GitHub Actions integration</span>
-          <span class="menu-hint">When disabled, workflow status is not requested or shown.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={draft().enabled}
-          onChange={(e) => update("enabled", e.currentTarget.checked)}
-        />
-      </label>
+      <ToggleField
+        label="Enable GitHub Actions integration"
+        description="When disabled, workflow status is not requested or shown."
+        checked={draft().enabled}
+        onChange={(checked) => update("enabled", checked)}
+      />
 
-      <label class="menu-field">
-        <span>API base URL</span>
-        <input
-          type="text"
-          value={draft().api_base_url}
-          onInput={(e) => update("api_base_url", e.currentTarget.value)}
-        />
-      </label>
+      <TextField label="API base URL" value={draft().api_base_url} onChange={(value) => update("api_base_url", value)} />
 
-      <label class="menu-field">
-        <span>Token env var</span>
-        <input
-          type="text"
-          value={draft().token_env}
-          onInput={(e) => update("token_env", e.currentTarget.value)}
-        />
-      </label>
+      <TextField label="Token env var" value={draft().token_env} onChange={(value) => update("token_env", value)} />
 
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Automatic GitHub Actions detection</span>
-          <span class="menu-hint">Infer owner and repo from each local repo's origin remote.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={draft().auto_detect}
-          onChange={(e) => update("auto_detect", e.currentTarget.checked)}
-        />
-      </label>
+      <ToggleField
+        label="Automatic GitHub Actions detection"
+        description="Infer owner and repo from each local repo's origin remote."
+        checked={draft().auto_detect}
+        onChange={(checked) => update("auto_detect", checked)}
+      />
 
       <div class="menu-field">
       <span>Advanced repo overrides</span>
