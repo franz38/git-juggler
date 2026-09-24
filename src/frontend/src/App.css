@@ -2196,8 +2196,6 @@ body.tab-dragging * {
 }
 
 .file-diff-overlay {
-  /* Below the main menu (100) so the menu can be opened over the diff. */
-  z-index: 90;
   align-items: center;
   padding-top: 0;
 }

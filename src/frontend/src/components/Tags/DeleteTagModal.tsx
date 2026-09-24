@@ -1,5 +1,6 @@
 import { Show, createSignal } from "solid-js";
 import { activeRepo, closeDeleteTagModal, deleteTagModal, runInTerminal, scheduleGraphRefresh, shellQuote } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 
 export function DeleteTagModal() {
   const [deleteRemote, setDeleteRemote] = createSignal(false);
@@ -21,10 +22,12 @@ export function DeleteTagModal() {
     close();
   };
 
+  useOverlay("delete-tag", () => !!deleteTagModal(), close);
+
   return (
     <Show when={deleteTagModal()}>
       {(modal) => (
-        <div class="menu-overlay" onClick={close}>
+        <div class="menu-overlay" style={{ "z-index": overlayZIndex("delete-tag") }} onClick={close}>
           <div class="branch-delete-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Delete tag</h3>
             <p class="menu-hint">

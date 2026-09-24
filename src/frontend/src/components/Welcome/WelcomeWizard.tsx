@@ -1,5 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { closeWelcomeWizard, loadConfig, welcomeWizardOpen } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 import { isPreviewingTheme } from "../../state/themes";
 import { AgentQuickPicks } from "../Menu/AgentQuickPicks";
 import { RepoPathsSettings } from "../Menu/RepoPathsSettings";
@@ -53,9 +54,11 @@ export function WelcomeWizard() {
   };
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
+  useOverlay("welcome-wizard", welcomeWizardOpen, closeWelcomeWizard);
+
   return (
     <Show when={welcomeWizardOpen()}>
-      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }}>
+      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} style={{ "z-index": overlayZIndex("welcome-wizard") }}>
         <div class="menu-dialog welcome-dialog">
           <div class="welcome-close" title="Skip setup" onClick={() => closeWelcomeWizard()}>
             &times;

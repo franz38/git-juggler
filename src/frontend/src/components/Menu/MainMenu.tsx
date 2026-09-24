@@ -18,6 +18,7 @@ import {
   setMenuSection as setActiveSection,
 } from "../../state/store";
 import type { BranchColorMode, KeyBindingAction } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 import { isPreviewingTheme } from "../../state/themes";
 import { ToggleField } from "../inputs/ToggleField";
 import { AgentsSettings } from "./AgentsSettings";
@@ -71,9 +72,11 @@ export function MainMenu() {
     onCleanup(() => window.removeEventListener("keydown", handleMenuKeydown));
   });
 
+  useOverlay("menu", menuOpen, closeMenu);
+
   return (
     <Show when={menuOpen()}>
-      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} onClick={closeMenu}>
+      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} style={{ "z-index": overlayZIndex("menu") }} onClick={closeMenu}>
         <div class="menu-dialog" onClick={(e) => e.stopPropagation()}>
           <div class="menu-sidebar">
             <div

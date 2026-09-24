@@ -1,9 +1,10 @@
-import { For, Match, Show, Switch, createMemo, createResource, onCleanup, onMount } from "solid-js";
+import { For, Match, Show, Switch, createMemo, createResource } from "solid-js";
 import { parse } from "diff2html/lib-esm/diff-parser";
 import { fetchCommitFileDiff, fetchWorkingFileDiff } from "../../api/client";
 import type { FileDiff } from "../../api/types";
 import { buildOverviewMarks, buildSideBySideRows, type DiffCell, type SideBySideRow } from "../../lib/sideBySide";
 import { closeFileDiff, commitDetails, diffFullFile, fileDiffModal, selectFileDiff, setDiffFullFile, uncommittedFiles } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 import { ToggleField } from "../inputs/ToggleField";
 
 function DiffPane(props: {
@@ -115,18 +116,12 @@ export function FileDiffModal() {
     return target.hash ? commitDetails()[target.hash]?.files ?? [target.file] : uncommittedFiles();
   });
 
-  onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fileDiffModal()) closeFileDiff();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    onCleanup(() => document.removeEventListener("keydown", handleKeyDown));
-  });
+  useOverlay("file-diff", () => !!fileDiffModal(), closeFileDiff);
 
   return (
     <Show when={fileDiffModal()}>
       {(target) => (
-        <div class="menu-overlay file-diff-overlay" onClick={closeFileDiff}>
+        <div class="menu-overlay file-diff-overlay" style={{ "z-index": overlayZIndex("file-diff") }} onClick={closeFileDiff}>
           <div class="file-diff-dialog" onClick={(e) => e.stopPropagation()}>
             <div class="file-diff-header">
               <span class={`file-status status-${target().file.status}`}>{target().file.status[0]?.toUpperCase()}</span>
