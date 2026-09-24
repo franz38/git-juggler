@@ -1608,6 +1608,11 @@ export function openFileDiff(repo: string, hash: string | null, file: FileChange
   setFileDiffModal({ repo, hash, file });
 }
 
+// Switch the open diff to another file of the same commit / working tree.
+export function selectFileDiff(file: FileChange): void {
+  setFileDiffModal((current) => (current ? { ...current, file } : current));
+}
+
 export function closeFileDiff(): void {
   setFileDiffModal(null);
 }

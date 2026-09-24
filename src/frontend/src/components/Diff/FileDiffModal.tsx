@@ -3,7 +3,7 @@ import { parse } from "diff2html/lib-esm/diff-parser";
 import { fetchCommitFileDiff, fetchWorkingFileDiff } from "../../api/client";
 import type { FileDiff } from "../../api/types";
 import { buildSideBySideRows, type DiffCell, type SideBySideRow } from "../../lib/sideBySide";
-import { closeFileDiff, fileDiffModal } from "../../state/store";
+import { closeFileDiff, commitDetails, fileDiffModal, selectFileDiff, uncommittedFiles } from "../../state/store";
 
 function DiffPane(props: {
   side: "left" | "right";
@@ -76,6 +76,14 @@ export function FileDiffModal() {
       : fetchWorkingFileDiff(target.repo, target.file),
   );
 
+  // Every file of the commit (or of the working tree) so the user can switch
+  // between them without closing the modal.
+  const files = createMemo(() => {
+    const target = fileDiffModal();
+    if (!target) return [];
+    return target.hash ? commitDetails()[target.hash]?.files ?? [target.file] : uncommittedFiles();
+  });
+
   onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && fileDiffModal()) closeFileDiff();
@@ -99,19 +107,36 @@ export function FileDiffModal() {
                 Close
               </button>
             </div>
-            <div class="file-diff-body">
-              <Switch>
-                <Match when={diff.error}>
-                  <div class="file-diff-message">Could not load the diff for this file.</div>
-                </Match>
-                <Match when={diff.loading || !diff()}>
-                  <div class="file-diff-message">Loading diff…</div>
-                </Match>
-                <Match when={diff()?.binary}>
-                  <div class="file-diff-message">Binary file — no textual diff available.</div>
-                </Match>
-                <Match when={diff()}>{(d) => <DiffTable diff={d()} />}</Match>
-              </Switch>
+            <div class="file-diff-main">
+              <div class="file-diff-files">
+                <For each={files()}>
+                  {(f) => (
+                    <div
+                      class={`file-diff-file status-${f.status}`}
+                      classList={{ active: f.path === target().file.path }}
+                      title={f.path}
+                      onClick={() => selectFileDiff(f)}
+                    >
+                      <span class="file-status">{f.status === "untracked" ? "U" : f.status[0]?.toUpperCase()}</span>
+                      <span class="file-diff-file-name">{f.path}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+                <div class="file-diff-body">
+                  <Switch>
+                    <Match when={diff.error}>
+                      <div class="file-diff-message">Could not load the diff for this file.</div>
+                    </Match>
+                    <Match when={diff.loading || !diff()}>
+                      <div class="file-diff-message">Loading diff…</div>
+                    </Match>
+                    <Match when={diff()?.binary}>
+                      <div class="file-diff-message">Binary file — no textual diff available.</div>
+                    </Match>
+                    <Match when={diff()}>{(d) => <DiffTable diff={d()} />}</Match>
+                  </Switch>
+                </div>
             </div>
           </div>
         </div>
