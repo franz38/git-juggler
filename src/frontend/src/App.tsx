@@ -23,14 +23,9 @@ import {
   activateAdjacentTab,
   agentPollSeconds,
   agentsEnabled,
-  closeCommandPalette,
-  closeMenu,
-  closeWelcomeWizard,
-  commandPaletteOpen,
   keyBindings,
   loadActiveTabGraph,
   matchesKeyBinding,
-  menuOpen,
   PIPELINE_POLL_MS,
   pollRepoStatus,
   refreshAgentActivity,
@@ -45,8 +40,8 @@ import {
   toggleCommandPalette,
   toggleMenu,
   toggleTerminalOpen,
-  welcomeWizardOpen,
 } from "./state/store";
+import { closeTopOverlay } from "./state/overlayStack";
 import { loadPreferences } from "./state/preferences";
 import { activeTheme, loadThemes } from "./state/themes";
 
@@ -116,12 +111,8 @@ function App() {
       } else if (matchesKeyBinding(e, bindings.commandPalette)) {
         e.preventDefault();
         toggleCommandPalette();
-      } else if (e.key === "Escape" && commandPaletteOpen()) {
-        closeCommandPalette();
-      } else if (e.key === "Escape" && menuOpen()) {
-        closeMenu();
-      } else if (e.key === "Escape" && welcomeWizardOpen()) {
-        closeWelcomeWizard();
+      } else if (e.key === "Escape") {
+        closeTopOverlay();
       }
     };
     window.addEventListener("keydown", handleKeydown);

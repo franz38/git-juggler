@@ -1,11 +1,14 @@
 import { For, Show } from "solid-js";
 import { closeDirectoryBrowser, directoryBrowser, navigateDirectoryBrowser, selectDirectoryBrowserPath } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 
 export function DirectoryBrowserModal() {
+  useOverlay("directory-browser", () => !!directoryBrowser(), closeDirectoryBrowser);
+
   return (
     <Show when={directoryBrowser()}>
       {(state) => (
-        <div class="menu-overlay" onClick={closeDirectoryBrowser}>
+        <div class="menu-overlay" style={{ "z-index": overlayZIndex("directory-browser") }} onClick={closeDirectoryBrowser}>
           <div class="create-tag-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Choose a folder</h3>
             <p class="directory-browser-path">{state().path}</p>

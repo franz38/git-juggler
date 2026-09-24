@@ -1,6 +1,8 @@
 import { Show, createMemo, createSignal } from "solid-js";
 import { activeRepo, closeDeleteBranchModal, commits, deleteBranchModal, runInTerminal, scheduleGraphRefresh, shellQuote } from "../../state/store";
 
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
+
 function remoteParts(remoteBranch: string): { remote: string; branch: string } | null {
   const slash = remoteBranch.indexOf("/");
   if (slash <= 0 || slash === remoteBranch.length - 1) return null;
@@ -48,10 +50,12 @@ export function DeleteBranchModal() {
     close();
   };
 
+  useOverlay("delete-branch", () => !!deleteBranchModal(), close);
+
   return (
     <Show when={deleteBranchModal()}>
       {(modal) => (
-        <div class="menu-overlay" onClick={close}>
+        <div class="menu-overlay" style={{ "z-index": overlayZIndex("delete-branch") }} onClick={close}>
           <div class="branch-delete-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{modal().remote ? "Delete remote branch" : "Delete branch"}</h3>
             <p class="menu-hint">

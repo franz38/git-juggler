@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 import type { MenuSection } from "../../state/store";
 import { KEY_BINDING_ACTIONS, closeCommandPalette, commandPaletteOpen, openMenu, openRepoTab, repos } from "../../state/store";
 
@@ -36,6 +37,7 @@ type ResultItem =
   | { kind: "repo"; key: string; repo: ReturnType<typeof repos>[number] };
 
 export function CommandPalette() {
+  useOverlay("command-palette", commandPaletteOpen, closeCommandPalette);
   return (
     <Show when={commandPaletteOpen()}>
       <CommandPaletteDialog />
@@ -91,7 +93,7 @@ function CommandPaletteDialog() {
   };
 
   return (
-    <div class="command-palette-overlay" onClick={closeCommandPalette}>
+    <div class="command-palette-overlay" style={{ "z-index": overlayZIndex("command-palette") }} onClick={closeCommandPalette}>
       <div class="command-palette-dialog" onClick={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}

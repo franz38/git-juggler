@@ -26,6 +26,7 @@ class Preferences(BaseModel):
     agents_enabled: bool | None = None
     agent_show_worktrees: bool | None = None
     agent_poll_seconds: int | None = Field(default=None, ge=1, le=3600)
+    diff_full_file: bool | None = None
     key_bindings: dict[str, KeyBindingPreference] | None = Field(default=None, max_length=32)
     onboarding_complete: bool | None = None
 

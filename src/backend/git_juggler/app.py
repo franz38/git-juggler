@@ -201,21 +201,25 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/api/repos/{repo_id}/commits/{sha}/diff", response_model=FileDiff)
     def api_commit_file_diff(
-        repo_id: str, sha: str, path: str, old_path: str | None = None
+        repo_id: str,
+        sha: str,
+        path: str,
+        old_path: str | None = None,
+        full: bool = False,
     ) -> FileDiff:
         repo_path = _resolve_repo_path(repo_id)
         try:
-            return get_commit_file_diff(repo_path, sha, path, old_path)
+            return get_commit_file_diff(repo_path, sha, path, old_path, full)
         except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
             raise HTTPException(status_code=404, detail="diff not found") from exc
 
     @app.get("/api/repos/{repo_id}/diff", response_model=FileDiff)
     def api_working_file_diff(
-        repo_id: str, path: str, old_path: str | None = None
+        repo_id: str, path: str, old_path: str | None = None, full: bool = False
     ) -> FileDiff:
         repo_path = _resolve_repo_path(repo_id)
         try:
-            return get_working_file_diff(repo_path, path, old_path)
+            return get_working_file_diff(repo_path, path, old_path, full)
         except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
             raise HTTPException(status_code=404, detail="diff not found") from exc
 

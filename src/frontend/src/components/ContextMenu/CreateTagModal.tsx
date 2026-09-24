@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { Show, createEffect, createSignal } from "solid-js";
 import {
   activeRepo,
   closeCreateTagModal,
@@ -7,6 +7,7 @@ import {
   createTagModal,
   scheduleGraphRefresh,
 } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 
 type Phase = "form" | "pending" | "error";
 
@@ -26,13 +27,7 @@ export function CreateTagModal() {
     }
   });
 
-  onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && createTagModal()) closeCreateTagModal();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    onCleanup(() => document.removeEventListener("keydown", handleKeyDown));
-  });
+  useOverlay("create-tag", () => !!createTagModal(), closeCreateTagModal);
 
   const sanitizedName = () => tagName().trim().replace(/\s+/g, "-");
   const canCreateLightweight = () => sanitizedName().length > 0 && phase() !== "pending";
@@ -65,7 +60,7 @@ export function CreateTagModal() {
   return (
     <Show when={createTagModal()}>
       {(target) => (
-        <div class="menu-overlay" onClick={closeCreateTagModal}>
+        <div class="menu-overlay" style={{ "z-index": overlayZIndex("create-tag") }} onClick={closeCreateTagModal}>
           <div class="create-tag-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Create tag</h3>
             <p class="menu-hint">

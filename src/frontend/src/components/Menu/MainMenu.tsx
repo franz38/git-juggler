@@ -4,6 +4,7 @@ import {
   MENU_SECTION_ORDER,
   branchColorMode,
   closeMenu,
+  diffFullFile,
   formatKeyBinding,
   keyBindings,
   menuOpen,
@@ -12,11 +13,14 @@ import {
   resetOnboarding,
   resetToFactory,
   setBranchColorMode,
+  setDiffFullFile,
   setKeyBinding,
   setMenuSection as setActiveSection,
 } from "../../state/store";
 import type { BranchColorMode, KeyBindingAction } from "../../state/store";
+import { overlayZIndex, useOverlay } from "../../state/overlayStack";
 import { isPreviewingTheme } from "../../state/themes";
+import { ToggleField } from "../inputs/ToggleField";
 import { AgentsSettings } from "./AgentsSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { JenkinsSettings } from "./JenkinsSettings";
@@ -68,9 +72,11 @@ export function MainMenu() {
     onCleanup(() => window.removeEventListener("keydown", handleMenuKeydown));
   });
 
+  useOverlay("menu", menuOpen, closeMenu);
+
   return (
     <Show when={menuOpen()}>
-      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} onClick={closeMenu}>
+      <div class="menu-overlay" classList={{ "previewing-theme": isPreviewingTheme() }} style={{ "z-index": overlayZIndex("menu") }} onClick={closeMenu}>
         <div class="menu-dialog" onClick={(e) => e.stopPropagation()}>
           <div class="menu-sidebar">
             <div
@@ -165,6 +171,13 @@ export function MainMenu() {
                   </For>
                 </div>
               </div>
+
+              <ToggleField
+                label="Show full file in diffs"
+                description="In the file diff viewer, show the whole file instead of only the changed sections."
+                checked={diffFullFile()}
+                onChange={setDiffFullFile}
+              />
             </Show>
             <Show when={activeSection() === "keybindings"}>
               <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>

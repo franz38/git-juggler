@@ -16,6 +16,7 @@ export interface Preferences {
   agents_enabled?: boolean | null;
   agent_show_worktrees?: boolean | null;
   agent_poll_seconds?: number | null;
+  diff_full_file?: boolean | null;
   key_bindings?: Record<string, KeyBindingPreference> | null;
   onboarding_complete?: boolean | null;
 }

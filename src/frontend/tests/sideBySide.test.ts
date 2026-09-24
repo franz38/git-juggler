@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSideBySideRows, type ParsedBlock } from "../src/lib/sideBySide.ts";
+import { buildOverviewMarks, buildSideBySideRows, type ParsedBlock } from "../src/lib/sideBySide.ts";
 
 test("pairs deletions with insertions and pads the shorter side", () => {
   const block: ParsedBlock = {
@@ -32,6 +32,31 @@ test("pairs deletions with insertions and pads the shorter side", () => {
     right: { number: 4, text: "new c", kind: "insert" },
   });
   assert.equal(rows.length, 5);
+});
+
+test("overview marks: one per change block with its own deleted/inserted counts", () => {
+  const rows = buildSideBySideRows([
+    {
+      header: "@@",
+      lines: [
+        { type: "context", content: " a", oldNumber: 1, newNumber: 1 },
+        { type: "delete", content: "-b", oldNumber: 2 },
+        { type: "delete", content: "-c", oldNumber: 3 },
+        { type: "insert", content: "+B", newNumber: 2 },
+        { type: "context", content: " d", oldNumber: 4, newNumber: 3 },
+        { type: "insert", content: "+e", newNumber: 4 },
+        { type: "insert", content: "+f", newNumber: 5 },
+        { type: "insert", content: "+g", newNumber: 6 },
+      ],
+    },
+  ]);
+  // rows: 0 hunk, 1 ctx, 2 (b|B), 3 (c|-), 4 ctx, 5 (-|e), 6 (-|f), 7 (-|g)
+  const { marks, total } = buildOverviewMarks(rows);
+  assert.equal(total, 8);
+  assert.deepEqual(marks, [
+    { start: 2, deleted: 2, inserted: 1 },
+    { start: 5, deleted: 0, inserted: 3 },
+  ]);
 });
 
 test("pure deletion leaves the right side empty", () => {
