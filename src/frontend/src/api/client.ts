@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GraphResponse, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -31,6 +31,16 @@ export function fetchRepoScanProgress(): Promise<RepoScanProgress> {
 export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse> {
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
   return getJson(`${API_BASE}/browse${query}`);
+}
+
+/** Opens the OS's native folder dialog on the backend's machine. Rejects with an
+ * ApiError (status 501) when no native dialog is available. */
+export async function pickFolderNative(): Promise<PickFolderResponse> {
+  const res = await fetch(`${API_BASE}/pick-folder`, { method: "POST" });
+  if (!res.ok) {
+    throw new ApiError(`request failed (${res.status}): pick-folder`, res.status);
+  }
+  return res.json() as Promise<PickFolderResponse>;
 }
 
 /**

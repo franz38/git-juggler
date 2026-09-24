@@ -126,6 +126,10 @@ class BrowseDirectoryResponse(BaseModel):
     entries: list[BrowseEntry]
 
 
+class PickFolderResponse(BaseModel):
+    path: str | None  # None when the user cancelled the dialog
+
+
 class AgentHookProviderStatusResponse(BaseModel):
     provider: str
     installed: bool

@@ -13,6 +13,7 @@ from .agent_hook_events import AgentHookEventReader
 from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
 from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
+from .pick_folder import NativePickerUnavailable, pick_folder
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
 from .file_diff import get_commit_file_diff, get_working_file_diff
@@ -31,6 +32,7 @@ from .schemas import (
     AgentHooksResponse,
     AgentRepositoryScanResponse,
     BrowseDirectoryResponse,
+    PickFolderResponse,
     CiRunInfo,
     CiStage,
     CommitDetail,
@@ -80,6 +82,13 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/browse", response_model=BrowseDirectoryResponse)
     def api_browse(path: str | None = None) -> BrowseDirectoryResponse:
         return browse_directory(path)
+
+    @app.post("/api/pick-folder", response_model=PickFolderResponse)
+    def api_pick_folder() -> PickFolderResponse:
+        try:
+            return PickFolderResponse(path=pick_folder())
+        except NativePickerUnavailable as e:
+            raise HTTPException(status_code=501, detail=str(e))
 
     terminal_shell = "cmd" if sys.platform == "win32" else "posix"
 

@@ -77,6 +77,10 @@ export interface BrowseDirectoryResponse {
   entries: BrowseEntry[];
 }
 
+export interface PickFolderResponse {
+  path: string | null;
+}
+
 export interface GitHubRepoConfig {
   repo_path: string;
   owner: string;

@@ -1,7 +1,7 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { ApiError, browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
+import { ApiError, browseDirectory, pickFolderNative, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -220,7 +220,16 @@ async function loadBrowseDirectory(path: string | undefined, onSelect: (path: st
   }
 }
 
-export function openDirectoryBrowser(onSelect: (path: string) => void): void {
+// Prefers the OS's native folder dialog; falls back to the in-app browser when
+// none is available (e.g. headless Linux, or a backend on another machine).
+export async function openDirectoryBrowser(onSelect: (path: string) => void): Promise<void> {
+  try {
+    const { path } = await pickFolderNative();
+    if (path) onSelect(path);
+    return;
+  } catch {
+    // fall through to the in-app browser
+  }
   void loadBrowseDirectory(undefined, onSelect);
 }
 
