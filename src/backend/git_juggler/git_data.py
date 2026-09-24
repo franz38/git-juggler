@@ -234,7 +234,10 @@ def get_graph(
     # commits as side nodes. We still avoid `--all` so remote-tracking branches
     # do not silently expand the local graph.
     revs = [h.name for h in heads] + [t.name for t in tags] + [ref.name for ref in remote_refs if ref.remote_head != "HEAD"]
-    raw_commits = list(repo.iter_commits(revs, topo_order=True, reverse=True)) if revs else []
+    # --date-order (not --topo-order): children still precede parents, but
+    # otherwise rows follow commit dates, so a branch's newer commits aren't
+    # pulled below an older merge just because that merge is topologically newer.
+    raw_commits = list(repo.iter_commits(revs, date_order=True, reverse=True)) if revs else []
     commits_by_sha = {c.hexsha: c for c in raw_commits}
     stash_commits = []
     for stash in stash_infos:

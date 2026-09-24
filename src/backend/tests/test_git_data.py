@@ -43,6 +43,37 @@ class GitGraphTest(unittest.TestCase):
             self.assertEqual(stash_node.refs.stashes, ["stash@{0}"])
             self.assertEqual(by_hash[base_commit.hexsha].refs.stashes, [])
 
+    def test_rows_follow_commit_dates_not_branch_grouping(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+            (path / "a.txt").write_text("a\n", encoding="utf-8")
+            repo.index.add(["a.txt"])
+
+            def commit(message: str, timestamp: int, parents: list | None = None):
+                date = f"{timestamp} +0000"
+                return repo.index.commit(
+                    message, author=author, committer=author, author_date=date, commit_date=date, parent_commits=parents
+                )
+
+            base = commit("base", 1_000)
+            repo.git.branch("-M", "main")
+            repo.git.branch("feature")
+            feature_1 = commit("feature 1", 2_000, [base])
+            merge = commit("merge feature 1", 3_000, [base, feature_1])
+            main_2 = commit("main 2", 5_000, [merge])
+            feature_2 = commit("feature 2", 4_000, [feature_1])
+            # index.commit() moves HEAD each time, so pin both branch tips explicitly.
+            repo.heads.main.commit = main_2
+            repo.heads.feature.commit = feature_2
+
+            commits, *_ = get_graph(path)
+            order = [c.hash for c in commits]  # oldest first
+
+            # feature 2 is newer than the merge that absorbed its parent, so it must sort after it.
+            self.assertLess(order.index(merge.hexsha), order.index(feature_2.hexsha))
+
     def test_remote_branch_is_returned_on_pushed_commit(self) -> None:
         author = Actor("Test User", "test@example.com")
         with tempfile.TemporaryDirectory() as directory:
