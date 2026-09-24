@@ -44,27 +44,29 @@ export function CommitContextMenu() {
   });
   const stashRef = createMemo(() => selectedCommit()?.refs.stashes[0]);
   const hashType = createMemo(() => (stashRef() ? "stash" : "commit"));
-  const unpushedCommits = createMemo(() => {
+  const parentsByHash = createMemo(() => new Map(commits().map((commit) => [commit.hash, commit.parents])));
+  const collectAncestors = (start: string): Set<string> => {
+    const parents = parentsByHash();
+    const seen = new Set<string>();
+    const stack = [start];
+    while (stack.length > 0) {
+      const hash = stack.pop()!;
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      for (const parent of parents.get(hash) ?? []) stack.push(parent);
+    }
+    return seen;
+  };
+  const headAncestors = createMemo(() => {
     const head = headCommit();
+    return head ? collectAncestors(head) : new Set<string>();
+  });
+  const unpushedCommits = createMemo(() => {
     const upstream = upstreamCommit();
-    if (!head || !upstream) return new Set<string>();
+    if (!headCommit() || !upstream) return new Set<string>();
 
-    const parentsByHash = new Map(commits().map((commit) => [commit.hash, commit.parents]));
-    const collectAncestors = (start: string): Set<string> => {
-      const seen = new Set<string>();
-      const stack = [start];
-      while (stack.length > 0) {
-        const hash = stack.pop()!;
-        if (seen.has(hash)) continue;
-        seen.add(hash);
-        for (const parent of parentsByHash.get(hash) ?? []) stack.push(parent);
-      }
-      return seen;
-    };
-
-    const upstreamAncestors = collectAncestors(upstream);
-    const localOnly = collectAncestors(head);
-    for (const hash of upstreamAncestors) localOnly.delete(hash);
+    const localOnly = new Set(headAncestors());
+    for (const hash of collectAncestors(upstream)) localOnly.delete(hash);
     return localOnly;
   });
   const canPushUpToHere = createMemo(() => {
@@ -90,6 +92,24 @@ export function CommitContextMenu() {
     // TerminalPanel), but we already know for certain one just happened
     // here, so schedule the refresh directly rather than relying on that
     // heuristic.
+    scheduleGraphRefresh(repo);
+    closeContextMenu();
+  };
+
+  // Cherry-picking a commit already in the current branch's history is a no-op.
+  const canCherryPick = createMemo(() => {
+    const commit = selectedCommit();
+    return Boolean(commit && !stashRef() && headCommit() && !headAncestors().has(commit.hash));
+  });
+
+  const handleCherryPick = () => {
+    const commit = selectedCommit();
+    const repo = activeRepo();
+    if (!commit || !repo || !canCherryPick()) return;
+    // A merge commit has several parents; git needs to be told which side is
+    // the mainline. Parent 1 is the branch the merge landed on.
+    const mainline = commit.parents.length > 1 ? "-m 1 " : "";
+    runInTerminal(repo, `git cherry-pick ${mainline}${commit.hash}`);
     scheduleGraphRefresh(repo);
     closeContextMenu();
   };
@@ -151,6 +171,11 @@ export function CommitContextMenu() {
                   <div class="context-menu-item" onClick={handleCheckout}>
                     Checkout
                   </div>
+                  <Show when={canCherryPick()}>
+                    <div class="context-menu-item" onClick={handleCherryPick}>
+                      Cherry-pick
+                    </div>
+                  </Show>
                   <div class="context-menu-item" onClick={handleCreateTag}>
                     Create tag
                   </div>
