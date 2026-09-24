@@ -27,8 +27,7 @@
   display: flex;
   width: 640px;
   max-width: calc(100vw - 32px);
-  height: 60vh;
-  min-height: 360px;
+  height: 480px;
   max-height: calc(100vh - 32px);
   background: var(--menu-bg);
   border: 1px solid var(--border);
