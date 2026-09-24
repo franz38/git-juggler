@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js";
+import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { ApiError, browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
@@ -109,6 +109,34 @@ export function reportRowHeight(hash: string, height: number): void {
   if (measuredHeights[hash] !== height) {
     setMeasuredHeights(hash, height);
   }
+}
+
+// One ResizeObserver shared by every row. Each row used to own its own
+// observer, so mounting N rows ran N callbacks that each forced a layout
+// (getBoundingClientRect) and wrote the store, re-running the O(n) rowLayout
+// memo every time. Sharing one observer delivers all changed rows in a single
+// batch: heights come from the entry (no forced layout) and are applied in
+// one store update, so rowLayout recomputes once.
+const rowKeys = new WeakMap<Element, string>();
+const rowResizeObserver = new ResizeObserver((entries) => {
+  batch(() => {
+    for (const entry of entries) {
+      const key = rowKeys.get(entry.target);
+      if (key === undefined) continue;
+      const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).getBoundingClientRect().height;
+      reportRowHeight(key, height);
+    }
+  });
+});
+
+// Reports `el`'s rendered height under `key` until the returned cleanup runs.
+export function observeRowHeight(el: Element, key: string): () => void {
+  rowKeys.set(el, key);
+  rowResizeObserver.observe(el);
+  return () => {
+    rowResizeObserver.unobserve(el);
+    rowKeys.delete(el);
+  };
 }
 
 export { repos, reposLoading, reposFound, tabs, activeRepo };

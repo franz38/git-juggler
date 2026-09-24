@@ -4,8 +4,8 @@ import {
   COLLAPSED_ROW_HEIGHT,
   UNCOMMITTED_ROW_KEY,
   activeRepo,
+  observeRowHeight,
   openFileDiff,
-  reportRowHeight,
   runInTerminal,
   scheduleCommitRefresh,
   scheduleGraphRefresh,
@@ -56,11 +56,7 @@ export function UncommittedRow(props: { files: FileChange[] }) {
   };
 
   onMount(() => {
-    const observer = new ResizeObserver(() => {
-      if (rowRef) reportRowHeight(UNCOMMITTED_ROW_KEY, rowRef.getBoundingClientRect().height);
-    });
-    observer.observe(rowRef!);
-    onCleanup(() => observer.disconnect());
+    onCleanup(observeRowHeight(rowRef!, UNCOMMITTED_ROW_KEY));
   });
 
   return (

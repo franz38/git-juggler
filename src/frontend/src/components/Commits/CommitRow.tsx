@@ -9,8 +9,8 @@ import {
   matchingHashes,
   openBranchContextMenu,
   openContextMenu,
+  observeRowHeight,
   openTagContextMenu,
-  reportRowHeight,
   toggleExpand,
 } from "../../state/store";
 import { BranchBadge } from "../Badges/BranchBadge";
@@ -42,11 +42,7 @@ export function CommitRow(props: { commit: CommitSummary }) {
   // The graph SVG stacks its dots using each row's real rendered height
   // (not an estimate) so it can never drift out of alignment with the list.
   onMount(() => {
-    const observer = new ResizeObserver(() => {
-      if (rowRef) reportRowHeight(props.commit.hash, rowRef.getBoundingClientRect().height);
-    });
-    observer.observe(rowRef!);
-    onCleanup(() => observer.disconnect());
+    onCleanup(observeRowHeight(rowRef!, props.commit.hash));
   });
 
   return (
