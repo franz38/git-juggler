@@ -61,24 +61,17 @@
   box-sizing: border-box;
 }
 
-/* Scrollbars stay invisible until the scroll container is hovered. The track
-   space stays reserved so content doesn't shift (unlike toggling overflow).
-   The diff pane keeps its own ::-webkit-scrollbar styling, which standard
-   scrollbar-* properties would override. */
-*:not(.file-diff-pane) {
+/* Scrollbars of the sidebar and the commit graph stay invisible until the
+   container is hovered. The track space stays reserved so content doesn't
+   shift (unlike toggling overflow). */
+.sidebar-content,
+.graph-and-list {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
-*:not(.file-diff-pane):hover {
-  scrollbar-color: color-mix(in srgb, var(--text-dim) 40%, transparent) transparent;
-}
-
-/* Slim, low-contrast scrollbars (Windows/Linux show fat classic ones). The diff
-   pane keeps its own ::-webkit-scrollbar styling, which standard scrollbar-*
-   properties would override. */
-*:not(.file-diff-pane) {
-  scrollbar-width: thin;
+.sidebar-content:hover,
+.graph-and-list:hover {
   scrollbar-color: color-mix(in srgb, var(--text-dim) 40%, transparent) transparent;
 }
 
