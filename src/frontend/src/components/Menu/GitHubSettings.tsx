@@ -107,7 +107,8 @@ export function GitHubSettings() {
         />
       </label>
 
-      <div class="menu-subheading">Advanced repo overrides</div>
+      <div class="menu-field">
+      <span>Advanced repo overrides</span>
       <p class="menu-hint">Only add mappings when origin cannot be used or should map to a different GitHub repo.</p>
       <div class="github-repo-mappings">
         <Show when={draft().repos.length > 0} fallback={<div class="menu-empty">No overrides configured</div>}>
@@ -139,6 +140,7 @@ export function GitHubSettings() {
             )}
           </Index>
         </Show>
+      </div>
       </div>
 
       <div class="menu-actions">
