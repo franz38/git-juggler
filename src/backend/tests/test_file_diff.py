@@ -65,6 +65,25 @@ class FileDiffTest(unittest.TestCase):
         self.assertIn("rename from old.txt", result.patch)
         self.assertNotIn("+line1", result.patch)
 
+    def test_full_flag_includes_unchanged_lines(self) -> None:
+        lines = [f"line{i}\n" for i in range(40)]
+        (self.path / "a.txt").write_text("".join(lines), encoding="utf-8")
+        self._commit("init", "a.txt")
+        lines[20] = "changed\n"
+        (self.path / "a.txt").write_text("".join(lines), encoding="utf-8")
+        sha = self._commit("edit", "a.txt")
+
+        short = get_commit_file_diff(self.path, sha, "a.txt")
+        self.assertNotIn("line0\n", short.patch)
+        full = get_commit_file_diff(self.path, sha, "a.txt", full=True)
+        self.assertIn(" line0\n", full.patch)
+        self.assertIn(" line39\n", full.patch)
+
+        (self.path / "a.txt").write_text("".join(lines) + "tail\n", encoding="utf-8")
+        working = get_working_file_diff(self.path, "a.txt", full=True)
+        self.assertIn(" line0\n", working.patch)
+        self.assertIn("+tail", working.patch)
+
     def test_binary_file(self) -> None:
         (self.path / "b.bin").write_bytes(b"\x00\x01\x02\xff" * 10)
         sha = self._commit("bin", "b.bin")

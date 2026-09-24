@@ -301,6 +301,7 @@ export { pinnedRepos, repoGroups };
 
 const AGENTS_ENABLED_KEY = "git-juggler:agentsEnabled";
 const AGENT_WORKTREES_KEY = "git-juggler:agentShowWorktrees";
+const DIFF_FULL_FILE_KEY = "git-juggler:diffFullFile";
 
 function loadBoolean(key: string): boolean {
   try {
@@ -328,6 +329,15 @@ export function setAgentShowWorktrees(show: boolean): void {
   setAgentShowWorktreesSignal(show);
   saveBoolean(AGENT_WORKTREES_KEY, show);
   savePreference({ agent_show_worktrees: show });
+}
+
+// Whether the diff viewer shows the whole file instead of only the changed hunks.
+const [diffFullFile, setDiffFullFileSignal] = createSignal(loadBoolean(DIFF_FULL_FILE_KEY));
+export { diffFullFile };
+export function setDiffFullFile(full: boolean): void {
+  setDiffFullFileSignal(full);
+  saveBoolean(DIFF_FULL_FILE_KEY, full);
+  savePreference({ diff_full_file: full });
 }
 
 // Left panel tabs: the repo list (default), the agents list and the pipelines
@@ -2046,6 +2056,13 @@ export function applyRemotePreferences(remote: Preferences): Preferences {
     saveBoolean(AGENT_WORKTREES_KEY, remote.agent_show_worktrees);
   } else if (isStoredLocally(AGENT_WORKTREES_KEY)) {
     seed.agent_show_worktrees = agentShowWorktrees();
+  }
+
+  if (typeof remote.diff_full_file === "boolean") {
+    setDiffFullFileSignal(remote.diff_full_file);
+    saveBoolean(DIFF_FULL_FILE_KEY, remote.diff_full_file);
+  } else if (isStoredLocally(DIFF_FULL_FILE_KEY)) {
+    seed.diff_full_file = diffFullFile();
   }
 
   if (typeof remote.agent_poll_seconds === "number") {

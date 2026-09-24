@@ -36,15 +36,17 @@ export function fetchCommitDetail(repoId: string, hash: string): Promise<CommitD
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}`);
 }
 
-export function fetchCommitFileDiff(repoId: string, hash: string, file: FileChange): Promise<FileDiff> {
+export function fetchCommitFileDiff(repoId: string, hash: string, file: FileChange, full = false): Promise<FileDiff> {
   const query = new URLSearchParams({ path: file.path });
   if (file.old_path) query.set("old_path", file.old_path);
+  if (full) query.set("full", "true");
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}/diff?${query}`);
 }
 
-export function fetchWorkingFileDiff(repoId: string, file: FileChange): Promise<FileDiff> {
+export function fetchWorkingFileDiff(repoId: string, file: FileChange, full = false): Promise<FileDiff> {
   const query = new URLSearchParams({ path: file.path });
   if (file.old_path) query.set("old_path", file.old_path);
+  if (full) query.set("full", "true");
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/diff?${query}`);
 }
 

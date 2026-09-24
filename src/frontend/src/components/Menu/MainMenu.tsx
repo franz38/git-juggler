@@ -4,6 +4,7 @@ import {
   MENU_SECTION_ORDER,
   branchColorMode,
   closeMenu,
+  diffFullFile,
   formatKeyBinding,
   keyBindings,
   menuOpen,
@@ -12,11 +13,13 @@ import {
   resetOnboarding,
   resetToFactory,
   setBranchColorMode,
+  setDiffFullFile,
   setKeyBinding,
   setMenuSection as setActiveSection,
 } from "../../state/store";
 import type { BranchColorMode, KeyBindingAction } from "../../state/store";
 import { isPreviewingTheme } from "../../state/themes";
+import { ToggleField } from "../inputs/ToggleField";
 import { AgentsSettings } from "./AgentsSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { JenkinsSettings } from "./JenkinsSettings";
@@ -165,6 +168,13 @@ export function MainMenu() {
                   </For>
                 </div>
               </div>
+
+              <ToggleField
+                label="Show full file in diffs"
+                description="In the file diff viewer, show the whole file instead of only the changed sections."
+                checked={diffFullFile()}
+                onChange={setDiffFullFile}
+              />
             </Show>
             <Show when={activeSection() === "keybindings"}>
               <p class="menu-hint">Click Change, then press the key combination you want. Press Escape to cancel.</p>

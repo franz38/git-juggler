@@ -2234,6 +2234,15 @@ body.tab-dragging * {
   overflow: hidden;
 }
 
+.file-diff-full-toggle {
+  flex: none;
+  gap: 8px !important;
+}
+
+.file-diff-full-toggle label {
+  white-space: nowrap;
+}
+
 .file-diff-message {
   padding: 24px;
   color: var(--text-dim);

@@ -3,7 +3,8 @@ import { parse } from "diff2html/lib-esm/diff-parser";
 import { fetchCommitFileDiff, fetchWorkingFileDiff } from "../../api/client";
 import type { FileDiff } from "../../api/types";
 import { buildSideBySideRows, type DiffCell, type SideBySideRow } from "../../lib/sideBySide";
-import { closeFileDiff, commitDetails, fileDiffModal, selectFileDiff, uncommittedFiles } from "../../state/store";
+import { closeFileDiff, commitDetails, diffFullFile, fileDiffModal, selectFileDiff, setDiffFullFile, uncommittedFiles } from "../../state/store";
+import { ToggleField } from "../inputs/ToggleField";
 
 function DiffPane(props: {
   side: "left" | "right";
@@ -70,10 +71,15 @@ function DiffTable(props: { diff: FileDiff }) {
 }
 
 export function FileDiffModal() {
-  const [diff] = createResource(fileDiffModal, (target) =>
-    target.hash
-      ? fetchCommitFileDiff(target.repo, target.hash, target.file)
-      : fetchWorkingFileDiff(target.repo, target.file),
+  const [diff] = createResource(
+    () => {
+      const target = fileDiffModal();
+      return target ? { target, full: diffFullFile() } : null;
+    },
+    ({ target, full }) =>
+      target.hash
+        ? fetchCommitFileDiff(target.repo, target.hash, target.file, full)
+        : fetchWorkingFileDiff(target.repo, target.file, full),
   );
 
   // Every file of the commit (or of the working tree) so the user can switch
@@ -103,6 +109,7 @@ export function FileDiffModal() {
                 <Show when={target().file.old_path}>{(old) => <>{old()} → </>}</Show>
                 {target().file.path}
               </span>
+              <ToggleField class="file-diff-full-toggle" label="Full file" checked={diffFullFile()} onChange={setDiffFullFile} />
               <button type="button" class="menu-secondary-button" onClick={closeFileDiff}>
                 Close
               </button>
