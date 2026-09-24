@@ -1642,6 +1642,33 @@ export function setTerminalHeight(height: number): void {
   }
 }
 
+// Every open repo owns a shell, but spawning them all at load time starts N
+// shells (and their prompt setup) in parallel, which delays the one the user is
+// actually looking at. A panel connects immediately only for the active repo;
+// the rest wait until that first shell has produced output (or a fallback
+// timeout), or until something needs them sooner: switching to the tab, or a
+// command queued via runInTerminal.
+const BACKGROUND_TERMINAL_FALLBACK_MS = 4000;
+const [backgroundTerminalsReady, setBackgroundTerminalsReady] = createSignal(false);
+const [demandedTerminals, setDemandedTerminals] = createSignal<ReadonlySet<string>>(new Set());
+setTimeout(() => setBackgroundTerminalsReady(true), BACKGROUND_TERMINAL_FALLBACK_MS);
+
+export function shouldConnectTerminal(repoId: string | null): boolean {
+  // The repo-less shell is only visible when no tabs are open.
+  if (repoId === null) return tabs().length === 0 || backgroundTerminalsReady();
+  return backgroundTerminalsReady() || repoId === activeRepo() || demandedTerminals().has(repoId);
+}
+
+// Called when any terminal delivers its first output.
+export function markTerminalOutputReceived(): void {
+  setBackgroundTerminalsReady(true);
+}
+
+function demandTerminal(repoId: string): void {
+  if (demandedTerminals().has(repoId)) return;
+  setDemandedTerminals((prev) => new Set(prev).add(repoId));
+}
+
 const terminalSenders = new Map<string, (data: string) => void>();
 // Commands sent before a repo's terminal has finished connecting (e.g. right
 // after opening its tab) are queued here and flushed once it registers.
@@ -1675,6 +1702,7 @@ export function runInTerminal(repoId: string, command: string): void {
     const pending = pendingCommands.get(repoId) ?? [];
     pending.push(data);
     pendingCommands.set(repoId, pending);
+    demandTerminal(repoId);
   }
 }
 

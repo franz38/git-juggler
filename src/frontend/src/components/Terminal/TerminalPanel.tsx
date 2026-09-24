@@ -1,17 +1,19 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { createEffect, onCleanup, onMount } from "solid-js";
+import { createEffect, onCleanup, onMount, untrack } from "solid-js";
 import { stripAnsi } from "../../lib/stripAnsi";
 import {
   feedTerminalOutput,
   flushPendingCommands,
+  markTerminalOutputReceived,
   noteTerminalOutput,
   registerTerminalSender,
   scheduleCheckoutRefresh,
   scheduleCiRefreshAfterPush,
   scheduleCommitRefresh,
   scheduleGraphRefresh,
+  shouldConnectTerminal,
   startFetch,
   startPush,
   unregisterTerminalSender,
@@ -47,18 +49,18 @@ export function TerminalPanel(props: { repo: string | null }) {
     term.open(containerRef!);
     fitAddon.fit();
 
-    const protocol = location.protocol === "https:" ? "wss" : "ws";
-    const query = props.repo ? `?repo=${encodeURIComponent(props.repo)}` : "";
-    const ws = new WebSocket(`${protocol}://${location.host}/ws/terminal${query}`);
+    // Created lazily (see shouldConnectTerminal) so background repos don't
+    // all spawn their shells at once alongside the active one.
+    let ws: WebSocket | undefined;
 
     const sendCommand = (data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "input", data }));
       }
     };
 
     const sendResize = () => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       }
     };
@@ -92,31 +94,46 @@ export function TerminalPanel(props: { repo: string | null }) {
       }
     };
 
-    ws.addEventListener("open", () => {
-      sendResize();
-      // Only register once the socket can actually deliver — registering
-      // earlier (even guarded by a readyState check inside the sender) lets
-      // a queued command be "flushed" into a still-connecting socket and
-      // silently dropped.
-      if (props.repo) {
-        registerTerminalSender(props.repo, sendCommand);
-        flushPendingCommands(props.repo);
-      }
-    });
-    ws.addEventListener("message", (event: MessageEvent<string>) => {
-      try {
-        const payload = JSON.parse(event.data) as { type: string; data: string };
-        if (payload.type === "output") {
-          term.write(payload.data);
-          if (props.repo) {
-            noteTerminalOutput(props.repo);
-            feedTerminalOutput(props.repo, payload.data);
-          }
-          scanForGitCommands(payload.data);
+    const connect = () => {
+      const protocol = location.protocol === "https:" ? "wss" : "ws";
+      const query = props.repo ? `?repo=${encodeURIComponent(props.repo)}` : "";
+      const socket = new WebSocket(`${protocol}://${location.host}/ws/terminal${query}`);
+      ws = socket;
+
+      socket.addEventListener("open", () => {
+        sendResize();
+        // Only register once the socket can actually deliver — registering
+        // earlier (even guarded by a readyState check inside the sender) lets
+        // a queued command be "flushed" into a still-connecting socket and
+        // silently dropped.
+        if (props.repo) {
+          registerTerminalSender(props.repo, sendCommand);
+          flushPendingCommands(props.repo);
         }
-      } catch {
-        // ignore malformed frames
-      }
+      });
+      socket.addEventListener("message", (event: MessageEvent<string>) => {
+        try {
+          const payload = JSON.parse(event.data) as { type: string; data: string };
+          if (payload.type === "output") {
+            term.write(payload.data);
+            markTerminalOutputReceived();
+            if (props.repo) {
+              noteTerminalOutput(props.repo);
+              feedTerminalOutput(props.repo, payload.data);
+            }
+            scanForGitCommands(payload.data);
+          }
+        } catch {
+          // ignore malformed frames
+        }
+      });
+    };
+
+    let connected = false;
+    createEffect(() => {
+      if (connected || !shouldConnectTerminal(props.repo)) return;
+      connected = true;
+      untrack(connect);
     });
 
     term.onData((data) => sendCommand(data));
@@ -130,7 +147,7 @@ export function TerminalPanel(props: { repo: string | null }) {
     onCleanup(() => {
       if (props.repo) unregisterTerminalSender(props.repo);
       resizeObserver.disconnect();
-      ws.close();
+      ws?.close();
       term.dispose();
     });
   });

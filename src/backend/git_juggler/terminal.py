@@ -30,10 +30,64 @@ async def run_terminal_session(websocket: WebSocket, cwd: Path) -> None:
         await _run_posix_session(websocket, cwd)
 
 
+_MAX_FD = 4096
+_SHELL_KILL_GRACE_S = 2.0
+_reapers: set[asyncio.Task[None]] = set()
+
+
+def _signal_shell_group(pid: int, sig: int) -> None:
+    # pty.fork() makes the shell a session leader, so its pid is also its
+    # process group id: signalling the group reaches foreground jobs too, not
+    # just the shell.
+    try:
+        os.killpg(pid, sig)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def _try_reap(pid: int) -> bool:
+    try:
+        reaped, _ = os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        return True
+    return reaped == pid
+
+
+def _hang_up_shell(pid: int) -> None:
+    """SIGHUP the shell's process group and reap the shell without blocking
+    the event loop; escalate to SIGKILL if it ignores the hang-up."""
+    import signal
+
+    _signal_shell_group(pid, signal.SIGHUP)
+    if _try_reap(pid):
+        return
+
+    async def _reap() -> None:
+        waited = 0.0
+        while waited < _SHELL_KILL_GRACE_S:
+            await asyncio.sleep(0.1)
+            waited += 0.1
+            if _try_reap(pid):
+                return
+        _signal_shell_group(pid, signal.SIGKILL)
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            if _try_reap(pid):
+                return
+
+    task = asyncio.get_running_loop().create_task(_reap())
+    _reapers.add(task)
+    task.add_done_callback(_reapers.discard)
+
+
 async def _run_posix_session(websocket: WebSocket, cwd: Path) -> None:
     import fcntl
     import pty
-    import signal
     import struct
     import termios
 
@@ -45,6 +99,10 @@ async def _run_posix_session(websocket: WebSocket, cwd: Path) -> None:
     pid, master_fd = pty.fork()
 
     if pid == 0:  # child
+        # The server's listening socket is inheritable (uvicorn marks it so),
+        # and a shell that keeps it open would hold the port even after the
+        # server dies.
+        os.closerange(3, _MAX_FD)
         os.chdir(cwd)
         os.execvp(shell, [shell])
         os._exit(1)  # pragma: no cover - unreachable
@@ -94,10 +152,7 @@ async def _run_posix_session(websocket: WebSocket, cwd: Path) -> None:
         except (ValueError, OSError):
             pass
         output_task.cancel()
-        try:
-            os.kill(pid, signal.SIGHUP)
-        except ProcessLookupError:
-            pass
+        _hang_up_shell(pid)
         try:
             os.close(master_fd)
         except OSError:
