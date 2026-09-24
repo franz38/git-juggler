@@ -61,6 +61,14 @@
   box-sizing: border-box;
 }
 
+/* Slim, low-contrast scrollbars (Windows/Linux show fat classic ones). The diff
+   pane keeps its own ::-webkit-scrollbar styling, which standard scrollbar-*
+   properties would override. */
+*:not(.file-diff-pane) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-dim) 40%, transparent) transparent;
+}
+
 body {
   margin: 0;
 }
