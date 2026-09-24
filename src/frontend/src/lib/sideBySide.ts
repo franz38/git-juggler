@@ -66,3 +66,32 @@ export function buildSideBySideRows(blocks: ParsedBlock[]): SideBySideRow[] {
   }
   return rows;
 }
+
+export interface OverviewMark {
+  start: number; // index of the block's first row
+  deleted: number;
+  inserted: number;
+}
+
+// One mark per run of changed rows (deletions and insertions sit on the same
+// rows, paired index by index), for a scaled overview of where the changes
+// are. `total` is the number of rows, so start/total is the vertical position.
+export function buildOverviewMarks(rows: SideBySideRow[]): { marks: OverviewMark[]; total: number } {
+  const marks: OverviewMark[] = [];
+  let current: OverviewMark | null = null;
+  rows.forEach((row, index) => {
+    const deleted = row.kind === "line" && row.left?.kind === "delete";
+    const inserted = row.kind === "line" && row.right?.kind === "insert";
+    if (!deleted && !inserted) {
+      current = null;
+      return;
+    }
+    if (!current) {
+      current = { start: index, deleted: 0, inserted: 0 };
+      marks.push(current);
+    }
+    if (deleted) current.deleted++;
+    if (inserted) current.inserted++;
+  });
+  return { marks, total: rows.length };
+}

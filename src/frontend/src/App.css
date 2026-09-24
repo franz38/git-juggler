@@ -2318,6 +2318,29 @@ body.tab-dragging * {
   min-height: 0;
 }
 
+.file-diff-overview {
+  position: relative;
+  flex: 0 0 28px;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text-dim) 6%, transparent);
+}
+
+.overview-bar {
+  position: absolute;
+  width: 45%;
+  min-height: 2px;
+}
+
+.overview-delete {
+  left: 2px;
+  background: var(--danger);
+}
+
+.overview-insert {
+  right: 2px;
+  background: var(--success);
+}
+
 .file-diff-pane {
   flex: 1 1 0;
   min-width: 0;

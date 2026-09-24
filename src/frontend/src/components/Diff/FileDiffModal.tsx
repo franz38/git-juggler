@@ -2,7 +2,7 @@ import { For, Match, Show, Switch, createMemo, createResource, onCleanup, onMoun
 import { parse } from "diff2html/lib-esm/diff-parser";
 import { fetchCommitFileDiff, fetchWorkingFileDiff } from "../../api/client";
 import type { FileDiff } from "../../api/types";
-import { buildSideBySideRows, type DiffCell, type SideBySideRow } from "../../lib/sideBySide";
+import { buildOverviewMarks, buildSideBySideRows, type DiffCell, type SideBySideRow } from "../../lib/sideBySide";
 import { closeFileDiff, commitDetails, diffFullFile, fileDiffModal, selectFileDiff, setDiffFullFile, uncommittedFiles } from "../../state/store";
 import { ToggleField } from "../inputs/ToggleField";
 
@@ -41,6 +41,30 @@ function DiffPane(props: {
   );
 }
 
+// A column-high overview of the whole file: removed lines as red bars in the
+// left half, added lines as green bars in the right half, each placed and
+// sized by its share of the total rows.
+function DiffOverview(props: { rows: SideBySideRow[] }) {
+  const overview = createMemo(() => buildOverviewMarks(props.rows));
+  const pct = (rows: number) => `${(rows / overview().total) * 100}%`;
+  return (
+    <div class="file-diff-overview">
+      <For each={overview().marks}>
+        {(mark) => (
+          <>
+            <Show when={mark.deleted > 0}>
+              <div class="overview-bar overview-delete" style={{ top: pct(mark.start), height: pct(mark.deleted) }} />
+            </Show>
+            <Show when={mark.inserted > 0}>
+              <div class="overview-bar overview-insert" style={{ top: pct(mark.start), height: pct(mark.inserted) }} />
+            </Show>
+          </>
+        )}
+      </For>
+    </div>
+  );
+}
+
 function DiffTable(props: { diff: FileDiff }) {
   const rows = createMemo(() => {
     const files = parse(props.diff.patch);
@@ -60,6 +84,7 @@ function DiffTable(props: { diff: FileDiff }) {
   return (
     <Show when={rows().length > 0} fallback={<div class="file-diff-message">No textual changes.</div>}>
       <div class="file-diff-panes">
+        <DiffOverview rows={rows()} />
         <DiffPane side="left" rows={rows()} ref={(el) => (leftPane = el)} onScroll={syncVertical("left")} />
         <DiffPane side="right" rows={rows()} ref={(el) => (rightPane = el)} onScroll={syncVertical("right")} />
       </div>
