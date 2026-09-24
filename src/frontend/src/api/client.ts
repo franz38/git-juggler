@@ -3,10 +3,19 @@ import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, Ag
 
 const API_BASE = "/api";
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`request failed (${res.status}): ${url}`);
+    throw new ApiError(`request failed (${res.status}): ${url}`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -24,8 +33,14 @@ export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse>
   return getJson(`${API_BASE}/browse${query}`);
 }
 
-export function fetchGraph(repoId: string): Promise<GraphResponse> {
-  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/graph`);
+/**
+ * One page of the commit graph. Without `before` this is the newest page plus
+ * the repo-wide state (branches, status, upstream); with `before` (a previous
+ * page's `next_cursor`) it is the next, older page of commits only.
+ */
+export function fetchGraph(repoId: string, before?: string): Promise<GraphResponse> {
+  const query = before ? `?before=${encodeURIComponent(before)}` : "";
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/graph${query}`);
 }
 
 export function fetchRepoStatus(repoId: string): Promise<RepoStatusResponse> {

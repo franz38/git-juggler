@@ -189,6 +189,11 @@ class GraphResponse(BaseModel):
     uncommitted_files: list[FileChange] = Field(default_factory=list)
     checked_out_branches: list[str] = Field(default_factory=list)
     refs_signature: str = ""
+    # Paging: commits are the newest page (oldest-first within it); when
+    # has_more, pass next_cursor as `before` to fetch the next, older page.
+    # Only the first page (no `before`) carries the repo-wide fields above.
+    has_more: bool = False
+    next_cursor: str | None = None
 
 
 class RepoStatusResponse(BaseModel):

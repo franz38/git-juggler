@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,9 +16,35 @@ from .browse import browse_directory
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
 from .file_diff import get_commit_file_diff, get_working_file_diff
-from .git_data import get_graph, get_repo_status
+from .git_data import (
+    GRAPH_PAGE_SIZE,
+    HistoryChangedError,
+    get_commit_hashes,
+    get_graph,
+    get_repo_status,
+)
 from .repos import get_scan_progress, list_repos, resolve_repo_path
-from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileDiff, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .schemas import (
+    ActivePipeline,
+    AgentActivityResponse,
+    AgentHookProviderStatusResponse,
+    AgentHooksResponse,
+    AgentRepositoryScanResponse,
+    BrowseDirectoryResponse,
+    CiRunInfo,
+    CiStage,
+    CommitDetail,
+    ConfigResponse,
+    ConfigUpdateRequest,
+    FileDiff,
+    GraphResponse,
+    Preferences,
+    RepoScanProgress,
+    RepoStatusResponse,
+    RepoSummary,
+    ThemesResponse,
+    VscodeTheme,
+)
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -80,7 +106,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             for raw in body.repo_paths:
                 path = Path(raw).expanduser().resolve()
                 if not path.is_dir():
-                    raise HTTPException(status_code=400, detail=f"not a directory: {raw}")
+                    raise HTTPException(
+                        status_code=400, detail=f"not a directory: {raw}"
+                    )
                 key = str(path)
                 if key in seen:
                     continue
@@ -137,36 +165,26 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.put("/api/preferences", response_model=Preferences)
     def api_put_preferences(body: Preferences) -> Preferences:
-        return config.update_preferences(body.model_dump(mode="json", exclude_unset=True))
+        return config.update_preferences(
+            body.model_dump(mode="json", exclude_unset=True)
+        )
 
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
-    def api_graph(repo_id: str) -> GraphResponse:
+    def api_graph(
+        repo_id: str,
+        before: str | None = None,
+        limit: int = Query(GRAPH_PAGE_SIZE, ge=1, le=10 * GRAPH_PAGE_SIZE),
+    ) -> GraphResponse:
         path = _resolve_repo_path(repo_id)
-        (
-            commits,
-            branches,
-            current_branch,
-            head_commit,
-            upstream_commit,
-            upstream_remote,
-            upstream_branch,
-            is_dirty,
-            uncommitted_files,
-            checked_out_branches, refs_signature,
-        ) = get_graph(path)
-        return GraphResponse(
-            commits=commits,
-            branches=branches,
-            current_branch=current_branch,
-            head_commit=head_commit,
-            upstream_commit=upstream_commit,
-            upstream_remote=upstream_remote,
-            upstream_branch=upstream_branch,
-            is_dirty=is_dirty,
-            uncommitted_files=uncommitted_files,
-            checked_out_branches=checked_out_branches,
-            refs_signature=refs_signature,
-        )
+        try:
+            return GraphResponse(
+                **get_graph(path, limit=limit, before=before)._asdict()
+            )
+        except HistoryChangedError as exc:
+            # The cursor commit is gone (history rewritten): the client should reload from the first page.
+            raise HTTPException(
+                status_code=409, detail="graph history changed"
+            ) from exc
 
     @app.get("/api/repos/{repo_id}/status", response_model=RepoStatusResponse)
     def api_repo_status(repo_id: str) -> RepoStatusResponse:
@@ -182,7 +200,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="commit not found") from exc
 
     @app.get("/api/repos/{repo_id}/commits/{sha}/diff", response_model=FileDiff)
-    def api_commit_file_diff(repo_id: str, sha: str, path: str, old_path: str | None = None) -> FileDiff:
+    def api_commit_file_diff(
+        repo_id: str, sha: str, path: str, old_path: str | None = None
+    ) -> FileDiff:
         repo_path = _resolve_repo_path(repo_id)
         try:
             return get_commit_file_diff(repo_path, sha, path, old_path)
@@ -190,7 +210,9 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="diff not found") from exc
 
     @app.get("/api/repos/{repo_id}/diff", response_model=FileDiff)
-    def api_working_file_diff(repo_id: str, path: str, old_path: str | None = None) -> FileDiff:
+    def api_working_file_diff(
+        repo_id: str, path: str, old_path: str | None = None
+    ) -> FileDiff:
         repo_path = _resolve_repo_path(repo_id)
         try:
             return get_working_file_diff(repo_path, path, old_path)
@@ -200,15 +222,25 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
     def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:
         path = _resolve_repo_path(repo_id)
-        commits, *_ = get_graph(path)
-        return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
+        return get_ci_runs(
+            path,
+            get_commit_hashes(path),
+            config.load_github_config(),
+            config.load_jenkins_config(),
+        )
 
     # Stages (GitHub jobs / Jenkins pipeline stages) of one run. `run_id` is the
     # value CiRunInfo.run_id carried; 404 when the provider has no stage data.
     @app.get("/api/repos/{repo_id}/ci/stages", response_model=list[CiStage])
     def api_ci_stages(repo_id: str, provider: str, run_id: str) -> list[CiStage]:
         path = _resolve_repo_path(repo_id)
-        stages = get_ci_run_stages(path, provider, run_id, config.load_github_config(), config.load_jenkins_config())
+        stages = get_ci_run_stages(
+            path,
+            provider,
+            run_id,
+            config.load_github_config(),
+            config.load_jenkins_config(),
+        )
         if stages is None:
             raise HTTPException(status_code=404, detail="stages not available")
         return stages
@@ -216,7 +248,11 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     # Queued/running pipelines across all repos, for the Pipelines tab.
     @app.get("/api/ci/active", response_model=list[ActivePipeline])
     def api_ci_active() -> list[ActivePipeline]:
-        return get_active_pipelines(list_repos(config.load_repo_paths()), config.load_github_config(), config.load_jenkins_config())
+        return get_active_pipelines(
+            list_repos(config.load_repo_paths()),
+            config.load_github_config(),
+            config.load_jenkins_config(),
+        )
 
     hook_event_reader = AgentHookEventReader()
 
@@ -260,7 +296,11 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         scanned_at = max((scan.scanned_at for scan in scans), default=0)
         return AgentActivityResponse(
             agents=[
-                {"pid": scan.agent_pid, "command_line": "hook activity", "matched_pattern": "hook"}
+                {
+                    "pid": scan.agent_pid,
+                    "command_line": "hook activity",
+                    "matched_pattern": "hook",
+                }
                 for scan in hook_scans
             ],
             scans=scans,
@@ -275,11 +315,17 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             opencode=_hook_status_response(statuses["opencode"]),
         )
 
-    @app.post("/api/agents/hooks/claude/install", response_model=AgentHookProviderStatusResponse)
+    @app.post(
+        "/api/agents/hooks/claude/install",
+        response_model=AgentHookProviderStatusResponse,
+    )
     def api_install_claude_hooks() -> AgentHookProviderStatusResponse:
         return _hook_status_response(install_claude_hooks())
 
-    @app.post("/api/agents/hooks/opencode/install", response_model=AgentHookProviderStatusResponse)
+    @app.post(
+        "/api/agents/hooks/opencode/install",
+        response_model=AgentHookProviderStatusResponse,
+    )
     def api_install_opencode_hooks() -> AgentHookProviderStatusResponse:
         return _hook_status_response(install_opencode_hooks())
 
