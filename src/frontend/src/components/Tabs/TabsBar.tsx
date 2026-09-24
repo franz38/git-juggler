@@ -27,11 +27,78 @@ export function TabsBar() {
   const [draggedTabId, setDraggedTabId] = createSignal<string | null>(null);
   const tabElements = new Map<string, HTMLDivElement>();
 
-  const draggedIdFrom = (event: DragEvent): string | null => {
-    return draggedTabId() || event.dataTransfer?.getData("application/x-git-juggler-tab") || event.dataTransfer?.getData("text/plain") || null;
+  // Pixels the pointer must travel before a press turns into a drag, so a
+  // plain click (or a slightly shaky one) still activates the tab.
+  const DRAG_THRESHOLD = 4;
+  // Set when a drag just finished so the click that follows the pointerup on
+  // the dragged tab doesn't also activate it.
+  let suppressClick = false;
+
+  const clearDrag = () => {
+    setDraggedTabId(null);
+    document.body.classList.remove("tab-dragging");
   };
 
-  const clearDrag = () => setDraggedTabId(null);
+  // Tabs are reordered with pointer events rather than native HTML5 drag and
+  // drop: during a native drag the OS owns the cursor, so the page can't keep
+  // showing the grabbing hand. Listeners live on window (not the tab) because
+  // the tab element gets moved in the DOM as it swaps, which can drop pointer
+  // capture.
+  const startPress = (event: PointerEvent, tabId: string) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest(".tab-close")) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+    let ghost: HTMLElement | null = null;
+    let grabOffsetX = 0;
+    let grabOffsetY = 0;
+
+    // The drag preview: a floating copy of the tab that follows the pointer,
+    // standing in for the native drag image. The real tab stays in the bar,
+    // dimmed, as the slot it will drop into.
+    const createGhost = () => {
+      const source = tabElements.get(tabId);
+      if (!source) return;
+      const rect = source.getBoundingClientRect();
+      grabOffsetX = startX - rect.left;
+      grabOffsetY = startY - rect.top;
+      ghost = source.cloneNode(true) as HTMLElement;
+      ghost.classList.remove("dragging");
+      ghost.classList.add("tab-ghost");
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.height = `${rect.height}px`;
+      document.body.appendChild(ghost);
+    };
+    const moveGhost = (e: PointerEvent) => {
+      if (ghost) ghost.style.transform = `translate(${e.clientX - grabOffsetX}px, ${e.clientY - grabOffsetY}px)`;
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!dragging) {
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
+        dragging = true;
+        setDraggedTabId(tabId);
+        document.body.classList.add("tab-dragging");
+        createGhost();
+      }
+      moveGhost(e);
+      maybeSwap(tabId, e.clientX);
+    };
+    const finish = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      ghost?.remove();
+      if (dragging) {
+        suppressClick = true;
+        setTimeout(() => (suppressClick = false), 0);
+      }
+      clearDrag();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
 
   // Animates the dragged tab and the neighbor it's about to swap with: capture
   // both elements' current position, let the (synchronous) reorder happen,
@@ -49,9 +116,7 @@ export function TabsBar() {
   // cursor has crossed past the midpoint of, instead of computing a full
   // target index and only reordering on drop -- the list reorders live as
   // you drag, no gap/ghost placeholder needed.
-  const maybeSwap = (event: DragEvent) => {
-    const draggedId = draggedIdFrom(event);
-    if (!draggedId) return;
+  const maybeSwap = (draggedId: string, clientX: number) => {
     const currentTabs = tabs();
     const draggedIndex = currentTabs.findIndex((tab) => tab.id === draggedId);
     if (draggedIndex === -1) return;
@@ -63,7 +128,7 @@ export function TabsBar() {
       const el = tabElements.get(nextTab.id);
       if (el) {
         const rect = el.getBoundingClientRect();
-        if (event.clientX > rect.left + rect.width / 2) {
+        if (clientX > rect.left + rect.width / 2) {
           animateSwap(draggedEl, el);
           moveTab(draggedId, nextTab.id, "after");
           return;
@@ -76,7 +141,7 @@ export function TabsBar() {
       const el = tabElements.get(prevTab.id);
       if (el) {
         const rect = el.getBoundingClientRect();
-        if (event.clientX < rect.left + rect.width / 2) {
+        if (clientX < rect.left + rect.width / 2) {
           animateSwap(draggedEl, el);
           moveTab(draggedId, prevTab.id, "before");
         }
@@ -85,51 +150,22 @@ export function TabsBar() {
   };
 
   return (
-    <div
-      class="tabs-bar"
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-        maybeSwap(e);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        clearDrag();
-      }}
-    >
+    <div class="tabs-bar">
       <For each={tabs()}>
         {(tab) => (
           <div
             ref={(el) => tabElements.set(tab.id, el)}
             class="tab"
             classList={{ active: activeRepo() === tab.id, preview: !tab.pinned, dragging: draggedTabId() === tab.id }}
-            draggable="true"
-            onClick={() => activateTab(tab.id)}
+            onPointerDown={(e) => startPress(e, tab.id)}
+            onClick={() => {
+              if (!suppressClick) activateTab(tab.id);
+            }}
             onDblClick={() => pinTab(tab.id)}
             onContextMenu={(e) => {
               e.preventDefault();
               openRepoContextMenu(e.clientX, e.clientY, tab.id, tab.name);
             }}
-            onDragStart={(e) => {
-              setDraggedTabId(tab.id);
-              e.dataTransfer?.setData("application/x-git-juggler-tab", tab.id);
-              e.dataTransfer?.setData("text/plain", tab.id);
-              if (e.dataTransfer) {
-                e.dataTransfer.effectAllowed = "move";
-              }
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-              maybeSwap(e);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              clearDrag();
-            }}
-            onDragEnd={clearDrag}
             title={tab.pinned ? tab.name : `${tab.name} (double-click to pin)`}
           >
             <span class="tab-names">

@@ -1483,16 +1483,32 @@
   transition: width 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
 }
 
-.tab[draggable="true"] {
-  cursor: grab;
+.tab:active {
+  cursor: grabbing;
 }
 
-.tab[draggable="true"]:active {
-  cursor: grabbing;
+/* Tabs are dragged with pointer events (not native drag and drop), so the
+   grabbing hand can stay for the whole drag, wherever the pointer wanders. */
+body.tab-dragging,
+body.tab-dragging * {
+  cursor: grabbing !important;
 }
 
 .tab.dragging {
   opacity: 0.45;
+}
+
+/* Floating copy of the tab that follows the pointer while it's dragged. */
+.tab-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.85;
+  background: var(--active-bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: none;
 }
 
 .tab.preview {
