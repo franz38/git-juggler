@@ -90,9 +90,10 @@ const [previewId, setPreviewId] = createSignal<string | null>(null);
 const [installedRaw, setInstalledRaw] = createSignal<RawVscodeTheme[]>([]);
 const [importedRaw, setImportedRaw] = createSignal<RawVscodeTheme[]>([]);
 const [themesError, setThemesError] = createSignal<string | null>(null);
+const [themesLoading, setThemesLoading] = createSignal(true);
 const cachedTheme = loadCachedTheme();
 
-export { themeId, themesError };
+export { themeId, themesError, themesLoading };
 
 function resolveAll(raws: RawVscodeTheme[]): AppTheme[] {
   const out: AppTheme[] = [];
@@ -189,6 +190,8 @@ export async function loadThemes(): Promise<void> {
     cacheTheme(allThemes().find((t) => t.id === id));
   } catch (err) {
     setThemesError(err instanceof Error ? err.message : "Could not load themes");
+  } finally {
+    setThemesLoading(false);
   }
 }
 

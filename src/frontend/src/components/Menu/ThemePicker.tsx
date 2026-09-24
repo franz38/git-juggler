@@ -11,6 +11,7 @@ import {
   setThemeId,
   themeId,
   themesError,
+  themesLoading,
   togglePinTheme,
 } from "../../state/themes";
 
@@ -131,10 +132,16 @@ export function ThemePicker() {
           <For each={imported()}>{(t) => <ThemeRow theme={t} removable />}</For>
         </Show>
         <div class="theme-group-label">Installed VS Code themes</div>
+        <Show when={themesLoading()}>
+          <div class="theme-loading" role="status">
+            <span class="theme-spinner" aria-hidden="true" />
+            Loading installed themes…
+          </div>
+        </Show>
         <For
           each={installed()}
           fallback={
-            <p class="menu-hint">
+            <p class="menu-hint" hidden={themesLoading()}>
               {installedThemes().length === 0
                 ? "No VS Code themes found in ~/.vscode/extensions or the VS Code app. You can still import a theme file."
                 : installedThemes().every((t) => isThemePinned(t.id)) && !query().trim()

@@ -2721,3 +2721,23 @@
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
+
+.theme-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  font-size: 12px;
+  color: var(--muted, inherit);
+}
+.theme-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: theme-spin 0.7s linear infinite;
+}
+@keyframes theme-spin {
+  to { transform: rotate(360deg); }
+}
