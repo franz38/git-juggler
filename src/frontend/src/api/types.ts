@@ -204,6 +204,8 @@ export interface CiRunInfo {
   duration_ms: number | null;
   /** Provider handle for fetching the run's stages (GitHub run id / Jenkins build URL). */
   run_id: string | null;
+  /** Commit the run was triggered for (attaches a polled run to its graph row). */
+  head_sha: string | null;
   /** Only filled in for active pipelines; otherwise fetched on demand. */
   stages: CiStage[] | null;
 }

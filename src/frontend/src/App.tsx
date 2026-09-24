@@ -31,6 +31,8 @@ import {
   pollRepoStatus,
   refreshAgentActivity,
   refreshPipelines,
+  refreshActiveRepoCiRuns,
+  CI_COMPLETED_REFRESH_INTERVAL_MS,
   setSidebarWidth,
   sidebarTab,
   setTerminalHeight,
@@ -91,6 +93,12 @@ function App() {
     const timer = window.setInterval(() => {
       void refreshPipelines();
     }, PIPELINE_POLL_MS);
+    onCleanup(() => window.clearInterval(timer));
+  });
+
+  // Completed CI runs of the open repo refresh on their own slow clock.
+  createEffect(() => {
+    const timer = window.setInterval(refreshActiveRepoCiRuns, CI_COMPLETED_REFRESH_INTERVAL_MS);
     onCleanup(() => window.clearInterval(timer));
   });
 

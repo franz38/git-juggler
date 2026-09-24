@@ -1,7 +1,8 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { ApiError, browseDirectory, pickFolderNative, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
+import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
+import { ApiError, browseDirectory, pickFolderNative, pollCiRuns, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -1450,14 +1451,47 @@ export async function loadRunStages(repoId: string, run: CiRunInfo): Promise<voi
   }
 }
 
-const CI_POLL_MS = 10000;
-const CI_PUSH_REFRESH_DELAYS_MS = [1000, 5000, 15000, 30000];
-const ciPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const ciPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+// CI refresh has three independent clocks:
+//  - completed runs: loaded with the graph, then refreshed every
+//    CI_COMPLETED_REFRESH_MS for the open repo while the tab is visible;
+//  - discovery: right after a commit action, "what is running for this repo?"
+//    at CI_DISCOVERY_DELAYS_MS, since the pipeline may not exist yet;
+//  - tracking: while a run is going, only those runs are polled, every
+//    ciPollSeconds (Menu > CI); a run that finishes triggers one completed refresh.
+const CI_DISCOVERY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
+const CI_COMPLETED_REFRESH_MS = 60000;
+export const DEFAULT_CI_POLL_SECONDS = 10;
+export const MAX_CI_POLL_SECONDS = 3600;
+const CI_POLL_SECONDS_KEY = "git-juggler:ciPollSeconds";
 
-function hasRunningCiRuns(runsByHash: Record<string, CiRunInfo[]>): boolean {
-  return Object.values(runsByHash).some((runs) => runs.some((run) => run.status === "running"));
+function clampCiPollSeconds(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_CI_POLL_SECONDS;
+  return Math.min(MAX_CI_POLL_SECONDS, Math.max(1, Math.round(value)));
 }
+
+function loadCiPollSeconds(): number {
+  try {
+    const stored = localStorage.getItem(CI_POLL_SECONDS_KEY);
+    return stored === null ? DEFAULT_CI_POLL_SECONDS : clampCiPollSeconds(Number(stored));
+  } catch {
+    return DEFAULT_CI_POLL_SECONDS;
+  }
+}
+
+const [ciPollSeconds, setCiPollSecondsSignal] = createSignal(loadCiPollSeconds());
+export { ciPollSeconds };
+export function setCiPollSeconds(seconds: number): void {
+  const next = clampCiPollSeconds(seconds);
+  setCiPollSecondsSignal(next);
+  try {
+    localStorage.setItem(CI_POLL_SECONDS_KEY, String(next));
+  } catch {
+    // Not critical — the setting just won't survive a reload.
+  }
+}
+
+const ciPollTimers = new Map<string, ReturnType<typeof setTimeout>>(); // tracking timers
+const ciPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>(); // discovery timers
 
 function clearCiPoll(repoId: string): void {
   const timer = ciPollTimers.get(repoId);
@@ -1465,16 +1499,61 @@ function clearCiPoll(repoId: string): void {
   ciPollTimers.delete(repoId);
 }
 
-function scheduleCiPollIfNeeded(repoId: string, runsByHash: Record<string, CiRunInfo[]>): void {
+// Folds a poll result into the repo's runs. Stages of runs still going feed the
+// hover graph's cache; a run that just finished drops its cached (running)
+// stages so the next hover loads the final ones once.
+function applyPolledRuns(repoId: string, polled: CiRunInfo[]): CiRunInfo[] {
+  ensureRepoState(repoId);
+  const { next, finished } = mergePolledRuns(repoStates[repoId].ciRuns, polled);
+  setRepoStates(repoId, "ciRuns", next);
+  const live = polled.filter((run) => run.run_id && run.stages);
+  if (live.length > 0 || finished.length > 0) {
+    setRunStages((prev) => {
+      const updated = { ...prev };
+      for (const run of live) updated[runStagesKey(run)] = run.stages;
+      for (const run of finished) delete updated[runStagesKey(run)];
+      return updated;
+    });
+  }
+  return finished;
+}
+
+function scheduleCiTrackingIfNeeded(repoId: string): void {
   clearCiPoll(repoId);
-  if (!hasRunningCiRuns(runsByHash)) return;
+  if (runningRefs(repoStates[repoId]?.ciRuns ?? {}).length === 0) return;
   ciPollTimers.set(
     repoId,
     setTimeout(() => {
       ciPollTimers.delete(repoId);
-      void loadCiRunsInto(repoId);
-    }, CI_POLL_MS),
+      void trackCiRuns(repoId);
+    }, ciPollSeconds() * 1000),
   );
+}
+
+// Polls only the runs known to be running. When one has finished, the completed
+// list is refreshed once (which also restarts tracking if others are still going).
+async function trackCiRuns(repoId: string): Promise<void> {
+  const refs = runningRefs(repoStates[repoId]?.ciRuns ?? {});
+  if (refs.length === 0) return;
+  try {
+    const finished = applyPolledRuns(repoId, await pollCiRuns(repoId, refs));
+    if (finished.length > 0) void loadCiRunsInto(repoId);
+    else scheduleCiTrackingIfNeeded(repoId);
+  } catch {
+    // Polling is opportunistic; try again next round.
+    scheduleCiTrackingIfNeeded(repoId);
+  }
+}
+
+// Asks for every active run of the repo (a pipeline that just started isn't in
+// the known list yet), then hands over to tracking.
+async function discoverCiRuns(repoId: string): Promise<void> {
+  try {
+    applyPolledRuns(repoId, await pollCiRuns(repoId));
+  } catch {
+    // Opportunistic; the next discovery delay or the completed refresh catches up.
+  }
+  if (!ciPollTimers.has(repoId)) scheduleCiTrackingIfNeeded(repoId);
 }
 
 function clearCiPushRefresh(repoId: string): void {
@@ -1545,7 +1624,7 @@ async function loadCiRunsInto(repoId: string): Promise<void> {
   try {
     const runs = await fetchCiRuns(repoId);
     setRepoStates(repoId, "ciRuns", runs);
-    scheduleCiPollIfNeeded(repoId, runs);
+    scheduleCiTrackingIfNeeded(repoId);
   } catch (e) {
     setRepoStates(repoId, "ciError", (e as Error).message);
     clearCiPoll(repoId);
@@ -1554,18 +1633,27 @@ async function loadCiRunsInto(repoId: string): Promise<void> {
   }
 }
 
+// The slow "completed runs" refresh for the open repo; skipped while the tab is
+// hidden, and when a run is being tracked (that poll refreshes on completion).
+export const CI_COMPLETED_REFRESH_INTERVAL_MS = CI_COMPLETED_REFRESH_MS;
+export function refreshActiveRepoCiRuns(): void {
+  const repoId = activeRepo();
+  if (!repoId || document.hidden || ciPollTimers.has(repoId)) return;
+  void loadCiRunsInto(repoId);
+}
+
 export function scheduleCiRefreshAfterPush(repoId: string): void {
   scheduleGraphRefresh(repoId);
   if (!githubConfig().enabled && !jenkinsConfig().enabled) return;
   clearCiPushRefresh(repoId);
   const timers: ReturnType<typeof setTimeout>[] = [];
-  for (const delay of CI_PUSH_REFRESH_DELAYS_MS) {
+  for (const delay of CI_DISCOVERY_DELAYS_MS) {
     const timer = setTimeout(() => {
       const current = ciPushRefreshTimers.get(repoId) ?? [];
       const remaining = current.filter((item) => item !== timer);
       if (remaining.length > 0) ciPushRefreshTimers.set(repoId, remaining);
       else ciPushRefreshTimers.delete(repoId);
-      void loadCiRunsInto(repoId);
+      void discoverCiRuns(repoId);
     }, delay);
     timers.push(timer);
   }

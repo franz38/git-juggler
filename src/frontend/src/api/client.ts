@@ -33,6 +33,20 @@ export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse>
   return getJson(`${API_BASE}/browse${query}`);
 }
 
+/**
+ * Live poll of a repo's pipelines. Without `runRefs`: every active run (used to
+ * discover a pipeline that just started; `headSha` narrows it where the
+ * provider can filter). With `runRefs` (`<provider>:<run_id>`): only those
+ * runs, including their final status once finished.
+ */
+export function pollCiRuns(repoId: string, runRefs?: string[], headSha?: string): Promise<CiRunInfo[]> {
+  const params = new URLSearchParams();
+  for (const ref of runRefs ?? []) params.append("run", ref);
+  if (headSha) params.set("head_sha", headSha);
+  const query = params.toString();
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/poll${query ? `?${query}` : ""}`);
+}
+
 /** Opens the OS's native folder dialog on the backend's machine. Rejects with an
  * ApiError (status 501) when no native dialog is available. */
 export async function pickFolderNative(): Promise<PickFolderResponse> {

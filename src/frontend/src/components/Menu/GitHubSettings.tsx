@@ -1,5 +1,6 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
 import type { GitHubConfig } from "../../api/types";
+import { CiPollField } from "./CiPollField";
 import { TextField } from "../inputs/TextField";
 import { ToggleField } from "../inputs/ToggleField";
 import { githubConfig, githubConfigError, saveGitHubConfig } from "../../state/store";
@@ -73,6 +74,8 @@ export function GitHubSettings() {
         checked={draft().enabled}
         onChange={(checked) => update("enabled", checked)}
       />
+
+      <CiPollField />
 
       <TextField label="API base URL" value={draft().api_base_url} onChange={(value) => update("api_base_url", value)} />
 

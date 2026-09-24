@@ -1,5 +1,6 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
 import type { JenkinsConfig } from "../../api/types";
+import { CiPollField } from "./CiPollField";
 import { NumberField } from "../inputs/NumberField";
 import { TextField } from "../inputs/TextField";
 import { ToggleField } from "../inputs/ToggleField";
@@ -77,6 +78,8 @@ export function JenkinsSettings() {
         checked={draft().enabled}
         onChange={(checked) => update("enabled", checked)}
       />
+
+      <CiPollField />
 
       <TextField
         label="Jenkins base URL"
