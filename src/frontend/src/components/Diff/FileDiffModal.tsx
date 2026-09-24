@@ -84,9 +84,9 @@ function DiffTable(props: { diff: FileDiff }) {
   return (
     <Show when={rows().length > 0} fallback={<div class="file-diff-message">No textual changes.</div>}>
       <div class="file-diff-panes">
-        <DiffOverview rows={rows()} />
         <DiffPane side="left" rows={rows()} ref={(el) => (leftPane = el)} onScroll={syncVertical("left")} />
         <DiffPane side="right" rows={rows()} ref={(el) => (rightPane = el)} onScroll={syncVertical("right")} />
+        <DiffOverview rows={rows()} />
       </div>
       <Show when={props.diff.truncated}>
         <div class="file-diff-message">Diff truncated — it is too large to display in full.</div>

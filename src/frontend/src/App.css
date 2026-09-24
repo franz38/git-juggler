@@ -2313,16 +2313,51 @@ body.tab-dragging * {
 }
 
 .file-diff-panes {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
+/* The overview sits under the right pane's (wide, translucent) scrollbar, so
+   the scrollbar thumb slides over the change bars like an editor minimap. */
 .file-diff-overview {
-  position: relative;
-  flex: 0 0 28px;
-  border-right: 1px solid var(--border);
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  border-left: 1px solid var(--border);
   background: color-mix(in srgb, var(--text-dim) 6%, transparent);
+}
+
+.file-diff-pane {
+  position: relative;
+  z-index: 1;
+}
+
+.file-diff-pane::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.file-diff-pane-right::-webkit-scrollbar {
+  width: 28px;
+}
+
+.file-diff-pane::-webkit-scrollbar-track,
+.file-diff-pane::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.file-diff-pane::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-dim) 25%, transparent);
+  border-radius: 5px;
+}
+
+.file-diff-pane::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-dim) 45%, transparent);
 }
 
 .overview-bar {
