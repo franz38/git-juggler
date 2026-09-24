@@ -5,7 +5,7 @@ import {
   activeRepo,
   agentActivityByRepositoryId,
   agentActivityByWorktreePath,
-  createRepoGroup,
+  openNewGroupModal,
   fetchRepo,
   loadConfig,
   loadRepos,
@@ -166,11 +166,9 @@ function GroupCheckbox(props: { checked: boolean; indeterminate: boolean; onChan
 function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) {
   const isPinned = () => pinnedRepos().has(props.state.repo.path);
 
-  async function createGroupForRepo(): Promise<void> {
+  function createGroupForRepo(): void {
     props.onClose();
-    const name = window.prompt("New group name");
-    if (!name) return;
-    await createRepoGroup(name, props.state.repo.path);
+    openNewGroupModal(props.state.repo.path);
   }
 
   return (
@@ -213,7 +211,7 @@ function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) 
           </For>
         </Show>
         <div class="repo-bookmark-menu-separator" />
-        <button type="button" class="repo-bookmark-menu-item" onClick={() => void createGroupForRepo()}>
+        <button type="button" class="repo-bookmark-menu-item" onClick={createGroupForRepo}>
           <span>+</span>
           <span>Create new group</span>
         </button>

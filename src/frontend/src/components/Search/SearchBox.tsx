@@ -1,4 +1,5 @@
-import { Show, createSignal } from "solid-js";
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
+import { useOverlay } from "../../state/overlayStack";
 import { scrollToCommit } from "../../lib/scrollToCommit";
 import {
   authorFilter,
@@ -25,6 +26,22 @@ export function SearchBox() {
   // Only one of the two popovers (commit filter / branch visibility) is open at a time.
   const [openPanel, setOpenPanel] = createSignal<"filter" | "branches" | null>(null);
   const togglePanel = (panel: "filter" | "branches") => setOpenPanel((current) => (current === panel ? null : panel));
+
+  // Esc closes the open popover (via the shared overlay stack), and so does a
+  // click anywhere outside it. Clicks on the toggle buttons are left to their
+  // own handlers so a second click still closes the panel.
+  useOverlay("search-popover", () => openPanel() !== null, () => setOpenPanel(null));
+  createEffect(() => {
+    if (openPanel() === null) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest(".filter-popover, .filter-button")) return;
+      setOpenPanel(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    onCleanup(() => document.removeEventListener("mousedown", onPointerDown));
+  });
+
   const activeFilterCount = () => (authorFilter().length > 0 ? 1 : 0) + (commentFilter().trim().length > 0 ? 1 : 0) + (tagFilter() !== "unset" ? 1 : 0);
   const activeBranchFilterCount = () => (branchFilter().length > 0 ? 1 : 0) + (branchSince() ? 1 : 0);
 

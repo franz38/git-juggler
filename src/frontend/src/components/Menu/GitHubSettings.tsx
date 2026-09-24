@@ -64,7 +64,7 @@ export function GitHubSettings() {
       <p class="menu-hint">Workflow status is detected from each repo's origin remote by default.</p>
 
       <div class="menu-notice">
-        GitHub token is not stored by git-juggler. Set <span class="mono">{draft().token_env || "GITHUB_TOKEN"}</span> before starting the backend.
+        GitHub token is not stored by git-juggler. Set <span class="mono">{draft().token_env || "GITHUB_TOKEN"}</span> before starting the app.
       </div>
 
       <ToggleField

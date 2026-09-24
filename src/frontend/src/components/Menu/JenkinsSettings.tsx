@@ -68,7 +68,7 @@ export function JenkinsSettings() {
       <p class="menu-hint">Jenkins builds are matched to commits from configured job URLs.</p>
 
       <div class="menu-notice">
-        Jenkins API token is not stored by git-juggler. Set <span class="mono">{draft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the backend.
+        Jenkins API token is not stored by git-juggler. Set <span class="mono">{draft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the app.
       </div>
 
       <ToggleField

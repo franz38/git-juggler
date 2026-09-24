@@ -596,6 +596,19 @@ export async function createRepoGroup(name: string, repoPath?: string): Promise<
   await saveRepoGroups([...repoGroups(), group]);
 }
 
+// "New group" dialog: holds the repo the group is being created for (it becomes
+// the group's first member), or null when the dialog is closed.
+const [newGroupModal, setNewGroupModal] = createSignal<{ repoPath: string } | null>(null);
+export { newGroupModal };
+
+export function openNewGroupModal(repoPath: string): void {
+  setNewGroupModal({ repoPath });
+}
+
+export function closeNewGroupModal(): void {
+  setNewGroupModal(null);
+}
+
 export async function setRepoInGroup(groupId: string, repoPath: string, inGroup: boolean): Promise<void> {
   const next = repoGroups().map((group) => {
     if (group.id !== groupId) return group;
