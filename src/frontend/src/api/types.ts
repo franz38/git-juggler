@@ -141,6 +141,9 @@ export interface GraphResponse {
   uncommitted_files: FileChange[];
   checked_out_branches: string[];
   refs_signature: string;
+  /** More (older) commits exist beyond this page; pass `next_cursor` as `before` to fetch them. */
+  has_more: boolean;
+  next_cursor: string | null;
 }
 
 export interface RepoStatusResponse {

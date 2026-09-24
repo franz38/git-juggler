@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
+import { ApiError, browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -35,6 +35,10 @@ interface RepoState {
   upstreamRemote: string | null;
   upstreamBranch: string | null;
   refsSignature: string | null;
+  /** Older commits exist beyond what's loaded; `nextCursor` is the `before` for the next page. */
+  hasMore: boolean;
+  nextCursor: string | null;
+  loadingMore: boolean;
   isDirty: boolean;
   uncommittedFiles: FileChange[];
   uncommittedExpanded: boolean;
@@ -606,6 +610,9 @@ function ensureRepoState(name: string): void {
       upstreamRemote: null,
       upstreamBranch: null,
       refsSignature: null,
+      hasMore: false,
+      nextCursor: null,
+      loadingMore: false,
       isDirty: false,
       uncommittedFiles: [],
       uncommittedExpanded: false,
@@ -620,12 +627,77 @@ function ensureRepoState(name: string): void {
   }
 }
 
+// Bumped by every first-page load. An older page still in flight when a
+// refresh lands belongs to the previous snapshot and must not be merged in.
+const graphGenerations = new Map<string, number>();
+
+// Appends the next (older) page to what's loaded. Pages arrive oldest-first
+// like the first one, and everything older than the loaded history sorts
+// before it, so the page goes in front. Returns whether a page was added.
+async function loadOlderPage(name: string, generation: number): Promise<boolean> {
+  const state = repoStates[name];
+  if (!state || !state.hasMore || !state.nextCursor) return false;
+  setRepoStates(name, "loadingMore", true);
+  try {
+    const page = await fetchGraph(name, state.nextCursor);
+    if (graphGenerations.get(name) !== generation) return false;
+    const known = new Set(repoStates[name].commits.map((c) => c.hash));
+    const older = page.commits.filter((c) => !known.has(c.hash));
+    setRepoStates(name, "commits", [...older, ...repoStates[name].commits]);
+    setRepoStates(name, "hasMore", page.has_more);
+    setRepoStates(name, "nextCursor", page.next_cursor);
+    return true;
+  } catch (e) {
+    if (graphGenerations.get(name) !== generation) return false;
+    if (e instanceof ApiError && e.status === 409) {
+      // The cursor commit is gone (history was rewritten): start over from the first page.
+      void refreshRepoGraph(name);
+      return false;
+    }
+    // Stop asking for more rather than retrying in a loop; the next refresh starts clean.
+    setRepoStates(name, "hasMore", false);
+    setRepoStates(name, "error", (e as Error).message);
+    return false;
+  } finally {
+    if (graphGenerations.get(name) === generation) setRepoStates(name, "loadingMore", false);
+  }
+}
+
+// Called when the user scrolls to the end of the loaded commits.
+export async function loadMoreCommits(repoId: string): Promise<void> {
+  const state = repoStates[repoId];
+  if (!state || state.loading || state.loadingMore || !state.hasMore) return;
+  await loadOlderPage(repoId, graphGenerations.get(repoId) ?? 0);
+}
+
 async function loadGraphInto(name: string): Promise<void> {
+  const generation = (graphGenerations.get(name) ?? 0) + 1;
+  graphGenerations.set(name, generation);
+  const alreadyLoaded = repoStates[name].commits.length;
   setRepoStates(name, "loading", true);
+  setRepoStates(name, "loadingMore", false);
   setRepoStates(name, "error", null);
   try {
     const data = await fetchGraph(name);
-    setRepoStates(name, "commits", data.commits);
+    // A refresh only brings back the newest page; re-fetch as many older ones
+    // as the user had already scrolled through *before* swapping anything in,
+    // so the list doesn't shrink and then regrow under their scroll position.
+    let commits = data.commits;
+    let hasMore = data.has_more;
+    let nextCursor = data.next_cursor;
+    while (hasMore && nextCursor && commits.length < alreadyLoaded) {
+      try {
+        const page = await fetchGraph(name, nextCursor);
+        commits = [...page.commits, ...commits];
+        hasMore = page.has_more;
+        nextCursor = page.next_cursor;
+      } catch {
+        break; // keep what we have; scrolling to the end fetches the rest
+      }
+    }
+    setRepoStates(name, "commits", commits);
+    setRepoStates(name, "hasMore", hasMore);
+    setRepoStates(name, "nextCursor", nextCursor);
     setRepoStates(name, "currentBranch", data.current_branch);
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
@@ -1022,6 +1094,17 @@ export const ciRuns = createMemo<Record<string, CiRunInfo[]>>(() => {
 export const graphLoading = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.loading ?? false : false;
+});
+
+// Older commits exist beyond the loaded ones (the list loads them on scroll).
+export const graphHasMore = createMemo<boolean>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.hasMore ?? false : false;
+});
+
+export const graphLoadingMore = createMemo<boolean>(() => {
+  const name = activeRepo();
+  return name ? repoStates[name]?.loadingMore ?? false : false;
 });
 
 export const errorMessage = createMemo<string | null>(() => {

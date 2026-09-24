@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,7 @@ from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
-from .git_data import get_graph, get_repo_status
+from .git_data import GRAPH_PAGE_SIZE, HistoryChangedError, get_commit_hashes, get_graph, get_repo_status
 from .repos import get_scan_progress, list_repos, resolve_repo_path
 from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
@@ -139,33 +139,17 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
         return config.update_preferences(body.model_dump(mode="json", exclude_unset=True))
 
     @app.get("/api/repos/{repo_id}/graph", response_model=GraphResponse)
-    def api_graph(repo_id: str) -> GraphResponse:
+    def api_graph(
+        repo_id: str,
+        before: str | None = None,
+        limit: int = Query(GRAPH_PAGE_SIZE, ge=1, le=10 * GRAPH_PAGE_SIZE),
+    ) -> GraphResponse:
         path = _resolve_repo_path(repo_id)
-        (
-            commits,
-            branches,
-            current_branch,
-            head_commit,
-            upstream_commit,
-            upstream_remote,
-            upstream_branch,
-            is_dirty,
-            uncommitted_files,
-            checked_out_branches, refs_signature,
-        ) = get_graph(path)
-        return GraphResponse(
-            commits=commits,
-            branches=branches,
-            current_branch=current_branch,
-            head_commit=head_commit,
-            upstream_commit=upstream_commit,
-            upstream_remote=upstream_remote,
-            upstream_branch=upstream_branch,
-            is_dirty=is_dirty,
-            uncommitted_files=uncommitted_files,
-            checked_out_branches=checked_out_branches,
-            refs_signature=refs_signature,
-        )
+        try:
+            return GraphResponse(**get_graph(path, limit=limit, before=before)._asdict())
+        except HistoryChangedError as exc:
+            # The cursor commit is gone (history rewritten): the client should reload from the first page.
+            raise HTTPException(status_code=409, detail="graph history changed") from exc
 
     @app.get("/api/repos/{repo_id}/status", response_model=RepoStatusResponse)
     def api_repo_status(repo_id: str) -> RepoStatusResponse:
@@ -183,8 +167,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
     def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:
         path = _resolve_repo_path(repo_id)
-        commits, *_ = get_graph(path)
-        return get_ci_runs(path, {c.hash for c in commits}, config.load_github_config(), config.load_jenkins_config())
+        return get_ci_runs(path, get_commit_hashes(path), config.load_github_config(), config.load_jenkins_config())
 
     # Stages (GitHub jobs / Jenkins pipeline stages) of one run. `run_id` is the
     # value CiRunInfo.run_id carried; 404 when the provider has no stage data.

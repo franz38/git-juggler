@@ -1,9 +1,45 @@
-import { For, Show, createMemo } from "solid-js";
-import { COLLAPSED_ROW_HEIGHT, activeRepo, errorMessage, fetchingRepos, graphLoading, rowLayout, uncommittedFiles, workingTreeVisible } from "../../state/store";
+import { For, Show, createEffect, createMemo, on, onCleanup, onMount } from "solid-js";
+import { COLLAPSED_ROW_HEIGHT, activeRepo, errorMessage, fetchingRepos, graphHasMore, graphLoading, graphLoadingMore, loadMoreCommits, rowLayout, uncommittedFiles, workingTreeVisible } from "../../state/store";
 import { CommitRow } from "./CommitRow";
 import { UncommittedRow } from "./UncommittedRow";
 
+// How far below the viewport the end of the list may be before the next page
+// is requested, so it's usually there by the time the user scrolls to it.
+const LOAD_MORE_MARGIN_PX = 600;
+
 export function CommitList() {
+  let sentinel: HTMLDivElement | undefined;
+  let observer: IntersectionObserver | undefined;
+
+  onMount(() => {
+    if (!sentinel) return;
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const repo = activeRepo();
+        if (repo) void loadMoreCommits(repo);
+      },
+      { root: sentinel.closest(".graph-and-list"), rootMargin: `0px 0px ${LOAD_MORE_MARGIN_PX}px 0px` },
+    );
+    observer.observe(sentinel);
+  });
+  onCleanup(() => observer?.disconnect());
+
+  // An observer only reports when visibility *changes*. If the end of the list
+  // is still in view after a page lands (a tall window, or filters hiding most
+  // rows), nothing would fire again, so re-observe to get a fresh report.
+  createEffect(
+    on(
+      [() => rowLayout().order.length, graphHasMore, graphLoadingMore, activeRepo],
+      () => {
+        if (!observer || !sentinel) return;
+        observer.unobserve(sentinel);
+        observer.observe(sentinel);
+      },
+      { defer: true },
+    ),
+  );
+
   const isFetching = createMemo(() => {
     const repo = activeRepo();
     return repo !== null && fetchingRepos().has(repo);
@@ -33,6 +69,14 @@ export function CommitList() {
         Fetching…
       </div>
       <For each={rowLayout().order}>{(commit) => <CommitRow commit={commit} />}</For>
+      <div
+        ref={sentinel}
+        class="load-more-sentinel"
+        classList={{ "load-more-sentinel--visible": graphLoadingMore() }}
+        style={{ "--load-more-height": `${COLLAPSED_ROW_HEIGHT}px` }}
+      >
+        <Show when={graphLoadingMore()}>Loading older commits…</Show>
+      </div>
     </div>
   );
 }

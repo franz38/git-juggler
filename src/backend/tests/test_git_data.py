@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 from git import Actor, Repo
 
-from git_juggler.git_data import get_graph, get_repo_status
+from git_juggler import git_data
+from git_juggler.git_data import HistoryChangedError, get_commit_hashes, get_graph, get_repo_status
 
 
 class GitGraphTest(unittest.TestCase):
@@ -161,6 +162,174 @@ class GitGraphTest(unittest.TestCase):
 
             repo.git.worktree("add", str(Path(directory) / "wt"), "feature")
             self.assertNotEqual(with_branch, get_repo_status(path).refs_signature)
+
+    def _branchy_repo(self, path: Path, author: Actor) -> Repo:
+        """main with a merged feature branch and an unmerged one, 12 commits."""
+        repo = self._init_repo(path, author)
+        (path / "f.txt").write_text("0\n", encoding="utf-8")
+        repo.index.add(["f.txt"])
+        repo.index.commit("root", author=author, committer=author)
+        repo.git.branch("-M", "main")
+        for i in range(3):
+            repo.index.commit(f"main {i}", author=author, committer=author)
+        repo.git.checkout("-b", "feature")
+        for i in range(3):
+            repo.index.commit(f"feature {i}", author=author, committer=author)
+        repo.git.checkout("main")
+        repo.git.merge("--no-ff", "-m", "merge feature", "feature")
+        repo.git.checkout("-b", "other", "main~2")
+        for i in range(2):
+            repo.index.commit(f"other {i}", author=author, committer=author)
+        repo.git.checkout("main")
+        return repo
+
+    def test_pages_cover_history_newest_first_without_gaps_or_overlap(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._branchy_repo(path, author)
+
+            full = get_graph(path, limit=1000)
+            self.assertFalse(full.has_more)
+            self.assertIsNone(full.next_cursor)
+
+            first = get_graph(path, limit=5)
+            self.assertTrue(first.has_more)
+            self.assertEqual([c.hash for c in first.commits], [c.hash for c in full.commits[-5:]])
+            self.assertEqual(first.next_cursor, first.commits[0].hash)
+            self.assertEqual(first.current_branch, "main")
+            self.assertEqual(first.refs_signature, full.refs_signature)
+
+            collected = list(first.commits)
+            page = first
+            while page.has_more:
+                page = get_graph(path, limit=5, before=page.next_cursor)
+                # Later pages carry commits only; repo-wide status stays with page one.
+                self.assertIsNone(page.current_branch)
+                collected = page.commits + collected
+            self.assertEqual([c.hash for c in collected], [c.hash for c in full.commits])
+            # Ownership must not depend on which page a commit lands on.
+            self.assertEqual([(c.hash, c.branch) for c in collected], [(c.hash, c.branch) for c in full.commits])
+
+    def test_unknown_page_cursor_reports_changed_history(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._branchy_repo(path, author)
+            get_graph(path, limit=5)
+            with self.assertRaises(HistoryChangedError):
+                get_graph(path, limit=5, before="0" * 40)
+
+    def test_later_page_still_works_after_cache_miss(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._branchy_repo(path, author)
+            first = get_graph(path, limit=5)
+            git_data._history_cache.clear()
+            second = get_graph(path, limit=5, before=first.next_cursor)
+            self.assertEqual(len(second.commits), 5)
+
+    def test_history_cache_is_invalidated_by_new_commit(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._branchy_repo(path, author)
+            before = get_graph(path, limit=1000)
+            new_commit = repo.index.commit("later", author=author, committer=author)
+            after = get_graph(path, limit=1000)
+            self.assertEqual(len(after.commits), len(before.commits) + 1)
+            self.assertEqual(after.commits[-1].hash, new_commit.hexsha)
+            self.assertIn(new_commit.hexsha, get_commit_hashes(path))
+
+    def test_commit_hashes_cover_every_page(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._branchy_repo(path, author)
+            full = get_graph(path, limit=1000)
+            self.assertEqual(get_commit_hashes(path), {c.hash for c in full.commits})
+
+    def test_root_commit_has_no_parents_and_metadata_is_filled(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._branchy_repo(path, author)
+            root = get_graph(path, limit=1000).commits[0]
+            self.assertEqual(root.parents, [])
+            self.assertEqual(root.subject, "root")
+            self.assertEqual(root.author.name, "Test User")
+            self.assertEqual(root.author.email, "test@example.com")
+            self.assertEqual(root.short_hash, root.hash[:7])
+
+    def test_repo_without_commits_yields_empty_graph(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self._init_repo(path, author)
+            (path / "a.txt").write_text("a\n", encoding="utf-8")
+            graph = get_graph(path)
+            self.assertEqual(graph.commits, [])
+            self.assertEqual(graph.branches, [])
+            self.assertIsNone(graph.head_commit)
+            self.assertEqual([(f.path, f.status) for f in graph.uncommitted_files], [("a.txt", "untracked")])
+
+    def test_status_reports_staged_unstaged_renamed_and_untracked(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+            for name in ("staged.txt", "both.txt", "gone.txt", "old name.txt", "plain.txt"):
+                (path / name).write_text("base\n", encoding="utf-8")
+            repo.index.add(["staged.txt", "both.txt", "gone.txt", "old name.txt", "plain.txt"])
+            repo.index.commit("base", author=author, committer=author)
+
+            (path / "staged.txt").write_text("x\n", encoding="utf-8")
+            (path / "both.txt").write_text("x\n", encoding="utf-8")
+            repo.git.add("staged.txt", "both.txt")
+            (path / "both.txt").write_text("y\n", encoding="utf-8")
+            (path / "gone.txt").unlink()
+            repo.git.mv("old name.txt", "new name.txt")
+            (path / "brand new.txt").write_text("n\n", encoding="utf-8")
+            (path / "dir").mkdir()
+            (path / "dir" / "a.txt").write_text("a\n", encoding="utf-8")
+
+            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[]):
+                status = get_repo_status(path)
+
+            self.assertEqual(
+                {f.path: f.status for f in status.uncommitted_files},
+                {
+                    "staged.txt": "modified",
+                    "both.txt": "modified",
+                    "gone.txt": "deleted",
+                    "new name.txt": "renamed",
+                    "brand new.txt": "untracked",
+                    "dir/a.txt": "untracked",
+                },
+            )
+            self.assertTrue(status.is_dirty)
+
+    def test_upstream_is_reported_for_tracked_branch(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "repo"
+            remote_path = Path(directory) / "remote.git"
+            repo = self._init_repo(path, author)
+            Repo.init(remote_path, bare=True)
+            (path / "a.txt").write_text("a\n", encoding="utf-8")
+            repo.index.add(["a.txt"])
+            pushed = repo.index.commit("initial", author=author, committer=author)
+            branch = repo.active_branch.name
+            repo.create_remote("origin", str(remote_path))
+            repo.git.push("-u", "origin", branch)
+            repo.index.commit("local", author=author, committer=author)
+
+            status = get_repo_status(path)
+            self.assertEqual(status.upstream_commit, pushed.hexsha)
+            self.assertEqual(status.upstream_remote, "origin")
+            self.assertEqual(status.upstream_branch, branch)
+            self.assertEqual(status.current_branch, branch)
 
 
 if __name__ == "__main__":
