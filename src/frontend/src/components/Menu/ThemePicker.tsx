@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
-import { BUILTIN_THEMES, type AppTheme } from "../../lib/appTheme";
+import type { AppTheme } from "../../lib/appTheme";
+import { SHIPPED_THEMES } from "../../lib/bundledThemes";
 import {
   importThemeFile,
   importedThemes,
@@ -68,7 +69,7 @@ export function ThemePicker() {
   onCleanup(() => previewTheme(null));
 
   const matches = (t: AppTheme) => t.name.toLowerCase().includes(query().trim().toLowerCase());
-  const allThemes = createMemo(() => [...BUILTIN_THEMES, ...importedThemes(), ...installedThemes()]);
+  const allThemes = createMemo(() => [...SHIPPED_THEMES, ...importedThemes(), ...installedThemes()]);
   const isImported = (t: AppTheme) => importedThemes().some((i) => i.id === t.id);
 
   // Pinned themes are listed once, at the top, in the order they were pinned;
@@ -79,7 +80,7 @@ export function ThemePicker() {
       .map((id) => allThemes().find((t) => t.id === id))
       .filter((t): t is AppTheme => t !== undefined && matches(t)),
   );
-  const builtin = createMemo(() => BUILTIN_THEMES.filter((t) => matches(t) && !isThemePinned(t.id)));
+  const builtin = createMemo(() => SHIPPED_THEMES.filter((t) => matches(t) && !isThemePinned(t.id)));
   const imported = createMemo(() => importedThemes().filter((t) => matches(t) && !isThemePinned(t.id)));
   const installed = createMemo(() => installedThemes().filter((t) => matches(t) && !isThemePinned(t.id)));
 

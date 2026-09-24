@@ -1,5 +1,6 @@
 import { For, Show, createMemo, onCleanup } from "solid-js";
 import { BUILTIN_DARK, BUILTIN_LIGHT, type AppTheme } from "../../lib/appTheme";
+import { DEFAULT_THEME } from "../../lib/bundledThemes";
 import { installedThemes, previewTheme, setThemeId, themeId } from "../../state/themes";
 
 type Quick = { id: string; label: string; kind: "dark" | "light" | "system"; theme: AppTheme };
@@ -58,35 +59,37 @@ export function ThemeQuickPicks() {
         </For>
       </div>
 
-      <Show when={installedThemes().length > 0}>
-        <div class="theme-quickpick-editor-section">
-          <div class="menu-setting-label">Or use one of your editor themes</div>
-          <p class="menu-hint">{installedThemes().length} found — searchable in Appearance later.</p>
-          <div class="theme-quickpick-mini-grid">
-            <For each={installedThemes()}>
-              {(t) => (
-                <button
-                  type="button"
-                  class="theme-quickpick-mini-card"
-                  classList={{ active: themeId() === t.id }}
-                  title={t.name}
-                  onClick={() => setThemeId(t.id)}
-                  onMouseEnter={() => previewTheme(t.id)}
-                  onMouseLeave={() => previewTheme(null)}
+      <div class="theme-quickpick-editor-section">
+        <div class="menu-setting-label">Or pick another theme</div>
+        <p class="menu-hint">
+          <Show when={installedThemes().length > 0} fallback="More themes are searchable in Appearance later.">
+            Includes {installedThemes().length} found in your editor — searchable in Appearance later.
+          </Show>
+        </p>
+        <div class="theme-quickpick-mini-grid">
+          <For each={[DEFAULT_THEME, ...installedThemes()]}>
+            {(t) => (
+              <button
+                type="button"
+                class="theme-quickpick-mini-card"
+                classList={{ active: themeId() === t.id }}
+                title={t.name}
+                onClick={() => setThemeId(t.id)}
+                onMouseEnter={() => previewTheme(t.id)}
+                onMouseLeave={() => previewTheme(null)}
+              >
+                <span
+                  class="theme-quickpick-mini-preview"
+                  style={{ background: t.vars["--bg"], "border-color": t.vars["--border"] }}
                 >
-                  <span
-                    class="theme-quickpick-mini-preview"
-                    style={{ background: t.vars["--bg"], "border-color": t.vars["--border"] }}
-                  >
-                    <span class="theme-quickpick-mini-bar" style={{ background: t.vars["--accent"] }} />
-                  </span>
-                  <span class="theme-quickpick-mini-label">{t.name}</span>
-                </button>
-              )}
-            </For>
-          </div>
+                  <span class="theme-quickpick-mini-bar" style={{ background: t.vars["--accent"] }} />
+                </span>
+                <span class="theme-quickpick-mini-label">{t.name}</span>
+              </button>
+            )}
+          </For>
         </div>
-      </Show>
+      </div>
     </div>
   );
 }

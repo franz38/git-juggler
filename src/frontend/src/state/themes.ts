@@ -1,7 +1,8 @@
 import { createMemo, createSignal } from "solid-js";
 import { fetchThemes, saveImportedThemes } from "../api/client";
 import type { Preferences } from "../api/types";
-import { BUILTIN_DARK, BUILTIN_LIGHT, BUILTIN_THEMES, type AppTheme, type RawVscodeTheme } from "../lib/appTheme";
+import { BUILTIN_DARK, BUILTIN_LIGHT, type AppTheme, type RawVscodeTheme } from "../lib/appTheme";
+import { DEFAULT_THEME, SHIPPED_THEMES } from "../lib/bundledThemes";
 import { savePreference } from "./preferenceSync";
 import { rawThemeFromFile, resolveVscodeTheme } from "../lib/vscodeTheme";
 
@@ -18,10 +19,10 @@ function loadThemeId(): string {
     const stored = localStorage.getItem(THEME_KEY);
     // Older versions stored just "light" or "dark".
     if (stored === "light") return BUILTIN_LIGHT.id;
-    if (!stored || stored === "dark") return BUILTIN_DARK.id;
-    return stored;
+    if (stored === "dark") return BUILTIN_DARK.id;
+    return stored || DEFAULT_THEME.id;
   } catch {
-    return BUILTIN_DARK.id;
+    return DEFAULT_THEME.id;
   }
 }
 
@@ -110,7 +111,7 @@ function resolveAll(raws: RawVscodeTheme[]): AppTheme[] {
 export const installedThemes = createMemo(() => resolveAll(installedRaw()));
 export const importedThemes = createMemo(() => resolveAll(importedRaw()));
 
-const allThemes = createMemo<AppTheme[]>(() => [...BUILTIN_THEMES, ...importedThemes(), ...installedThemes()]);
+const allThemes = createMemo<AppTheme[]>(() => [...SHIPPED_THEMES, ...importedThemes(), ...installedThemes()]);
 
 /** The theme currently applied: a hover/keyboard preview wins over the saved choice. */
 export const activeTheme = createMemo<AppTheme>(() => {
@@ -118,7 +119,7 @@ export const activeTheme = createMemo<AppTheme>(() => {
   return (
     allThemes().find((t) => t.id === id) ??
     (cachedTheme && cachedTheme.id === id ? cachedTheme : null) ??
-    BUILTIN_DARK
+    DEFAULT_THEME
   );
 });
 
@@ -214,7 +215,7 @@ export async function importThemeFile(file: File): Promise<string | null> {
 export async function removeImportedTheme(id: string): Promise<void> {
   const next = importedRaw().filter((t) => t.id !== id);
   setImportedRaw(next);
-  if (themeId() === id) setThemeId(BUILTIN_DARK.id);
+  if (themeId() === id) setThemeId(DEFAULT_THEME.id);
   try {
     await saveImportedThemes(next);
   } catch {
