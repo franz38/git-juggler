@@ -168,6 +168,13 @@ class CommitSummary(BaseModel):
 class FileChange(BaseModel):
     path: str
     status: str
+    old_path: str | None = None
+
+
+class FileDiff(BaseModel):
+    patch: str
+    binary: bool = False
+    truncated: bool = False
 
 
 class GraphResponse(BaseModel):

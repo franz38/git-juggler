@@ -4,6 +4,7 @@ import {
   COLLAPSED_ROW_HEIGHT,
   UNCOMMITTED_ROW_KEY,
   activeRepo,
+  openFileDiff,
   reportRowHeight,
   runInTerminal,
   scheduleCommitRefresh,
@@ -108,7 +109,17 @@ export function UncommittedRow(props: { files: FileChange[] }) {
                       onClick={(e) => e.stopPropagation()}
                     />
                     <span class="file-status">{statusLabel(f.status)}</span>
-                    <span class="file-path">{f.path}</span>
+                    <span
+                      class="file-path clickable"
+                      title="View changes"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const repo = activeRepo();
+                        if (repo) openFileDiff(repo, null, f);
+                      }}
+                    >
+                      {f.path}
+                    </span>
                   </div>
                 )}
               </For>

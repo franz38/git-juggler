@@ -5,6 +5,7 @@ import { DeleteBranchModal } from "./components/Branches/DeleteBranchModal";
 import { BranchContextMenu } from "./components/ContextMenu/BranchContextMenu";
 import { CommitContextMenu } from "./components/ContextMenu/CommitContextMenu";
 import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
+import { FileDiffModal } from "./components/Diff/FileDiffModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
 import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
@@ -165,6 +166,7 @@ function App() {
       <BranchContextMenu />
       <CommitContextMenu />
       <CreateTagModal />
+      <FileDiffModal />
       <DeleteBranchModal />
       <DeleteTagModal />
       <DirectoryBrowserModal />

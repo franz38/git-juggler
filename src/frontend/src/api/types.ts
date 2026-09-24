@@ -157,6 +157,13 @@ export interface RepoStatusResponse {
 export interface FileChange {
   path: string;
   status: string;
+  old_path?: string | null;
+}
+
+export interface FileDiff {
+  patch: string;
+  binary: boolean;
+  truncated: boolean;
 }
 
 export interface CommitDetail {

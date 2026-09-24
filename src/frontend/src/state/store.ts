@@ -1594,6 +1594,24 @@ export function closeCreateTagModal(): void {
   setCreateTagModal(null);
 }
 
+// Side-by-side diff of one file. `hash` is null for a working-tree (uncommitted) file.
+export interface FileDiffTarget {
+  repo: string;
+  hash: string | null;
+  file: FileChange;
+}
+
+const [fileDiffModal, setFileDiffModal] = createSignal<FileDiffTarget | null>(null);
+export { fileDiffModal };
+
+export function openFileDiff(repo: string, hash: string | null, file: FileChange): void {
+  setFileDiffModal({ repo, hash, file });
+}
+
+export function closeFileDiff(): void {
+  setFileDiffModal(null);
+}
+
 // Quotes a value for safe inclusion in a command string sent to the
 // terminal. Branches on which shell the backend actually spawns
 // (terminalShell(), from /api/config -- see terminal.py): POSIX shells get

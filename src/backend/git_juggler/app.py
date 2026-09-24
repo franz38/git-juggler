@@ -15,9 +15,10 @@ from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
 from .commit_detail import get_commit_detail
+from .file_diff import get_commit_file_diff, get_working_file_diff
 from .git_data import get_graph, get_repo_status
 from .repos import get_scan_progress, list_repos, resolve_repo_path
-from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
+from .schemas import ActivePipeline, AgentActivityResponse, AgentHookProviderStatusResponse, AgentHooksResponse, AgentRepositoryScanResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileDiff, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse, VscodeTheme
 from .terminal import run_terminal_session
 from .themes import discover_themes
 
@@ -179,6 +180,22 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             return get_commit_detail(path, sha)
         except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
             raise HTTPException(status_code=404, detail="commit not found") from exc
+
+    @app.get("/api/repos/{repo_id}/commits/{sha}/diff", response_model=FileDiff)
+    def api_commit_file_diff(repo_id: str, sha: str, path: str, old_path: str | None = None) -> FileDiff:
+        repo_path = _resolve_repo_path(repo_id)
+        try:
+            return get_commit_file_diff(repo_path, sha, path, old_path)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
+            raise HTTPException(status_code=404, detail="diff not found") from exc
+
+    @app.get("/api/repos/{repo_id}/diff", response_model=FileDiff)
+    def api_working_file_diff(repo_id: str, path: str, old_path: str | None = None) -> FileDiff:
+        repo_path = _resolve_repo_path(repo_id)
+        try:
+            return get_working_file_diff(repo_path, path, old_path)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
+            raise HTTPException(status_code=404, detail="diff not found") from exc
 
     @app.get("/api/repos/{repo_id}/ci/runs", response_model=dict[str, list[CiRunInfo]])
     def api_ci_runs(repo_id: str) -> dict[str, list[CiRunInfo]]:

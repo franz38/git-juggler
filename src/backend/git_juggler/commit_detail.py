@@ -29,7 +29,8 @@ def get_commit_detail(repo_path: Path, sha: str) -> CommitDetail:
     for d in diffs:
         status = _STATUS_MAP.get(d.change_type or "M", "modified")
         path = d.b_path or d.a_path or "?"
-        files.append(FileChange(path=path, status=status))
+        old_path = d.a_path if d.a_path and d.a_path != path else None
+        files.append(FileChange(path=path, status=status, old_path=old_path))
     files.sort(key=lambda f: f.path)
 
     subject = commit.summary if isinstance(commit.summary, str) else commit.summary.decode()

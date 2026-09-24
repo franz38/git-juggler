@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GraphResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -34,6 +34,18 @@ export function fetchRepoStatus(repoId: string): Promise<RepoStatusResponse> {
 
 export function fetchCommitDetail(repoId: string, hash: string): Promise<CommitDetail> {
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}`);
+}
+
+export function fetchCommitFileDiff(repoId: string, hash: string, file: FileChange): Promise<FileDiff> {
+  const query = new URLSearchParams({ path: file.path });
+  if (file.old_path) query.set("old_path", file.old_path);
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(hash)}/diff?${query}`);
+}
+
+export function fetchWorkingFileDiff(repoId: string, file: FileChange): Promise<FileDiff> {
+  const query = new URLSearchParams({ path: file.path });
+  if (file.old_path) query.set("old_path", file.old_path);
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/diff?${query}`);
 }
 
 export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>> {

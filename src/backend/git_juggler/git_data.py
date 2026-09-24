@@ -98,20 +98,23 @@ def _is_excluded(path: str, excluded_paths: list[str]) -> bool:
 
 def _uncommitted_files(repo: Repo, excluded_paths: list[str]) -> list[FileChange]:
     changes: dict[str, str] = {}
+    old_paths: dict[str, str] = {}
 
-    def add_change(path: str | None, status: str) -> None:
+    def add_change(path: str | None, status: str, old_path: str | None = None) -> None:
         if path:
             changes[path] = status
+            if old_path and old_path != path:
+                old_paths[path] = old_path
 
     try:
         for diff in repo.index.diff("HEAD"):
-            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type))
+            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type), diff.a_path)
     except Exception:
         pass
 
     try:
         for diff in repo.index.diff(None):
-            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type))
+            add_change(diff.b_path or diff.a_path, _diff_status(diff.change_type), diff.a_path)
     except Exception:
         pass
 
@@ -119,7 +122,7 @@ def _uncommitted_files(repo: Repo, excluded_paths: list[str]) -> list[FileChange
         add_change(path, "untracked")
 
     return [
-        FileChange(path=path, status=status)
+        FileChange(path=path, status=status, old_path=old_paths.get(path))
         for path, status in sorted(changes.items())
         if not _is_excluded(path, excluded_paths)
     ]

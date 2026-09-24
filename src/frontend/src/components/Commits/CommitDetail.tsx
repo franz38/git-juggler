@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import type { CommitDetail } from "../../api/types";
 import { formatDate } from "../../lib/formatDate";
+import { activeRepo, openFileDiff } from "../../state/store";
 
 export function CommitDetailView(props: { detail?: CommitDetail }) {
   return (
@@ -28,7 +29,14 @@ export function CommitDetailView(props: { detail?: CommitDetail }) {
         <div class="commit-files">
           <For each={props.detail!.files}>
             {(f) => (
-              <div class={`commit-file status-${f.status}`}>
+              <div
+                class={`commit-file clickable status-${f.status}`}
+                title="View changes"
+                onClick={() => {
+                  const repo = activeRepo();
+                  if (repo) openFileDiff(repo, props.detail!.hash, f);
+                }}
+              >
                 <span class="file-status">{f.status[0]?.toUpperCase()}</span>
                 <span class="file-path">{f.path}</span>
               </div>
