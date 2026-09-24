@@ -459,6 +459,12 @@
   color: var(--text-h);
 }
 
+.menu-secondary-button.danger,
+.menu-secondary-button.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger-fg);
+}
+
 .menu-setting {
   display: flex;
   align-items: center;

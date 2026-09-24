@@ -234,7 +234,7 @@ export function MainMenu() {
                 <Show
                   when={confirmingFactoryReset()}
                   fallback={
-                    <button type="button" class="menu-secondary-button" onClick={() => setConfirmingFactoryReset(true)}>
+                    <button type="button" class="menu-secondary-button danger" onClick={() => setConfirmingFactoryReset(true)}>
                       Reset
                     </button>
                   }
