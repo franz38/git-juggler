@@ -2082,7 +2082,7 @@ body.tab-dragging * {
   left: 0;
   z-index: 20;
   min-width: 220px;
-  max-width: 320px;
+  max-width: 360px;
   padding: 8px 10px;
   background: var(--menu-bg);
   border: 1px solid var(--border);
@@ -2663,6 +2663,86 @@ body.tab-dragging * {
   gap: 4px;
   padding-left: 12px;
   color: var(--text);
+}
+
+.stage-graph {
+  display: flex;
+  align-items: flex-start;
+  margin: 6px 0 2px;
+  font-size: 10px;
+}
+
+.stage-graph-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 58px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.stage-graph-node.pending {
+  opacity: 0.55;
+}
+
+.stage-graph-node.current .stage-graph-name {
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.stage-graph-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-dim);
+  border-radius: 50%;
+  font-weight: 800;
+  line-height: 1;
+  background: var(--menu-bg);
+}
+
+.stage-graph-node.current .stage-graph-dot {
+  box-shadow: 0 0 0 2px var(--shadow-soft);
+}
+
+.stage-graph-dot.running {
+  animation: stage-graph-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes stage-graph-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.stage-graph-link {
+  flex: 0 0 12px;
+  height: 2px;
+  margin-top: 10px;
+  border-radius: 1px;
+}
+
+.stage-graph-more {
+  margin-top: 3px;
+  padding: 0 5px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+.stage-graph-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.stage-graph-time {
+  color: var(--text-dim);
 }
 
 /* --- Welcome wizard ------------------------------------------------- */

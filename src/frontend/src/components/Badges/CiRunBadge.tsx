@@ -2,7 +2,9 @@ import { For, Show } from "solid-js";
 import type { CiRunInfo } from "../../api/types";
 import { formatDate } from "../../lib/formatDate";
 import { activeRepo, loadRunStages, runStages, runStagesKey } from "../../state/store";
-import { StageStrip, finishedStageCount } from "../Pipelines/StageStrip";
+import { currentStageIndex } from "../../lib/stageWindow";
+import { StageGraph } from "../Pipelines/StageGraph";
+import { finishedStageCount } from "../Pipelines/StageStrip";
 import { ProviderIcon, formatDuration, providerName, statusColor, statusMark, statusPriority } from "./ciStatus";
 
 function pickRun(runs: CiRunInfo[]): CiRunInfo {
@@ -52,7 +54,10 @@ export function CiRunBadge(props: { runs: CiRunInfo[] }) {
                 <span>Duration: {formatDuration(item.duration_ms)}</span>
                 <Show when={stages()?.length}>
                   <span>Stages: {finishedStageCount(stages() ?? [])}/{stages()?.length} done</span>
-                  <StageStrip stages={stages() ?? []} />
+                  <Show when={stages()?.[currentStageIndex(stages() ?? [])]}>
+                    {(stage) => <span>Current stage: {stage().name}</span>}
+                  </Show>
+                  <StageGraph stages={stages() ?? []} />
                 </Show>
               </span>
             );
