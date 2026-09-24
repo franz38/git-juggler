@@ -1,5 +1,8 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
 import type { JenkinsConfig } from "../../api/types";
+import { NumberField } from "../inputs/NumberField";
+import { TextField } from "../inputs/TextField";
+import { ToggleField } from "../inputs/ToggleField";
 import { jenkinsConfig, jenkinsConfigError, saveJenkinsConfig } from "../../state/store";
 
 const emptyJenkinsConfig: JenkinsConfig = {
@@ -68,56 +71,31 @@ export function JenkinsSettings() {
         Jenkins API token is not stored by git-juggler. Set <span class="mono">{draft().api_token_env || "JENKINS_API_TOKEN"}</span> before starting the backend.
       </div>
 
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Enable Jenkins integration</span>
-          <span class="menu-hint">When disabled, Jenkins build status is not requested or shown.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={draft().enabled}
-          onChange={(e) => update("enabled", e.currentTarget.checked)}
-        />
-      </label>
+      <ToggleField
+        label="Enable Jenkins integration"
+        description="When disabled, Jenkins build status is not requested or shown."
+        checked={draft().enabled}
+        onChange={(checked) => update("enabled", checked)}
+      />
 
-      <label class="menu-field">
-        <span>Jenkins base URL</span>
-        <input
-          type="text"
-          placeholder="https://jenkins.example.com"
-          value={draft().base_url}
-          onInput={(e) => update("base_url", e.currentTarget.value)}
-        />
-      </label>
+      <TextField
+        label="Jenkins base URL"
+        placeholder="https://jenkins.example.com"
+        value={draft().base_url}
+        onChange={(value) => update("base_url", value)}
+      />
 
-      <label class="menu-field">
-        <span>Username</span>
-        <input
-          type="text"
-          value={draft().username}
-          onInput={(e) => update("username", e.currentTarget.value)}
-        />
-      </label>
+      <TextField label="Username" mono={false} value={draft().username} onChange={(value) => update("username", value)} />
 
-      <label class="menu-field">
-        <span>Token env var</span>
-        <input
-          type="text"
-          value={draft().api_token_env}
-          onInput={(e) => update("api_token_env", e.currentTarget.value)}
-        />
-      </label>
+      <TextField label="Token env var" value={draft().api_token_env} onChange={(value) => update("api_token_env", value)} />
 
-      <label class="menu-field">
-        <span>Build limit per job</span>
-        <input
-          type="number"
-          min="1"
-          max="500"
-          value={draft().build_limit}
-          onInput={(e) => update("build_limit", Number(e.currentTarget.value))}
-        />
-      </label>
+      <NumberField
+        label="Build limit per job"
+        min={1}
+        max={500}
+        value={draft().build_limit}
+        onChange={(value) => update("build_limit", value ?? 50)}
+      />
 
       <div class="menu-field">
       <span>Job mappings</span>

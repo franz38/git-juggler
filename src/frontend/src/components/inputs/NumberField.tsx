@@ -1,52 +1,40 @@
-import { Show, createSignal, createUniqueId, type JSX } from "solid-js";
+import { Show, createSignal, createUniqueId } from "solid-js";
+import { MONO, borderFor, descStyle, labelStyle } from "./styles";
 
-const FONT = "'IBM Plex Sans', Helvetica, Arial, sans-serif";
-const MONO = "'IBM Plex Mono', ui-monospace, monospace";
-const C = {
-  label: "#ededed",
-  desc: "#8f8f8f",
-  hint: "#6f6f6f",
-  value: "#d6d6d6",
-  inputBg: "#1b1b1b",
-  inputBgAlt: "#232323",
-  border: "#333333",
-  borderAlt: "#3a3a3a",
-  accent: "#2f6fbd",
-  off: "#3a3a3a",
-};
-
-const labelStyle: JSX.CSSProperties = { "font-size": "13px", "font-weight": 500, color: C.label, "font-family": FONT };
-const descStyle: JSX.CSSProperties = { "font-size": "12px", color: C.desc, "line-height": 1.5, "font-family": FONT };
-
-interface BaseProps {
+export interface NumberFieldProps {
   label: string;
-  description?: string;
-  disabled?: boolean;
-  class?: string;
-}
-
-export interface NumberFieldProps extends BaseProps {
   value: number;
-  onChange: (value: number) => void;
+  /**
+   * Called when an edit is committed (on blur / Enter) with the value clamped to
+   * min/max, or `null` when the field was left empty or isn't a number. What an
+   * empty field means is up to the caller.
+   */
+  onChange: (value: number | null) => void;
+  description?: string;
   min?: number;
   max?: number;
   step?: number;
   /** Unit suffix inside the input, e.g. "sec". */
   unit?: string;
   width?: number;
+  disabled?: boolean;
+  class?: string;
 }
 
 export function NumberField(props: NumberFieldProps) {
   const id = createUniqueId();
   const [focus, setFocus] = createSignal(false);
-  const commit = (raw: string) => {
-    const n = Number(raw);
-    if (raw === "" || Number.isNaN(n)) return;
-    const clamped = Math.min(props.max ?? Infinity, Math.max(props.min ?? -Infinity, n));
-    props.onChange(clamped);
+
+  const commit = (input: HTMLInputElement) => {
+    const n = input.valueAsNumber;
+    props.onChange(Number.isNaN(n) ? null : Math.min(props.max ?? Infinity, Math.max(props.min ?? -Infinity, n)));
+    // Always show the value the caller actually applied, even when it equals
+    // the previous one (in which case no re-render would refresh the input).
+    input.value = String(props.value);
   };
+
   return (
-    <div class={props.class} style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "16px", padding: "12px 0" }}>
+    <div class={props.class} style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "16px" }}>
       <div style={{ display: "flex", "flex-direction": "column", gap: "2px", "min-width": 0 }}>
         <label for={id} style={labelStyle}>{props.label}</label>
         <Show when={props.description}>
@@ -61,11 +49,10 @@ export function NumberField(props: NumberFieldProps) {
           display: "flex",
           "align-items": "center",
           gap: "6px",
-          padding: "0 10px",
-          "border-radius": "6px",
-          background: C.inputBgAlt,
-          border: `1px solid ${focus() ? C.accent : C.borderAlt}`,
-          transition: "border-color 150ms ease",
+          padding: "0 8px",
+          "border-radius": "4px",
+          background: "var(--input-bg)",
+          border: borderFor(focus()),
           opacity: props.disabled ? 0.5 : 1,
         }}
       >
@@ -78,23 +65,23 @@ export function NumberField(props: NumberFieldProps) {
           max={props.max}
           step={props.step ?? 1}
           disabled={props.disabled}
-          onChange={(e) => commit(e.currentTarget.value)}
+          onChange={(e) => commit(e.currentTarget)}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           style={{
             flex: 1,
             "min-width": 0,
-            padding: "6px 0",
+            padding: "5px 0",
             border: "none",
             background: "transparent",
-            color: C.value,
+            color: "var(--text)",
             "font-family": MONO,
             "font-size": "12px",
             outline: "none",
           }}
         />
         <Show when={props.unit}>
-          <span style={{ flex: "none", "font-family": MONO, "font-size": "11px", color: C.hint }}>{props.unit}</span>
+          <span style={{ flex: "none", "font-family": MONO, "font-size": "11px", color: "var(--text-dim)" }}>{props.unit}</span>
         </Show>
       </div>
     </div>

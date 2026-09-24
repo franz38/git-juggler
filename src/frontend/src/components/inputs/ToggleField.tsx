@@ -1,39 +1,20 @@
-import { Show, createUniqueId, type JSX } from "solid-js";
+import { Show, createUniqueId } from "solid-js";
+import { descStyle, labelStyle } from "./styles";
 
-const FONT = "'IBM Plex Sans', Helvetica, Arial, sans-serif";
-const C = {
-  label: "#ededed",
-  desc: "#8f8f8f",
-  hint: "#6f6f6f",
-  value: "#d6d6d6",
-  inputBg: "#1b1b1b",
-  inputBgAlt: "#232323",
-  border: "#333333",
-  borderAlt: "#3a3a3a",
-  accent: "#2f6fbd",
-  off: "#3a3a3a",
-};
-
-const labelStyle: JSX.CSSProperties = { "font-size": "13px", "font-weight": 500, color: C.label, "font-family": FONT };
-const descStyle: JSX.CSSProperties = { "font-size": "12px", color: C.desc, "line-height": 1.5, "font-family": FONT };
-
-interface BaseProps {
+export interface ToggleFieldProps {
   label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
   description?: string;
   disabled?: boolean;
   class?: string;
-}
-
-export interface ToggleFieldProps extends BaseProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
 }
 
 export function ToggleField(props: ToggleFieldProps) {
   const id = createUniqueId();
   const toggle = () => !props.disabled && props.onChange(!props.checked);
   return (
-    <div class={props.class} style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "16px", padding: "12px 0" }}>
+    <div class={props.class} style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "16px" }}>
       <div style={{ display: "flex", "flex-direction": "column", gap: "2px", "min-width": 0 }}>
         <label for={id} style={{ ...labelStyle, cursor: props.disabled ? "default" : "pointer" }}>{props.label}</label>
         <Show when={props.description}>
@@ -56,7 +37,7 @@ export function ToggleField(props: ToggleFieldProps) {
           "border-radius": "9px",
           "box-sizing": "border-box",
           display: "flex",
-          background: props.checked ? C.accent : C.off,
+          background: props.checked ? "var(--accent)" : "var(--border)",
           cursor: props.disabled ? "default" : "pointer",
           opacity: props.disabled ? 0.5 : 1,
           transition: "background-color 180ms ease",

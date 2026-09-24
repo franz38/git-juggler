@@ -322,48 +322,6 @@
   min-height: 44px;
 }
 
-.menu-switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.menu-switch-row input {
-  flex: 0 0 auto;
-  accent-color: var(--accent);
-}
-
-.menu-switch-row .menu-hint {
-  display: block;
-  margin: 3px 0 0;
-}
-
-.menu-number-input {
-  width: 72px;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 6px;
-}
-
-.menu-number-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.menu-number-input:disabled {
-  opacity: 0.5;
-}
-
 .menu-field input:focus,
 .menu-field textarea:focus,
 .github-repo-row input:focus {
@@ -506,10 +464,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
 }
 
 .menu-setting-main {
@@ -620,9 +574,6 @@
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
-  padding: 0;
-  background: none;
-  border: none;
 }
 
 .theme-picker {

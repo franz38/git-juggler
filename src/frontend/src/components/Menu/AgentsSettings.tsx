@@ -1,5 +1,7 @@
 import { Show, createEffect, createSignal } from "solid-js";
 import type { AgentHookProviderStatus } from "../../api/types";
+import { NumberField } from "../inputs/NumberField";
+import { ToggleField } from "../inputs/ToggleField";
 import {
   DEFAULT_AGENT_POLL_SECONDS,
   MAX_AGENT_POLL_SECONDS,
@@ -63,51 +65,31 @@ export function AgentsSettings() {
 
   return (
     <>
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Enable agent activity detection</span>
-          <span class="menu-hint">When disabled, no agent data is fetched or shown anywhere in the app.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={agentsEnabled()}
-          onChange={(e) => setAgentsEnabled(e.currentTarget.checked)}
-        />
-      </label>
+      <ToggleField
+        label="Enable agent activity detection"
+        description="When disabled, no agent data is fetched or shown anywhere in the app."
+        checked={agentsEnabled()}
+        onChange={setAgentsEnabled}
+      />
 
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Show worktrees in the agents panel</span>
-          <span class="menu-hint">Lists each session's worktrees (branch, commit, last activity) under the session. Off by default.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={agentShowWorktrees()}
-          disabled={!agentsEnabled()}
-          onChange={(e) => setAgentShowWorktrees(e.currentTarget.checked)}
-        />
-      </label>
+      <ToggleField
+        label="Show worktrees in the agents panel"
+        description="Lists each session's worktrees (branch, commit, last activity) under the session. Off by default."
+        checked={agentShowWorktrees()}
+        disabled={!agentsEnabled()}
+        onChange={setAgentShowWorktrees}
+      />
 
-      <label class="menu-switch-row">
-        <span>
-          <span class="menu-setting-label">Polling interval (seconds)</span>
-          <span class="menu-hint">How often agent activity is refreshed. Default {DEFAULT_AGENT_POLL_SECONDS}.</span>
-        </span>
-        <input
-          class="menu-number-input"
-          type="number"
-          min="1"
-          max={MAX_AGENT_POLL_SECONDS}
-          step="1"
-          value={agentPollSeconds()}
-          disabled={!agentsEnabled()}
-          onChange={(e) => {
-            setAgentPollSeconds(e.currentTarget.valueAsNumber);
-            // Show the value that was actually applied (clamped, or the default if the field was emptied).
-            e.currentTarget.value = String(agentPollSeconds());
-          }}
-        />
-      </label>
+      <NumberField
+        label="Polling interval"
+        description={`How often agent activity is refreshed. Default ${DEFAULT_AGENT_POLL_SECONDS}.`}
+        unit="sec"
+        min={1}
+        max={MAX_AGENT_POLL_SECONDS}
+        value={agentPollSeconds()}
+        disabled={!agentsEnabled()}
+        onChange={(value) => setAgentPollSeconds(value ?? DEFAULT_AGENT_POLL_SECONDS)}
+      />
 
       <div class="agent-hooks-section">
         <div class="menu-setting-main">

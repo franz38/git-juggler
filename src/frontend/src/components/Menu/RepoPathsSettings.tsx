@@ -9,6 +9,7 @@ import {
   repoPathsError,
   saveExcludedPaths,
 } from "../../state/store";
+import { TextField } from "../inputs/TextField";
 
 // The "Search paths" settings: which top-level folders get scanned for git
 // repos, plus which per-repo paths are excluded from the uncommitted-changes
@@ -75,17 +76,14 @@ export function RepoPathsSettings() {
         <div class="menu-error">{repoPathsError()}</div>
       </Show>
       </div>
-      <label class="menu-field">
-        <span>Excluded paths</span>
-        <p class="menu-hint">Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes.</p>
-        <input
-          type="text"
-          placeholder=".claude"
-          value={excludedPathsDraft()}
-          onInput={(e) => setExcludedPathsDraft(e.currentTarget.value)}
-          onBlur={handleSaveExcludedPaths}
-        />
-      </label>
+      <TextField
+        label="Excluded paths"
+        description="Comma-separated paths (relative to each repo's root) ignored when detecting uncommitted changes."
+        placeholder=".claude"
+        value={excludedPathsDraft()}
+        onChange={setExcludedPathsDraft}
+        onBlur={handleSaveExcludedPaths}
+      />
       <Show when={excludedPathsError()}>
         <div class="menu-error">{excludedPathsError()}</div>
       </Show>
