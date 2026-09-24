@@ -192,3 +192,10 @@ def ensure_seeded(default_path: Path) -> None:
     if CONFIG_PATH.exists():
         return
     save_repo_paths([default_path])
+
+
+def reset_to_factory(default_path: Path) -> None:
+    """Deletes the whole config file (repo paths, groups, integrations, imported
+    themes, preferences, ...) and re-seeds it like a first run."""
+    CONFIG_PATH.unlink(missing_ok=True)
+    ensure_seeded(default_path)

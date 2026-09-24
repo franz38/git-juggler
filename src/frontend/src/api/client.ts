@@ -82,6 +82,14 @@ export async function updateConfig(body: ConfigUpdateRequest): Promise<ConfigRes
   return res.json() as Promise<ConfigResponse>;
 }
 
+// Deletes the backend's whole config (repo paths, integrations, themes,
+// preferences, ...) back to a first-run state.
+export async function resetConfig(): Promise<ConfigResponse> {
+  const res = await fetch(`${API_BASE}/config/reset`, { method: "POST" });
+  if (!res.ok) throw new Error(`request failed (${res.status})`);
+  return res.json() as Promise<ConfigResponse>;
+}
+
 export function fetchPreferences(): Promise<Preferences> {
   return getJson(`${API_BASE}/preferences`);
 }

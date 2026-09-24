@@ -98,3 +98,15 @@ def test_onboarding_complete_is_centralized_like_any_other_preference():
     # back to unset -- distinguishing "never onboarded" from "explicitly reset".
     result = config.update_preferences(patch(onboarding_complete=False))
     assert result.onboarding_complete is False
+
+
+def test_reset_to_factory_wipes_everything_and_reseeds_the_default_path(tmp_path):
+    config.save_repo_paths([tmp_path / "a", tmp_path / "b"])
+    config.save_pinned_repo_paths(["x"])
+    config.update_preferences(patch(theme_id="builtin:light", onboarding_complete=True))
+
+    config.reset_to_factory(tmp_path / "default")
+
+    assert config.load_repo_paths() == [tmp_path / "default"]
+    assert config.load_pinned_repo_paths() == []
+    assert config.load_preferences() == Preferences()

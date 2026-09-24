@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
-import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, updateConfig } from "../api/client";
+import { browseDirectory, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -1190,6 +1190,21 @@ export function closeWelcomeWizard(): void {
 export function resetOnboarding(): void {
   setOnboardingComplete(false);
   void loadConfig();
+}
+
+// Used by the menu's Configuration section: deletes the backend's whole config
+// (shared by every browser) and this browser's cached copy of it, then reloads
+// so everything starts from the defaults, with the welcome wizard again.
+export async function resetToFactory(): Promise<void> {
+  await resetConfig();
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("git-juggler:")) localStorage.removeItem(key);
+    }
+  } catch {
+    // Cache only; the backend copy is already gone.
+  }
+  window.location.reload();
 }
 
 const [repoPaths, setRepoPaths] = createSignal<string[]>([]);

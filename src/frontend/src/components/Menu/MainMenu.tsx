@@ -10,6 +10,7 @@ import {
   menuSection as activeSection,
   resetKeyBinding,
   resetOnboarding,
+  resetToFactory,
   setBranchColorMode,
   setKeyBinding,
   setMenuSection as setActiveSection,
@@ -24,6 +25,8 @@ import { ThemePicker } from "./ThemePicker";
 
 export function MainMenu() {
   const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
+  const [confirmingFactoryReset, setConfirmingFactoryReset] = createSignal(false);
+  const [factoryResetError, setFactoryResetError] = createSignal<string | null>(null);
 
   // Captures the next real keypress (ignoring bare modifier taps) and binds
   // it to `action`; Escape cancels without changing anything. Runs in the
@@ -215,6 +218,44 @@ export function MainMenu() {
                 >
                   Reset
                 </button>
+              </div>
+              <div class="menu-setting">
+                <div class="menu-setting-main">
+                  <div class="menu-setting-label">Reset to factory settings</div>
+                  <p class="menu-hint">
+                    Deletes the whole configuration — repo paths, groups, GitHub and Jenkins integrations, imported themes, theme, key
+                    bindings and agent settings — for every browser, then reloads the app as a fresh install. Your repositories
+                    themselves are not touched.
+                  </p>
+                  <Show when={factoryResetError()}>
+                    <p class="menu-hint">{factoryResetError()}</p>
+                  </Show>
+                </div>
+                <Show
+                  when={confirmingFactoryReset()}
+                  fallback={
+                    <button type="button" class="menu-secondary-button" onClick={() => setConfirmingFactoryReset(true)}>
+                      Reset
+                    </button>
+                  }
+                >
+                  <button type="button" class="menu-secondary-button" onClick={() => setConfirmingFactoryReset(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="menu-primary-button danger"
+                    onClick={() => {
+                      setFactoryResetError(null);
+                      resetToFactory().catch((err: unknown) => {
+                        setConfirmingFactoryReset(false);
+                        setFactoryResetError(err instanceof Error ? err.message : "Reset failed");
+                      });
+                    }}
+                  >
+                    Confirm reset
+                  </button>
+                </Show>
               </div>
             </Show>
             </div>

@@ -105,6 +105,13 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
 
         return _current_config()
 
+    # Wipes every stored setting back to a first-run state. App settings only,
+    # nothing here touches a repo.
+    @app.post("/api/config/reset", response_model=ConfigResponse)
+    def api_reset_config() -> ConfigResponse:
+        config.reset_to_factory(root_path)
+        return _current_config()
+
     def _current_themes() -> ThemesResponse:
         imported = [VscodeTheme(**t) for t in config.load_imported_themes()]
         return ThemesResponse(installed=discover_themes(), imported=imported)
