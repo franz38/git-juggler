@@ -2242,8 +2242,8 @@ body.tab-dragging * {
 }
 
 .file-diff-table {
-  width: 100%;
-  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 12px;
@@ -2252,6 +2252,10 @@ body.tab-dragging * {
 
 .file-diff-table .diff-col-num {
   width: 48px;
+}
+
+.file-diff-table .diff-col-code {
+  min-width: 320px;
 }
 
 .file-diff-table td {
@@ -2266,8 +2270,7 @@ body.tab-dragging * {
 }
 
 .diff-code {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
   color: var(--text);
 }
 
