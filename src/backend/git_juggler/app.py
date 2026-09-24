@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,7 @@ from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_ho
 from .agent_tracking.activity_models import AgentRepositoryScan
 from .browse import browse_directory
 from .pick_folder import NativePickerUnavailable, pick_folder
-from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs
+from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs, poll_ci_runs
 from .commit_detail import get_commit_detail
 from .file_diff import get_commit_file_diff, get_working_file_diff
 from .git_data import (
@@ -241,6 +242,20 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             config.load_github_config(),
             config.load_jenkins_config(),
         )
+
+    # Live poll of a repo's pipelines. Without `run`, every active run of the
+    # repo (`head_sha` narrows it where the provider can filter): used right
+    # after a commit action, when the run may not be known yet. With one or more
+    # `run=<provider>:<run_id>` (CiRunInfo.provider / run_id), only those runs,
+    # including their final status once finished.
+    @app.get("/api/repos/{repo_id}/ci/poll", response_model=list[CiRunInfo])
+    def api_ci_poll(
+        repo_id: str,
+        run: Annotated[list[str] | None, Query()] = None,
+        head_sha: str | None = None,
+    ) -> list[CiRunInfo]:
+        path = _resolve_repo_path(repo_id)
+        return poll_ci_runs(path, run, head_sha, config.load_github_config(), config.load_jenkins_config())
 
     # Stages (GitHub jobs / Jenkins pipeline stages) of one run. `run_id` is the
     # value CiRunInfo.run_id carried; 404 when the provider has no stage data.

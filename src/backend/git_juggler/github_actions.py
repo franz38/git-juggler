@@ -143,6 +143,40 @@ def _get_json(url: str, headers: dict[str, str]) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# Conditional-request cache for the polling calls: GitHub answers a request
+# carrying a matching `If-None-Match` with 304, which does not count against
+# the rate limit, so polling an unchanged run is free.
+_ETAG_CACHE: dict[str, tuple[str, dict]] = {}
+_ETAG_CACHE_MAX = 256
+
+
+def _get_json_cached(url: str, headers: dict[str, str]) -> dict | None:
+    cached = _ETAG_CACHE.get(url)
+    request_headers = dict(headers)
+    if cached:
+        request_headers["If-None-Match"] = cached[0]
+    request = Request(url, headers=request_headers)
+    try:
+        with urlopen(request, timeout=10) as response:  # noqa: S310 - configured user URL, read-only local app integration
+            body = response.read().decode("utf-8")
+            etag = response.headers.get("ETag")
+    except HTTPError as e:
+        return cached[1] if e.code == 304 and cached else None
+    except (URLError, TimeoutError, OSError):
+        return None
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if etag:
+        if len(_ETAG_CACHE) >= _ETAG_CACHE_MAX:
+            _ETAG_CACHE.pop(next(iter(_ETAG_CACHE)))
+        _ETAG_CACHE[url] = (etag, data)
+    return data
+
+
 def _fetch_workflow_runs(github_config: dict, repo_config: dict) -> list[dict]:
     repo_url = _repo_api_url(github_config, repo_config)
     if repo_url is None:
@@ -186,6 +220,7 @@ def _run_info(run: dict) -> CiRunInfo:
         updated_at=updated_at,
         duration_ms=_duration_ms(created_at, updated_at),
         run_id=str(run_id) if isinstance(run_id, int) else None,
+        head_sha=run.get("head_sha") if isinstance(run.get("head_sha"), str) else None,
     )
 
 
@@ -212,7 +247,7 @@ def _fetch_run_stages(github_config: dict, repo_config: dict, run_id: str) -> li
     repo_url = _repo_api_url(github_config, repo_config)
     if repo_url is None or not run_id.isdigit():
         return None
-    data = _get_json(f"{repo_url}/actions/runs/{run_id}/jobs?per_page=100", _headers(github_config))
+    data = _get_json_cached(f"{repo_url}/actions/runs/{run_id}/jobs?per_page=100", _headers(github_config))
     jobs = data.get("jobs") if isinstance(data, dict) else None
     if not isinstance(jobs, list):
         return None
@@ -238,9 +273,11 @@ def get_run_stages(repo_path: Path, github_config: dict | None, run_id: str) -> 
     return _fetch_run_stages(github_config, repo_config, run_id)
 
 
-def get_active_runs(repo_path: Path, github_config: dict | None) -> list[CiRunInfo]:
+def get_active_runs(repo_path: Path, github_config: dict | None, head_sha: str | None = None) -> list[CiRunInfo]:
     """Runs that are queued or in progress right now, with their stages.
-    Independent of the commit graph: works for commits that aren't loaded."""
+    Independent of the commit graph: works for commits that aren't loaded.
+    With `head_sha` only that commit's runs are listed (the pipeline of a
+    commit action that was just performed)."""
     github_config = github_config or {}
     repo_config = _resolve_repo_config(github_config, repo_path)
     if repo_config is None:
@@ -253,7 +290,10 @@ def get_active_runs(repo_path: Path, github_config: dict | None) -> list[CiRunIn
     # One call per repo (the `status` filter takes a single value, and this is
     # polled across every repo, so requests are kept low against rate limits):
     # the latest runs, filtered here to the ones still going.
-    data = _get_json(f"{repo_url}/actions/runs?{urlencode({'per_page': '30'})}", headers)
+    query = {"per_page": "30"}
+    if head_sha:
+        query["head_sha"] = head_sha
+    data = _get_json_cached(f"{repo_url}/actions/runs?{urlencode(query)}", headers)
     items = data.get("workflow_runs") if isinstance(data, dict) else None
     runs = [
         run
@@ -268,6 +308,44 @@ def get_active_runs(repo_path: Path, github_config: dict | None) -> list[CiRunIn
             info.stages = _fetch_run_stages(github_config, repo_config, info.run_id)
         result.append(info)
     return result
+
+
+def get_runs_by_id(repo_path: Path, github_config: dict | None, run_ids: list[str]) -> list[CiRunInfo]:
+    """Current state of specific runs (one conditional call per run, plus one
+    for the stages of a run that is still going). A run that has finished comes
+    back with its final status and without stages."""
+    github_config = github_config or {}
+    repo_config = _resolve_repo_config(github_config, repo_path)
+    repo_url = _repo_api_url(github_config, repo_config) if repo_config else None
+    if repo_config is None or repo_url is None:
+        return []
+    headers = _headers(github_config)
+
+    result: list[CiRunInfo] = []
+    for run_id in run_ids:
+        if not run_id.isdigit():
+            continue
+        data = _get_json_cached(f"{repo_url}/actions/runs/{run_id}", headers)
+        if data is None:
+            continue
+        info = _run_info(data)
+        if info.status == "running" and info.run_id:
+            info.stages = _fetch_run_stages(github_config, repo_config, info.run_id)
+        result.append(info)
+    return result
+
+
+def poll_runs(
+    repo_path: Path,
+    github_config: dict | None,
+    run_ids: list[str] | None,
+    head_sha: str | None = None,
+) -> list[CiRunInfo]:
+    """`run_ids=None`: every active run of the repo (discovery). Otherwise
+    exactly those runs, whatever their state."""
+    if run_ids is None:
+        return get_active_runs(repo_path, github_config, head_sha)
+    return get_runs_by_id(repo_path, github_config, run_ids)
 
 
 def _tag_targets(repo_path: Path) -> dict[str, str]:

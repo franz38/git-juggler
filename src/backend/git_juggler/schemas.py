@@ -247,6 +247,9 @@ class CiRunInfo(BaseModel):
     # Provider-specific handle used to fetch the run's stages later: the
     # workflow run id for GitHub Actions, the build URL for Jenkins.
     run_id: str | None = None
+    # Commit the run was triggered for, so a polled run can be attached to its
+    # row in the commit graph.
+    head_sha: str | None = None
     stages: list[CiStage] | None = None
 
 

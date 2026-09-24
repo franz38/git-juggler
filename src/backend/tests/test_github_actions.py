@@ -112,7 +112,7 @@ class GitHubActionsRepoInferenceTest(unittest.TestCase):
                 {"name": "release", "status": "queued", "conclusion": None, "steps": []},
             ]
         }
-        with patch.object(github_actions, "_get_json", lambda url, headers: payload):
+        with patch.object(github_actions, "_get_json_cached", lambda url, headers: payload):
             stages = github_actions._fetch_run_stages({}, {"owner": "o", "repo": "r"}, "42")
 
         assert stages is not None
@@ -137,7 +137,7 @@ class GitHubActionsRepoInferenceTest(unittest.TestCase):
             }
 
         config = {"repos": [{"repo_path": "/tmp/repo", "owner": "o", "repo": "r"}]}
-        with patch.object(github_actions, "_get_json", fake_get_json):
+        with patch.object(github_actions, "_get_json_cached", fake_get_json):
             runs = github_actions.get_active_runs(Path("/tmp/repo"), config)
 
         self.assertEqual([r.run_id for r in runs], ["1", "3"])

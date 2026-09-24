@@ -143,6 +143,19 @@ def _extract_commit_shas(build: dict) -> set[str]:
     return shas
 
 
+def _head_sha(build: dict) -> str | None:
+    """The commit a build ran on: the last built revision, else GIT_COMMIT.
+    (The change set lists every commit since the previous build, so it says
+    nothing about which one is the head.)"""
+    actions = build.get("actions")
+    if isinstance(actions, list):
+        for action in actions:
+            revision = action.get("lastBuiltRevision") if isinstance(action, dict) else None
+            if isinstance(revision, dict) and isinstance(revision.get("SHA1"), str):
+                return revision["SHA1"]
+    return _extract_parameters(actions).get("GIT_COMMIT")
+
+
 def _job_name(job_url: str) -> str:
     path_parts = [unquote(part) for part in urlparse(job_url).path.split("/") if part]
     names: list[str] = []
@@ -183,6 +196,7 @@ def _build_info(build: dict, name: str, build_url: str) -> CiRunInfo:
         updated_at=None,
         duration_ms=int(build.get("duration")) if isinstance(build.get("duration"), int) else None,
         run_id=url,
+        head_sha=_head_sha(build),
     )
 
 
@@ -239,7 +253,7 @@ def get_active_builds(repo_path: Path, jenkins_config: dict | None) -> list[CiRu
     headers = _headers(jenkins_config)
     tree = (
         "builds[number,url,result,building,timestamp,duration,"
-        "actions[lastBuiltRevision[branch[name]],parameters[name,value]]]{0,10}"
+        "actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]]]{0,10}"
     )
     result: list[CiRunInfo] = []
     for job in _matching_job_configs(jenkins_config, repo_path):
@@ -253,6 +267,46 @@ def get_active_builds(repo_path: Path, jenkins_config: dict | None) -> list[CiRu
             info.stages = _fetch_build_stages(info.url, headers)
             result.append(info)
     return result
+
+
+def get_builds_by_url(repo_path: Path, jenkins_config: dict | None, build_urls: list[str]) -> list[CiRunInfo]:
+    """Current state of specific builds (`wfapi/describe` also carries the stages
+    of one that is still going, so that is one extra call per running build).
+    Only URLs under one of the repo's configured jobs are fetched: the URLs come
+    from the client, and the request carries the configured credentials."""
+    if not jenkins_config:
+        return []
+    headers = _headers(jenkins_config)
+    job_urls = [str(job["job_url"]).rstrip("/") for job in _matching_job_configs(jenkins_config, repo_path)]
+
+    result: list[CiRunInfo] = []
+    for build_url in build_urls:
+        normalized = build_url.rstrip("/")
+        job_url = next((job for job in job_urls if normalized.startswith(f"{job}/")), None)
+        if job_url is None or ".." in normalized:
+            continue
+        build = _fetch_build(normalized, headers)
+        if build is None:
+            continue
+        info = _build_info(build, _job_name(job_url), normalized)
+        if info.status == "running":
+            info.stages = _fetch_build_stages(info.url, headers)
+        result.append(info)
+    return result
+
+
+def poll_runs(
+    repo_path: Path,
+    jenkins_config: dict | None,
+    run_ids: list[str] | None,
+    head_sha: str | None = None,
+) -> list[CiRunInfo]:
+    """`run_ids=None`: every running build of the repo's jobs (discovery).
+    Otherwise exactly those builds, whatever their state. Jenkins can't filter
+    builds by commit, so `head_sha` is accepted for interface parity only."""
+    if run_ids is None:
+        return get_active_builds(repo_path, jenkins_config)
+    return get_builds_by_url(repo_path, jenkins_config, run_ids)
 
 
 def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config: dict | None) -> dict[str, list[CiRunInfo]]:

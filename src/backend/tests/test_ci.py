@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from git_juggler import ci
+from git_juggler import ci, github_actions, jenkins
 from git_juggler.schemas import ActivePipeline, CiRunInfo, CiStage, RepoSummary
 
 
@@ -23,8 +23,8 @@ class ActivePipelinesTest(unittest.TestCase):
             "c": [],
         }
         with (
-            patch.object(ci, "get_active_runs", lambda path, cfg: runs[path.name]),
-            patch.object(ci, "get_active_builds", lambda path, cfg: []),
+            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: runs[path.name]),
+            patch.object(jenkins, "get_active_builds", lambda path, cfg: []),
         ):
             result = ci.get_active_pipelines([_repo("a"), _repo("b"), _repo("c")], None, None)
 
@@ -32,8 +32,8 @@ class ActivePipelinesTest(unittest.TestCase):
 
     def test_respects_disabled_providers(self) -> None:
         with (
-            patch.object(ci, "get_active_runs", lambda path, cfg: [_run(1, "2026-01-01T10:00:00Z")]) as gh,
-            patch.object(ci, "get_active_builds", lambda path, cfg: [_run(2, "2026-01-01T10:00:00Z", "jenkins")]),
+            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: [_run(1, "2026-01-01T10:00:00Z")]) as gh,
+            patch.object(jenkins, "get_active_builds", lambda path, cfg: [_run(2, "2026-01-01T10:00:00Z", "jenkins")]),
         ):
             self.assertEqual(ci.get_active_pipelines([_repo("a")], {"enabled": False}, None), [])
             only_jenkins = ci.get_active_pipelines([_repo("a")], {"enabled": False}, {"enabled": True})
@@ -46,8 +46,8 @@ class ActivePipelinesTest(unittest.TestCase):
     def test_stage_dispatch_by_provider(self) -> None:
         stages = [CiStage(name="build", status="success")]
         with (
-            patch.object(ci, "get_github_run_stages", lambda path, cfg, run_id: stages),
-            patch.object(ci, "get_build_stages", lambda path, cfg, run_id: None),
+            patch.object(github_actions, "get_run_stages", lambda path, cfg, run_id: stages),
+            patch.object(jenkins, "get_build_stages", lambda path, cfg, run_id: None),
         ):
             from pathlib import Path
 
