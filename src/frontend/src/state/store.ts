@@ -230,8 +230,8 @@ export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
 const DEFAULT_KEY_BINDINGS: Record<KeyBindingAction, KeyBinding> = {
   nextTab: { key: "ArrowRight", mod: true, shift: true, alt: false },
   prevTab: { key: "ArrowLeft", mod: true, shift: true, alt: false },
-  toggleMenu: { key: "p", mod: true, shift: false, alt: false },
-  commandPalette: { key: "p", mod: true, shift: true, alt: false },
+  toggleMenu: { key: "p", mod: true, shift: true, alt: false },
+  commandPalette: { key: "p", mod: true, shift: false, alt: false },
 };
 
 const KEY_BINDINGS_KEY = "git-juggler:keyBindings";
@@ -1114,7 +1114,7 @@ export const matchingHashes = createMemo<Set<string>>(() => {
   return matches;
 });
 
-// --- Settings (Cmd/Ctrl+P main menu) ---------------------------------------
+// --- Settings (Cmd/Ctrl+Shift+P main menu) ---------------------------------------
 
 export type MenuSection = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
 
