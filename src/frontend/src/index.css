@@ -61,6 +61,13 @@
   box-sizing: border-box;
 }
 
+/* Slim, low-contrast scrollbars for the sidebar and the commit graph. */
+.sidebar-content,
+.graph-and-list {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-dim) 40%, transparent) transparent;
+}
+
 /* Scrollbars of the sidebar and the commit graph stay invisible until the
    container is hovered. The track space stays reserved so content doesn't
    shift (unlike toggling overflow). */
