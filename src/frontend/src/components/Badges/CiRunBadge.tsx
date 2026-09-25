@@ -38,7 +38,6 @@ export function CiRunBadge(props: { runs: CiRunInfo[] }) {
         {statusMark(run().status)}
       </span>
       <span class="ci-run-tooltip">
-        <span class="ci-run-summary">{props.runs.length} CI run{props.runs.length === 1 ? "" : "s"}</span>
         <For each={props.runs}>
           {(item) => {
             const stages = () => runStages()[runStagesKey(item)];
@@ -47,17 +46,41 @@ export function CiRunBadge(props: { runs: CiRunInfo[] }) {
                 <span class="ci-run-title">
                   {providerName(item.provider)}: {item.name} #{item.number}
                 </span>
-                <span>Status: {item.status}</span>
-                <span>Branch: {item.branch ?? "n/a"}</span>
-                <span>Event: {item.event ?? "n/a"}</span>
-                <span>Updated: {item.updated_at ? formatDate(item.updated_at) : item.created_at ? formatDate(item.created_at) : "n/a"}</span>
-                <span>Duration: {formatDuration(item.duration_ms)}</span>
+                <span class="ci-run-props">
+                  <span class="ci-run-props-column">
+                    <span>Status: {item.status}</span>
+                    <span>Duration: {formatDuration(item.duration_ms)}</span>
+                    <span>Branch: {item.branch ?? "n/a"}</span>
+                    <span>Event: {item.event ?? "n/a"}</span>
+                    <span>Updated: {item.updated_at ? formatDate(item.updated_at) : item.created_at ? formatDate(item.created_at) : "n/a"}</span>
+                  </span>
+                  <span class="ci-run-props-column">
+                    <Show when={stages()?.length}>
+                      <span>
+                        Jobs: {finishedStageCount(stages() ?? [])}/{stages()?.length} done
+                      </span>
+                      <Show when={stages()?.[currentStageIndex(stages() ?? [])]}>
+                        {(job) => (
+                          <>
+                            <Show when={item.status !== "success"}>
+                              <span>Current job: {job().name}</span>
+                            </Show>
+                            <Show when={job().steps?.length}>
+                              <span>
+                                Steps: {finishedStageCount(job().steps ?? [])}/{job().steps?.length} done
+                              </span>
+                              <Show when={item.status !== "success" && job().steps?.[currentStageIndex(job().steps ?? [])]}>
+                                {(step) => <span>Current step: {step().name}</span>}
+                              </Show>
+                            </Show>
+                          </>
+                        )}
+                      </Show>
+                    </Show>
+                  </span>
+                </span>
                 <Show when={stages()?.length}>
-                  <span>Stages: {finishedStageCount(stages() ?? [])}/{stages()?.length} done</span>
-                  <Show when={stages()?.[currentStageIndex(stages() ?? [])]}>
-                    {(stage) => <span>Current stage: {stage().name}</span>}
-                  </Show>
-                  <StageGraph stages={stages() ?? []} />
+                  <StageGraph stages={stages() ?? []} runStatus={item.status} />
                 </Show>
               </span>
             );

@@ -2081,8 +2081,8 @@ body.tab-dragging * {
   top: calc(100% + 8px);
   left: 0;
   z-index: 20;
-  min-width: 220px;
-  max-width: 360px;
+  min-width: 420px;
+  width: max-content;
   padding: 8px 10px;
   background: var(--menu-bg);
   border: 1px solid var(--border);
@@ -2098,10 +2098,28 @@ body.tab-dragging * {
   gap: 8px;
 }
 
-.ci-run-summary {
-  color: var(--text-h);
-  font-size: 11px;
-  font-weight: 600;
+/* Fills the gap between the badge and the panel, so moving the pointer from
+   one to the other doesn't end the hover and close the panel. */
+.ci-run-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 0;
+  right: 0;
+  height: 9px;
+}
+
+.ci-run-props {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+}
+
+.ci-run-props-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .ci-run-item {
@@ -2665,50 +2683,34 @@ body.tab-dragging * {
   color: var(--text);
 }
 
+/* --- Commit hover: pipeline graph (SVG) ----------------------------- */
+
 .stage-graph {
-  display: flex;
-  align-items: flex-start;
+  display: block;
   margin: 6px 0 2px;
+  overflow: visible;
   font-size: 10px;
+  transition: width 0.22s ease;
 }
 
-.stage-graph-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 58px;
-  min-width: 0;
-  color: var(--text);
+/* Items and connectors are placed with a transform / width, so a layout change
+   (a hovered step making room) slides them instead of jumping. */
+.stage-graph-item {
+  transition: transform 0.22s ease;
 }
 
-.stage-graph-node.pending {
-  opacity: 0.55;
+.stage-graph-link {
+  transition:
+    transform 0.22s ease,
+    width 0.22s ease;
 }
 
-.stage-graph-node.current .stage-graph-name {
-  color: var(--text-h);
-  font-weight: 700;
+.stage-graph-ring {
+  fill: var(--menu-bg);
+  stroke-width: 2;
 }
 
-.stage-graph-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--text-dim);
-  border-radius: 50%;
-  font-weight: 800;
-  line-height: 1;
-  background: var(--menu-bg);
-}
-
-.stage-graph-node.current .stage-graph-dot {
-  box-shadow: 0 0 0 2px var(--shadow-soft);
-}
-
-.stage-graph-dot.running {
+.stage-graph-ring.running {
   animation: stage-graph-pulse 1.4s ease-in-out infinite;
 }
 
@@ -2718,31 +2720,77 @@ body.tab-dragging * {
   }
 }
 
-.stage-graph-link {
-  flex: 0 0 12px;
-  height: 2px;
-  margin-top: 10px;
-  border-radius: 1px;
+.stage-graph-spinner {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 9 22;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: stage-graph-spin 0.9s linear infinite;
 }
 
-.stage-graph-more {
-  margin-top: 3px;
-  padding: 0 5px;
-  border: 1px dashed var(--border);
-  border-radius: 999px;
-  color: var(--text-dim);
+@keyframes stage-graph-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.stage-graph-name {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-dim);
+.stage-graph-mark {
+  font-size: 10px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
-.stage-graph-time {
-  color: var(--text-dim);
+.stage-graph-name,
+.stage-graph-time,
+.stage-graph-step-name {
+  text-anchor: middle;
+  fill: var(--text-dim);
+}
+
+.stage-graph-job.current .stage-graph-name {
+  fill: var(--text-h);
+  font-weight: 700;
+}
+
+.stage-graph-job.pending,
+.stage-graph-summary.pending {
+  opacity: 0.55;
+}
+
+.stage-graph-hit {
+  fill: transparent;
+}
+
+.stage-graph-step-dot {
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.stage-graph-step-dot.pending {
+  opacity: 0.55;
+}
+
+.stage-graph-step-dot.running {
+  animation: stage-graph-pulse 1.4s ease-in-out infinite;
+}
+
+.stage-graph-step-dot.hovered {
+  transform: scale(1.5);
+}
+
+.stage-graph-step-name {
+  fill: var(--text-h);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.stage-graph-step-name.shown {
+  opacity: 1;
 }
 
 /* --- Welcome wizard ------------------------------------------------- */
