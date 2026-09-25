@@ -18,8 +18,10 @@ export function NewGroupModal() {
   const submit = async () => {
     const target = newGroupModal();
     if (!target || !canCreate()) return;
+    // Read the name before closing: closing resets it to "".
+    const groupName = name();
     closeNewGroupModal();
-    await createRepoGroup(name(), target.repoPath);
+    await createRepoGroup(groupName, target.repoPath);
   };
 
   return (
