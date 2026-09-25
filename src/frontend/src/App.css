@@ -2082,9 +2082,9 @@ body.tab-dragging * {
   height: 14px;
 }
 
-.ci-provider-text {
-  font-size: 10px;
-  font-weight: 800;
+/* The Jenkins butler is portrait: fit it whole inside its square. */
+.ci-provider-logo {
+  object-fit: contain;
 }
 
 .ci-run-status {
@@ -2092,69 +2092,21 @@ body.tab-dragging * {
   line-height: 1;
 }
 
+/* Only positions the popovers (CIRunPopover draws its own card), one per run.
+   Rendered in a portal on <body> and placed by CiRunBadge, so it floats above
+   everything, the terminal included, instead of being clipped by the graph. */
 .ci-run-tooltip {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 20;
-  min-width: 420px;
-  width: max-content;
-  padding: 8px 10px;
-  background: var(--menu-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--shadow-soft);
-  color: var(--text);
+  position: fixed;
+  z-index: 95;
+  width: 480px;
   white-space: normal;
+  cursor: default;
 }
 
-.ci-run-badge:hover .ci-run-tooltip {
+.ci-run-tooltip-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-/* Fills the gap between the badge and the panel, so moving the pointer from
-   one to the other doesn't end the hover and close the panel. */
-.ci-run-tooltip::before {
-  content: "";
-  position: absolute;
-  top: -9px;
-  left: 0;
-  right: 0;
-  height: 9px;
-}
-
-.ci-run-props {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 14px;
-}
-
-.ci-run-props-column {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.ci-run-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.ci-run-item + .ci-run-item {
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-
-.ci-run-title {
-  color: var(--text-h);
-  font-weight: 600;
 }
 
 .commit-detail {
@@ -2698,116 +2650,6 @@ body.tab-dragging * {
   gap: 4px;
   padding-left: 12px;
   color: var(--text);
-}
-
-/* --- Commit hover: pipeline graph (SVG) ----------------------------- */
-
-.stage-graph {
-  display: block;
-  margin: 6px 0 2px;
-  overflow: visible;
-  font-size: 10px;
-  transition: width 0.22s ease;
-}
-
-/* Items and connectors are placed with a transform / width, so a layout change
-   (a hovered step making room) slides them instead of jumping. */
-.stage-graph-item {
-  transition: transform 0.22s ease;
-}
-
-.stage-graph-link {
-  transition:
-    transform 0.22s ease,
-    width 0.22s ease;
-}
-
-.stage-graph-ring {
-  fill: var(--menu-bg);
-  stroke-width: 2;
-}
-
-.stage-graph-ring.running {
-  animation: stage-graph-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes stage-graph-pulse {
-  50% {
-    opacity: 0.55;
-  }
-}
-
-.stage-graph-spinner {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 9 22;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: stage-graph-spin 0.9s linear infinite;
-}
-
-@keyframes stage-graph-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.stage-graph-mark {
-  font-size: 10px;
-  font-weight: 800;
-  text-anchor: middle;
-  dominant-baseline: central;
-}
-
-.stage-graph-name,
-.stage-graph-time,
-.stage-graph-step-name {
-  text-anchor: middle;
-  fill: var(--text-dim);
-}
-
-.stage-graph-job.current .stage-graph-name {
-  fill: var(--text-h);
-  font-weight: 700;
-}
-
-.stage-graph-job.pending,
-.stage-graph-summary.pending {
-  opacity: 0.55;
-}
-
-.stage-graph-hit {
-  fill: transparent;
-}
-
-.stage-graph-step-dot {
-  stroke-width: 2;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 0.2s ease;
-}
-
-.stage-graph-step-dot.pending {
-  opacity: 0.55;
-}
-
-.stage-graph-step-dot.running {
-  animation: stage-graph-pulse 1.4s ease-in-out infinite;
-}
-
-.stage-graph-step-dot.hovered {
-  transform: scale(1.5);
-}
-
-.stage-graph-step-name {
-  fill: var(--text-h);
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-
-.stage-graph-step-name.shown {
-  opacity: 1;
 }
 
 /* --- Welcome wizard ------------------------------------------------- */
