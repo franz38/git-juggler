@@ -597,6 +597,18 @@ export async function createRepoGroup(name: string, repoPath?: string): Promise<
   await saveRepoGroups([...repoGroups(), group]);
 }
 
+export async function renameRepoGroup(groupId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const next = repoGroups().map((group) => (group.id === groupId ? { ...group, name: trimmed } : group));
+  await saveRepoGroups(next);
+}
+
+// Removes only the group; its repos stay in the main repo list.
+export async function deleteRepoGroup(groupId: string): Promise<void> {
+  await saveRepoGroups(repoGroups().filter((group) => group.id !== groupId));
+}
+
 // "New group" dialog: holds the repo the group is being created for (it becomes
 // the group's first member), or null when the dialog is closed.
 const [newGroupModal, setNewGroupModal] = createSignal<{ repoPath: string } | null>(null);

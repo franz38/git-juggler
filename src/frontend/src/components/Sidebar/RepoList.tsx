@@ -5,6 +5,7 @@ import {
   activeRepo,
   agentActivityByRepositoryId,
   agentActivityByWorktreePath,
+  deleteRepoGroup,
   openNewGroupModal,
   fetchRepo,
   loadConfig,
@@ -15,6 +16,7 @@ import {
   openRepoTab,
   pinTab,
   pinnedRepos,
+  renameRepoGroup,
   repoGroups,
   repos,
   reposFound,
@@ -30,6 +32,12 @@ interface BookmarkMenuState {
 }
 
 interface BulkMenuState {
+  x: number;
+  y: number;
+}
+
+interface GroupMenuState {
+  groupId: string;
   x: number;
   y: number;
 }
@@ -244,6 +252,30 @@ function BulkMenu(props: { state: BulkMenuState; selectedCount: number; onFetch:
   );
 }
 
+function GroupMenu(props: { state: GroupMenuState; onRename: (groupId: string) => void; onClose: () => void }) {
+  // Read before closing: onClose unmounts this menu, and props.state goes stale.
+  function run(action: (groupId: string) => void): void {
+    const groupId = props.state.groupId;
+    props.onClose();
+    action(groupId);
+  }
+
+  return (
+    <div class="repo-bookmark-overlay" onClick={props.onClose} onContextMenu={(e) => { e.preventDefault(); props.onClose(); }}>
+      <div class="repo-bookmark-menu" style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }} onClick={(e) => e.stopPropagation()}>
+        <button type="button" class="repo-bookmark-menu-item" onClick={() => run(props.onRename)}>
+          <span />
+          <span>Rename</span>
+        </button>
+        <button type="button" class="repo-bookmark-menu-item" onClick={() => run((groupId) => void deleteRepoGroup(groupId))}>
+          <span />
+          <span>Delete</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function RepoList() {
   onMount(() => {
     void loadRepos();
@@ -253,12 +285,15 @@ export function RepoList() {
   const [query, setQuery] = createSignal("");
   const [bookmarkMenu, setBookmarkMenu] = createSignal<BookmarkMenuState | null>(null);
   const [bulkMenu, setBulkMenu] = createSignal<BulkMenuState | null>(null);
+  const [groupMenu, setGroupMenu] = createSignal<GroupMenuState | null>(null);
   const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
   const [draggedGroupId, setDraggedGroupId] = createSignal<string | null>(null);
   const groupHeadingElements = new Map<string, HTMLElement>();
   const [draggedRepo, setDraggedRepo] = createSignal<{ groupId: string; repoPath: string } | null>(null);
   const repoElements = new Map<string, HTMLElement>();
   const [collapsedGroupIds, setCollapsedGroupIds] = createSignal<Set<string>>(new Set());
+  // Group whose name is being edited in place, or null.
+  const [editingGroupId, setEditingGroupId] = createSignal<string | null>(null);
   // moveRepoGroup/moveRepoInGroup round-trip through the backend before the
   // local state (and thus the DOM order) actually updates, so guard against
   // overlapping swap requests from rapid-fire dragover events while one is
@@ -495,6 +530,10 @@ export function RepoList() {
                 ref={(el) => groupHeadingElements.set(group.id, el)}
                 class="repo-group-heading"
                 classList={{ dragging: draggedGroupId() === group.id }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setGroupMenu({ groupId: group.id, x: e.clientX, y: e.clientY });
+                }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -507,21 +546,48 @@ export function RepoList() {
                   clearGroupDrag();
                 }}
               >
-                <span
-                  class="repo-group-name"
-                  draggable={true}
-                  onDragStart={(e) => {
-                    setDraggedGroupId(group.id);
-                    if (e.dataTransfer) {
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("application/x-git-juggler-group", group.id);
-                    }
-                    e.dataTransfer?.setData("text/plain", group.id);
-                  }}
-                  onDragEnd={clearGroupDrag}
+                <Show
+                  when={editingGroupId() === group.id}
+                  fallback={
+                    <span
+                      class="repo-group-name"
+                      draggable={true}
+                      title="Click to rename"
+                      onClick={() => setEditingGroupId(group.id)}
+                      onDragStart={(e) => {
+                        setDraggedGroupId(group.id);
+                        if (e.dataTransfer) {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("application/x-git-juggler-group", group.id);
+                        }
+                        e.dataTransfer?.setData("text/plain", group.id);
+                      }}
+                      onDragEnd={clearGroupDrag}
+                    >
+                      {group.name}
+                    </span>
+                  }
                 >
-                  {group.name}
-                </span>
+                  <input
+                    ref={(el) => queueMicrotask(() => el.select())}
+                    type="text"
+                    class="repo-group-name-input"
+                    value={group.name}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const name = e.currentTarget.value;
+                        setEditingGroupId(null);
+                        void renameRepoGroup(group.id, name);
+                      } else if (e.key === "Escape") {
+                        // Keep Escape from also closing whatever overlay is open.
+                        e.stopPropagation();
+                        setEditingGroupId(null);
+                      }
+                    }}
+                    // Only Enter saves; clicking away discards the edit.
+                    onBlur={() => setEditingGroupId(null)}
+                  />
+                </Show>
                 <button
                   type="button"
                   class="repo-group-collapse"
@@ -583,6 +649,7 @@ export function RepoList() {
         {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}
       </For>
       <Show when={bookmarkMenu()}>{(state) => <BookmarkMenu state={state()} onClose={() => setBookmarkMenu(null)} />}</Show>
+      <Show when={groupMenu()}>{(state) => <GroupMenu state={state()} onRename={setEditingGroupId} onClose={() => setGroupMenu(null)} />}</Show>
       <Show when={bulkMenu()}>{(state) => <BulkMenu state={state()} selectedCount={selectedRepoPaths().size} onFetch={fetchSelectedRepos} onClose={() => setBulkMenu(null)} />}</Show>
     </div>
   );

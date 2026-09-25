@@ -1282,10 +1282,27 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: grab;
+  /* Show user-chosen group names as typed, unlike the fixed section labels. */
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .repo-group-name:active {
   cursor: grabbing;
+}
+
+.repo-group-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: -3px 0 -3px -5px;
+  padding: 2px 4px;
+  font: inherit;
+  letter-spacing: normal;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
 }
 
 .repo-group-collapse {
