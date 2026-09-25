@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal, onCleanup } from "solid-js";
 import { useOverlay } from "../../state/overlayStack";
 import { scrollToCommit } from "../../lib/scrollToCommit";
+import { swallowNextClick } from "../../lib/swallowNextClick";
 import {
   authorFilter,
   branchFilter,
@@ -36,6 +37,9 @@ export function SearchBox() {
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as Element | null;
       if (target?.closest(".filter-popover, .filter-button")) return;
+      // Closing the popover is all a click on the graph should do: it must not
+      // also select the commit underneath.
+      if (e.button === 0 && target?.closest(".graph-and-list")) swallowNextClick();
       setOpenPanel(null);
     };
     document.addEventListener("mousedown", onPointerDown);
