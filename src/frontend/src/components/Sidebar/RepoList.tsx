@@ -167,8 +167,11 @@ function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) 
   const isPinned = () => pinnedRepos().has(props.state.repo.path);
 
   function createGroupForRepo(): void {
+    // Read the path before closing: onClose unmounts this menu, and reading
+    // props.state after that throws a stale-<Show> error.
+    const repoPath = props.state.repo.path;
     props.onClose();
-    openNewGroupModal(props.state.repo.path);
+    openNewGroupModal(repoPath);
   }
 
   return (
