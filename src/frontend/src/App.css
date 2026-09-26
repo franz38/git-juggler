@@ -1087,7 +1087,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
+  height: 40px;
+  margin: 1px 0;
   padding: 0 16px;
   cursor: pointer;
   color: var(--text);
@@ -1126,7 +1127,7 @@
 }
 
 .repo-name {
-  font-size: 12px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1162,37 +1163,6 @@
   white-space: nowrap;
 }
 
-.repo-bookmark {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 20px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  opacity: 0.5;
-  cursor: pointer;
-  margin-left: 4px;
-}
-
-.repo-bookmark:hover {
-  opacity: 1;
-}
-
-.repo-bookmark.pinned {
-  color: var(--accent);
-  opacity: 1;
-}
-
-.repo-bookmark svg {
-  width: 12px;
-  height: 12px;
-  fill: currentColor;
-}
-
 .repo-list .repo-group-heading {
   display: flex;
   align-items: center;
@@ -1212,15 +1182,20 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  font-size: 12px;
+  font-weight: 500;
   margin: -8px 0;
   padding: 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: grab;
-  /* Show user-chosen group names as typed, unlike the fixed section labels. */
-  text-transform: none;
+  text-transform: uppercase;
   letter-spacing: normal;
+}
+
+.repo-group-display-name {
+  text-transform: uppercase;
 }
 
 .repo-group-name:active {
@@ -2673,7 +2648,7 @@ body.tab-dragging * {
 .context-menu {
   position: fixed;
   z-index: 111;
-  min-width: 140px;
+  min-width: 180px;
   background: var(--menu-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -2687,6 +2662,48 @@ body.tab-dragging * {
   color: var(--text);
   border-radius: 4px;
   cursor: pointer;
+}
+
+.context-menu-item-with-mark {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.context-menu-item-with-trailing-mark {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.context-menu-item-with-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.context-menu-submenu {
+  position: relative;
+}
+
+.context-menu-submenu-panel {
+  display: none;
+  position: absolute;
+  left: calc(100% + 4px);
+  top: -4px;
+}
+
+.context-menu-submenu:hover > .context-menu-submenu-panel {
+  display: block;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px;
+  background: var(--border);
 }
 
 .context-menu-item:hover {

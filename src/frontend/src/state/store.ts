@@ -2149,13 +2149,14 @@ export interface RepoContextMenuState {
   y: number;
   repoId: string;
   repoName: string;
+  repoPath: string | null;
 }
 
 const [repoContextMenu, setRepoContextMenu] = createSignal<RepoContextMenuState | null>(null);
 export { repoContextMenu };
 
-export function openRepoContextMenu(x: number, y: number, repoId: string, repoName: string): void {
-  setRepoContextMenu({ x, y, repoId, repoName });
+export function openRepoContextMenu(x: number, y: number, repoId: string, repoName: string, repoPath?: string): void {
+  setRepoContextMenu({ x, y, repoId, repoName, repoPath: repoPath ?? null });
 }
 
 export function closeRepoContextMenu(): void {

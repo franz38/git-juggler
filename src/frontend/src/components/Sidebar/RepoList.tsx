@@ -7,7 +7,6 @@ import {
   agentActivityByRepositoryId,
   agentActivityByWorktreePath,
   deleteRepoGroup,
-  openNewGroupModal,
   fetchRepo,
   loadConfig,
   loadRepos,
@@ -22,15 +21,7 @@ import {
   repos,
   reposFound,
   reposLoading,
-  setRepoInGroup,
-  setRepoPinned,
 } from "../../state/store";
-
-interface BookmarkMenuState {
-  repo: RepoSummary;
-  x: number;
-  y: number;
-}
 
 interface BulkMenuState {
   x: number;
@@ -41,14 +32,6 @@ interface GroupMenuState {
   groupId: string;
   x: number;
   y: number;
-}
-
-function BookmarkIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M4 2.5C4 1.7 4.7 1 5.5 1h5c.8 0 1.5.7 1.5 1.5V15l-4-2.4L4 15V2.5Z" />
-    </svg>
-  );
 }
 
 function ChevronIcon() {
@@ -64,7 +47,6 @@ function RepoRow(props: {
   groupId?: string;
   selected: boolean;
   onSelectedChange: (repoPath: string, selected: boolean) => void;
-  onBookmarkClick: (repo: RepoSummary, x: number, y: number) => void;
   disableRepoDrag?: boolean;
   dragging?: boolean;
   onRepoRef?: (el: HTMLDivElement) => void;
@@ -73,7 +55,6 @@ function RepoRow(props: {
   onRepoDrop?: () => void;
   onRepoDragEnd?: () => void;
 }) {
-  const isPinned = () => pinnedRepos().has(props.repo.path);
   const agentActivity = () => agentActivityByWorktreePath().get(props.repo.path) ?? agentActivityByRepositoryId().get(props.repo.repository_id)?.[0];
 
   return (
@@ -110,22 +91,9 @@ function RepoRow(props: {
       }}
       onContextMenu={(e) => {
         e.preventDefault();
-        openRepoContextMenu(e.clientX, e.clientY, props.repo.id, props.repo.name);
+        openRepoContextMenu(e.clientX, e.clientY, props.repo.id, props.repo.name, props.repo.path);
       }}
     >
-      <button
-        type="button"
-        class="repo-bookmark"
-        classList={{ pinned: isPinned() }}
-        title="Organize repo"
-        onClick={(e) => {
-          e.stopPropagation();
-          const rect = e.currentTarget.getBoundingClientRect();
-          props.onBookmarkClick(props.repo, rect.left, rect.bottom + 4);
-        }}
-      >
-        <BookmarkIcon />
-      </button>
       <span class="repo-names">
         <span class="repo-name-line">
           <span class="repo-name">{props.repo.name}</span>
@@ -172,66 +140,6 @@ function GroupCheckbox(props: { checked: boolean; indeterminate: boolean; onChan
   );
 }
 
-function BookmarkMenu(props: { state: BookmarkMenuState; onClose: () => void }) {
-  const isPinned = () => pinnedRepos().has(props.state.repo.path);
-
-  function createGroupForRepo(): void {
-    // Read the path before closing: onClose unmounts this menu, and reading
-    // props.state after that throws a stale-<Show> error.
-    const repoPath = props.state.repo.path;
-    props.onClose();
-    openNewGroupModal(repoPath);
-  }
-
-  return (
-    <div class="repo-bookmark-overlay" onClick={props.onClose}>
-      <div
-        class="repo-bookmark-menu"
-        style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          class="repo-bookmark-menu-item"
-          onClick={() => {
-            void setRepoPinned(props.state.repo.path, !isPinned());
-            props.onClose();
-          }}
-        >
-          <span>{isPinned() ? "✓" : ""}</span>
-          <span>Pin</span>
-        </button>
-        <Show when={repoGroups().length > 0}>
-          <div class="repo-bookmark-menu-separator" />
-          <For each={repoGroups()}>
-            {(group) => {
-              const inGroup = () => group.repo_paths.includes(props.state.repo.path);
-              return (
-                <button
-                  type="button"
-                  class="repo-bookmark-menu-item"
-                  onClick={() => {
-                    void setRepoInGroup(group.id, props.state.repo.path, !inGroup());
-                    props.onClose();
-                  }}
-                >
-                  <span>{inGroup() ? "✓" : ""}</span>
-                  <span>{group.name}</span>
-                </button>
-              );
-            }}
-          </For>
-        </Show>
-        <div class="repo-bookmark-menu-separator" />
-        <button type="button" class="repo-bookmark-menu-item" onClick={createGroupForRepo}>
-          <span>+</span>
-          <span>Create new group</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function BulkMenu(props: { state: BulkMenuState; selectedCount: number; onFetch: () => void; onClose: () => void }) {
   return (
     <div class="repo-bookmark-overlay" onClick={props.onClose}>
@@ -263,15 +171,13 @@ function GroupMenu(props: { state: GroupMenuState; onRename: (groupId: string) =
 
   return (
     <div class="repo-bookmark-overlay" onClick={props.onClose} onContextMenu={(e) => { e.preventDefault(); props.onClose(); }}>
-      <div class="repo-bookmark-menu" style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }} onClick={(e) => e.stopPropagation()}>
-        <button type="button" class="repo-bookmark-menu-item" onClick={() => run(props.onRename)}>
-          <span />
+      <div class="context-menu" style={{ left: `${props.state.x}px`, top: `${props.state.y}px` }} onClick={(e) => e.stopPropagation()}>
+        <div class="context-menu-item" onClick={() => run(props.onRename)}>
           <span>Rename</span>
-        </button>
-        <button type="button" class="repo-bookmark-menu-item" onClick={() => run((groupId) => void deleteRepoGroup(groupId))}>
-          <span />
+        </div>
+        <div class="context-menu-item" onClick={() => run((groupId) => void deleteRepoGroup(groupId))}>
           <span>Delete</span>
-        </button>
+        </div>
       </div>
     </div>
   );
@@ -284,7 +190,6 @@ export function RepoList() {
   });
 
   const [query, setQuery] = createSignal("");
-  const [bookmarkMenu, setBookmarkMenu] = createSignal<BookmarkMenuState | null>(null);
   const [bulkMenu, setBulkMenu] = createSignal<BulkMenuState | null>(null);
   const [groupMenu, setGroupMenu] = createSignal<GroupMenuState | null>(null);
   const [selectedRepoPaths, setSelectedRepoPaths] = createSignal<Set<string>>(new Set());
@@ -331,10 +236,6 @@ export function RepoList() {
       }))
       .filter((group) => !hasQuery || group.repos.length > 0);
   });
-
-  function openBookmarkMenu(repo: RepoSummary, x: number, y: number): void {
-    setBookmarkMenu({ repo, x, y });
-  }
 
   function setRepoSelected(repoPath: string, selected: boolean): void {
     const next = new Set(selectedRepoPaths());
@@ -506,7 +407,7 @@ export function RepoList() {
       </Show>
       <Show when={pinned().length > 0}>
         <h2>Pinned</h2>
-        <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}</For>
+        <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} />}</For>
       </Show>
       <div
         class="repo-group-list"
@@ -567,7 +468,7 @@ export function RepoList() {
                       }}
                       onDragEnd={clearGroupDrag}
                     >
-                      {group.name}
+                      {group.name} ({group.repos.length})
                     </span>
                   }
                 >
@@ -630,7 +531,6 @@ export function RepoList() {
                         selected={selectedRepoPaths().has(repo.path)}
                         onSelectedChange={setRepoSelected}
                         disableRepoDrag={draggedGroupId() !== null}
-                        onBookmarkClick={openBookmarkMenu}
                         dragging={draggedRepo()?.groupId === group.id && draggedRepo()?.repoPath === repo.path}
                         onRepoRef={(el) => repoElements.set(repoKey(group.id, repo.path), el)}
                         onRepoDragStart={() => setDraggedRepo({ groupId: group.id, repoPath: repo.path })}
@@ -649,9 +549,8 @@ export function RepoList() {
       </div>
       <h2>Repositories</h2>
       <For each={unpinned()} fallback={<Show when={!reposLoading()}><div class="repo-empty">No git repos found</div></Show>}>
-        {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} onBookmarkClick={openBookmarkMenu} />}
+        {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} />}
       </For>
-      <Show when={bookmarkMenu()}>{(state) => <BookmarkMenu state={state()} onClose={() => setBookmarkMenu(null)} />}</Show>
       <Show when={groupMenu()}>{(state) => <GroupMenu state={state()} onRename={setEditingGroupId} onClose={() => setGroupMenu(null)} />}</Show>
       <Show when={bulkMenu()}>{(state) => <BulkMenu state={state()} selectedCount={selectedRepoPaths().size} onFetch={fetchSelectedRepos} onClose={() => setBulkMenu(null)} />}</Show>
     </div>

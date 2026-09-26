@@ -92,8 +92,10 @@ export function SearchBox() {
         onClick={() => togglePanel("branches")}
       >
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
-          <circle cx="8" cy="8" r="2" fill="currentColor" />
+          <circle cx="4" cy="3" r="1.7" fill="currentColor" />
+          <circle cx="4" cy="13" r="1.7" fill="currentColor" />
+          <circle cx="12" cy="8" r="1.7" fill="currentColor" />
+          <path d="M4 4.7v6.6M4 8h8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         </svg>
         <Show when={activeBranchFilterCount() > 0}>
           <span class="filter-count">{activeBranchFilterCount()}</span>
