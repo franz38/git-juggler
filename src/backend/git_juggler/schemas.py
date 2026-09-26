@@ -313,6 +313,7 @@ class AgentRepositoryScanResponse(BaseModel):
     process_pid: int | None = None
     name: str | None = None
     details: AgentSessionDetails | None = None
+    waiting_for: str | None = None
 
 
 class AgentProcessCandidateResponse(BaseModel):

@@ -194,8 +194,11 @@ class AgentHooksTest(unittest.TestCase):
     def test_claude_install_includes_session_end_hook(self) -> None:
         self.assertIn("SessionEnd", agent_hooks._claude_snippet_dict()["hooks"])
 
-    def _card(self, directory: Path, pid: int, session_id: str, status: str = "idle", name: str | None = "my session") -> None:
-        (directory / f"{pid}.json").write_text(json.dumps({"pid": pid, "sessionId": session_id, "status": status, "kind": "bg", "name": name, "cwd": "/x"}), encoding="utf-8")
+    def _card(self, directory: Path, pid: int, session_id: str, status: str = "idle", name: str | None = "my session", waiting_for: str | None = None) -> None:
+        card = {"pid": pid, "sessionId": session_id, "status": status, "kind": "bg", "name": name, "cwd": "/x"}
+        if waiting_for is not None:
+            card["waitingFor"] = waiting_for
+        (directory / f"{pid}.json").write_text(json.dumps(card), encoding="utf-8")
         (directory / f"{pid}.deadbeef.key").write_text("secret-not-json", encoding="utf-8")
 
     def test_claude_registry_gives_real_pid_name_status_and_closes_missing_sessions(self) -> None:
@@ -227,6 +230,29 @@ class AgentHooksTest(unittest.TestCase):
 
             with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
                 self.assertEqual(reader.recent_scans(now=start + 30_000), [])
+
+    def test_claude_waiting_card_is_active_and_reports_what_it_waits_for(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            sessions = root / "sessions"
+            sessions.mkdir()
+            event_path = root / "events.jsonl"
+            start = 1_000_000_000_000
+            self._write_events(event_path, [self._event(repo, "SessionStart", start, "s1")])
+            self._card(sessions, 111, "s1", status="waiting", waiting_for="input needed")
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None, opencode_db_path=None)
+
+            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+                scan = reader.recent_scans(now=start + 10 * 60_000)[0]
+                self.assertEqual((scan.state, scan.waiting_for), ("active", "input needed"))
+
+                self._card(sessions, 111, "s1", status="waiting")
+                self.assertEqual(reader.recent_scans(now=start + 10 * 60_000)[0].waiting_for, "permission prompt")
+
+                self._card(sessions, 111, "s1", status="busy")
+                self.assertIsNone(reader.recent_scans(now=start + 10 * 60_000)[0].waiting_for)
 
     def test_claude_registry_change_invalidates_cached_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

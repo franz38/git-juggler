@@ -1,39 +1,37 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { For, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { AgentRepositoryScan, AgentWorktreeActivity } from "../../api/types";
+import { toAgentSession } from "../../lib/agentStatusPopoverData";
 import { agentShowWorktrees } from "../../state/store";
-import { formatTime, pathBasename, sessionDetailsLine, sessionIdentity, sessionTitle, shortCommit } from "./agentFormat";
+import { AgentStatusPopover } from "./AgentStatusPopover";
 
 export interface AgentHoverEntry {
   scan: AgentRepositoryScan;
   activity: AgentWorktreeActivity;
 }
 
-const CARD_WIDTH = 340;
+const CARD_WIDTH = 440;
 const GAP = 12;
 const MARGIN = 8;
 
-function lastToolUse(activity: AgentWorktreeActivity): string | null {
-  for (let i = activity.evidence.length - 1; i >= 0; i--) {
-    const evidence = activity.evidence[i];
-    const target = evidence.command ?? evidence.path;
-    if (evidence.tool && target) return `${evidence.tool} · ${target.replace(/\s+/g, " ").slice(0, 80)}`;
-  }
-  return null;
-}
+const AGENT_LOGO: Record<string, string> = { claude: "/agent-logos/claude.png", opencode: "/agent-logos/opencode.webp" };
 
-// Floating details for the agent sessions working on a commit. Rendered in a
-// portal so the scrolling graph can't clip it; it never takes pointer events.
+// Floating AgentStatusPopovers, one per agent session working on a commit.
+// Rendered in a portal so the scrolling graph can't clip them; they never take pointer events.
 export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMRect }) {
   let el: HTMLDivElement | undefined;
   const [top, setTop] = createSignal(props.anchor.top);
+  // Ticks the timers ("2m 14s") while the card is open.
+  const [now, setNow] = createSignal(Date.now());
+  const timer = setInterval(() => setNow(Date.now()), 1000);
+  onCleanup(() => clearInterval(timer));
 
   const left = () => {
     const right = props.anchor.right + GAP;
     return right + CARD_WIDTH + MARGIN <= window.innerWidth ? right : Math.max(MARGIN, props.anchor.left - GAP - CARD_WIDTH);
   };
 
-  // One block per session; a session can be on this commit through several worktrees.
+  // One popover per session; a session can be on this commit through several worktrees.
   const sessions = createMemo(() => {
     const byScan = new Map<AgentRepositoryScan, AgentWorktreeActivity[]>();
     for (const { scan, activity } of props.entries) {
@@ -57,40 +55,10 @@ export function AgentHoverCard(props: { entries: AgentHoverEntry[]; anchor: DOMR
       <div ref={el} class="agent-hover-card" style={{ left: `${left()}px`, top: `${top()}px`, width: `${CARD_WIDTH}px` }}>
         <For each={sessions()}>
           {([scan, activities]) => (
-            <div class="agent-hover-session" classList={{ active: scan.state === "active" }}>
-              <div class="agent-hover-title">
-                <span>{sessionTitle(scan)}</span>
-                <span class="agent-state-pill" classList={{ idle: scan.state === "idle" }}>{scan.state}</span>
-              </div>
-              <div class="agent-hover-meta">{sessionIdentity(scan)}</div>
-              <Show when={sessionDetailsLine(scan)}>
-                <div class="agent-hover-meta">{sessionDetailsLine(scan)}</div>
-              </Show>
-              <Show when={scan.details?.last_prompt}>
-                <div class="agent-hover-prompt">“{scan.details!.last_prompt}”</div>
-              </Show>
-              <Show when={agentShowWorktrees()}>
-                <For each={activities}>
-                  {(activity) => (
-                    <div class="agent-hover-worktree" classList={{ active: activity.state === "active" }}>
-                      <div class="agent-hover-worktree-title">
-                        <span>{pathBasename(activity.worktree_path)}</span>
-                        <Show when={activity.is_home}>
-                          <span class="agent-state-pill" title="The worktree this session was started in">home</span>
-                        </Show>
-                        <span class="agent-state-pill" classList={{ idle: activity.state === "idle" }}>{activity.state}</span>
-                      </div>
-                      <div class="agent-hover-meta">
-                        {activity.branch ?? "detached"} · {shortCommit(activity.commit)} · last {formatTime(activity.last_activity)}
-                      </div>
-                      <Show when={lastToolUse(activity)}>
-                        <div class="agent-hover-meta agent-hover-mono">{lastToolUse(activity)}</div>
-                      </Show>
-                    </div>
-                  )}
-                </For>
-              </Show>
-            </div>
+            <AgentStatusPopover
+              session={toAgentSession(scan, activities, now(), agentShowWorktrees())}
+              agentIcon={AGENT_LOGO[scan.provider] ? <img src={AGENT_LOGO[scan.provider]} alt="" width={36} height={36} style={{ "object-fit": "contain" }} /> : undefined}
+            />
           )}
         </For>
       </div>

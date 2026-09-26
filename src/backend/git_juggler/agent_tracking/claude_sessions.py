@@ -21,6 +21,8 @@ class ClaudeSession:
     status_updated_at: int | None = None
     version: str | None = None
     entrypoint: str | None = None
+    # Set with status "waiting": "permission prompt" or "input needed".
+    waiting_for: str | None = None
 
 
 def registry_signature(directory: Path | None) -> tuple[tuple[str, int], ...] | None:
@@ -69,5 +71,6 @@ def read_registry(directory: Path | None) -> dict[str, ClaudeSession] | None:
             status_updated_at=data.get("statusUpdatedAt") if isinstance(data.get("statusUpdatedAt"), int) else None,
             version=data.get("version") if isinstance(data.get("version"), str) else None,
             entrypoint=data.get("entrypoint") if isinstance(data.get("entrypoint"), str) else None,
+            waiting_for=data.get("waitingFor") if isinstance(data.get("waitingFor"), str) else None,
         )
     return sessions

@@ -151,12 +151,16 @@ class AgentHookEventReader:
             card: ClaudeSession | None = None
             opencode_session: OpenCodeSession | None = None
             busy: bool | None = None  # what the agent itself reports, when it does
+            waiting_for: str | None = None
             if provider == "claude" and registry is not None and session_id:
                 card = registry.get(session_id)
                 if card is None or not _pid_alive(card.pid):
                     continue
                 process_pid: int | None = card.pid
-                busy = card.status == "busy" if card.status in ("busy", "idle") else None
+                # "waiting" (on a permission prompt or a question) is still mid-turn.
+                busy = card.status in ("busy", "waiting") if card.status in ("busy", "idle", "waiting") else None
+                if card.status == "waiting":
+                    waiting_for = card.waiting_for or "permission prompt"
             else:
                 process_pid = next((event.agent_pid for event in reversed(session_events) if event.agent_pid is not None), None)
                 if process_pid is not None and not _pid_alive(process_pid):
@@ -235,6 +239,7 @@ class AgentHookEventReader:
                     process_pid=process_pid,
                     name=card.name if card is not None else (opencode_session.title if opencode_session is not None else None),
                     details=details,
+                    waiting_for=waiting_for,
                 )
             )
         return scans, next_change

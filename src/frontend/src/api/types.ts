@@ -281,6 +281,8 @@ export interface AgentRepositoryScan {
   process_pid: number | null;
   name: string | null;
   details: AgentSessionDetails | null;
+  /** Set while the agent is blocked on the user: "permission prompt" or "input needed". */
+  waiting_for?: string | null;
 }
 
 export interface AgentProcessCandidate {

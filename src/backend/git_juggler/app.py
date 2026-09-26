@@ -312,6 +312,7 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             process_pid=scan.process_pid,
             name=scan.name,
             details=scan.details.__dict__ if scan.details is not None else None,
+            waiting_for=scan.waiting_for,
         )
 
     def _hook_status_response(status) -> AgentHookProviderStatusResponse:

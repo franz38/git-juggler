@@ -74,7 +74,7 @@ export function AgentsSettings() {
 
       <ToggleField
         label="Show worktrees in the agents panel"
-        description="Lists each session's worktrees (branch, commit, last activity) under the session. Off by default."
+        description="Lists each session's worktrees (branch, commit, last activity) under the session, in the agents panel and in the commit hover card. Off by default."
         checked={agentShowWorktrees()}
         disabled={!agentsEnabled()}
         onChange={setAgentShowWorktrees}

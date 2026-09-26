@@ -61,3 +61,5 @@ class AgentRepositoryScan:
     process_pid: int | None = None
     name: str | None = None
     details: SessionDetails | None = None
+    # What the agent is blocked on ("permission prompt", "input needed"), or None.
+    waiting_for: str | None = None
