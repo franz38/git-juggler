@@ -1,5 +1,6 @@
 import { Show, createMemo } from "solid-js";
 import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
+import { useOverlay } from "../../state/overlayStack";
 import {
   activeRepo,
   closeContextMenu,
@@ -7,6 +8,7 @@ import {
   contextMenu,
   currentBranch,
   headCommit,
+  openCreateBranchModal,
   openCreateTagModal,
   runInTerminal,
   scheduleCiRefreshAfterPush,
@@ -36,6 +38,7 @@ function copyText(value: string): void {
 
 export function CommitContextMenu() {
   let panelRef: HTMLDivElement | undefined;
+  useOverlay("commit-context-menu", () => !!contextMenu(), closeContextMenu);
 
   const selectedCommit = createMemo(() => {
     const menu = contextMenu();
@@ -121,6 +124,14 @@ export function CommitContextMenu() {
     closeContextMenu();
   };
 
+  const handleCreateBranch = () => {
+    const commit = selectedCommit();
+    const repo = activeRepo();
+    if (!commit || !repo || stashRef()) return;
+    openCreateBranchModal({ repoId: repo, hash: commit.hash, shortHash: commit.short_hash, subject: commit.subject });
+    closeContextMenu();
+  };
+
   const handlePushUpToHere = () => {
     const menu = contextMenu();
     const repo = activeRepo();
@@ -178,6 +189,9 @@ export function CommitContextMenu() {
                   </Show>
                   <div class="context-menu-item" onClick={handleCreateTag}>
                     Create tag
+                  </div>
+                  <div class="context-menu-item" onClick={handleCreateBranch}>
+                    Create branch here
                   </div>
                   <Show when={canPushUpToHere()}>
                     <div class="context-menu-item" onClick={handlePushUpToHere}>

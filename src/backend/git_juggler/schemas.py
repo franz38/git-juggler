@@ -86,6 +86,11 @@ class JenkinsConfig(BaseModel):
     jobs: list[JenkinsJobConfig] = Field(default_factory=list)
 
 
+class CiConnectionTestResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 class RepoGroupConfig(BaseModel):
     id: str
     name: str

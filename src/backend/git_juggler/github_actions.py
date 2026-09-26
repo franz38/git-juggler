@@ -348,6 +348,18 @@ def poll_runs(
     return get_runs_by_id(repo_path, github_config, run_ids)
 
 
+def test_connection(github_config: dict | None) -> tuple[bool, str]:
+    """Read-only connectivity check for the settings screen."""
+    github_config = github_config or {}
+    api_base = str(github_config.get("api_base_url") or "https://api.github.com").rstrip("/")
+    data = _get_json(f"{api_base}/rate_limit", _headers(github_config))
+    if data is None:
+        return False, f"Could not reach {api_base} with the current settings."
+    token_env = github_config.get("token_env") or "GITHUB_TOKEN"
+    token_note = f" using ${token_env}" if isinstance(token_env, str) and os.environ.get(token_env) else " without a token"
+    return True, f"Connected to {api_base}{token_note}."
+
+
 def _tag_targets(repo_path: Path) -> dict[str, str]:
     try:
         repo = Repo(repo_path)

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config
+from . import config, github_actions, jenkins
 from .agent_hook_events import AgentHookEventReader
 from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
 from .agent_tracking.activity_models import AgentRepositoryScan
@@ -36,11 +36,14 @@ from .schemas import (
     PickFolderResponse,
     CiRunInfo,
     CiStage,
+    CiConnectionTestResponse,
     CommitDetail,
     ConfigResponse,
     ConfigUpdateRequest,
     FileDiff,
+    GitHubConfig,
     GraphResponse,
+    JenkinsConfig,
     Preferences,
     RepoScanProgress,
     RepoStatusResponse,
@@ -281,6 +284,16 @@ def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
             config.load_github_config(),
             config.load_jenkins_config(),
         )
+
+    @app.post("/api/ci/github/test", response_model=CiConnectionTestResponse)
+    def api_test_github_connection(body: GitHubConfig) -> CiConnectionTestResponse:
+        ok, message = github_actions.test_connection(body.model_dump())
+        return CiConnectionTestResponse(ok=ok, message=message)
+
+    @app.post("/api/ci/jenkins/test", response_model=CiConnectionTestResponse)
+    def api_test_jenkins_connection(body: JenkinsConfig) -> CiConnectionTestResponse:
+        ok, message = jenkins.test_connection(body.model_dump())
+        return CiConnectionTestResponse(ok=ok, message=message)
 
     hook_event_reader = AgentHookEventReader()
 

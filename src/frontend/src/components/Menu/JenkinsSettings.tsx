@@ -1,4 +1,5 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
+import { testJenkinsConnection } from "../../api/client";
 import type { JenkinsConfig } from "../../api/types";
 import { CiPollField } from "./CiPollField";
 import { NumberField } from "../inputs/NumberField";
@@ -20,6 +21,9 @@ const emptyJenkinsConfig: JenkinsConfig = {
 // Jenkins settings".
 export function JenkinsSettings() {
   const [draft, setDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
+  const [testing, setTesting] = createSignal(false);
+  const [testResult, setTestResult] = createSignal<{ ok: boolean; message: string } | null>(null);
+  let testResultRef: HTMLDivElement | undefined;
 
   createEffect(() => {
     const config = jenkinsConfig();
@@ -51,18 +55,40 @@ export function JenkinsSettings() {
     }));
   };
 
+  const normalizedDraft = (): JenkinsConfig => ({
+    ...draft(),
+    base_url: draft().base_url.trim(),
+    username: draft().username.trim(),
+    api_token_env: draft().api_token_env.trim() || "JENKINS_API_TOKEN",
+    build_limit: Math.max(1, Math.min(Number(draft().build_limit) || 50, 500)),
+    jobs: draft().jobs
+      .map((job) => ({ repo_path: job.repo_path.trim(), job_url: job.job_url.trim() }))
+      .filter((job) => job.repo_path && job.job_url),
+  });
+
   const handleSave = () => {
-    void saveJenkinsConfig({
-      ...draft(),
-      base_url: draft().base_url.trim(),
-      username: draft().username.trim(),
-      api_token_env: draft().api_token_env.trim() || "JENKINS_API_TOKEN",
-      build_limit: Math.max(1, Math.min(Number(draft().build_limit) || 50, 500)),
-      jobs: draft().jobs
-        .map((job) => ({ repo_path: job.repo_path.trim(), job_url: job.job_url.trim() }))
-        .filter((job) => job.repo_path && job.job_url),
-    });
+    void saveJenkinsConfig(normalizedDraft());
   };
+
+  const handleTest = async () => {
+    if (testing()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      setTestResult(await testJenkinsConnection(normalizedDraft()));
+    } catch (e) {
+      setTestResult({ ok: false, message: (e as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  createEffect(() => {
+    if (!testResult()) return;
+    requestAnimationFrame(() => {
+      testResultRef?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  });
 
   return (
     <>
@@ -134,10 +160,21 @@ export function JenkinsSettings() {
         <button type="button" class="menu-secondary-button" onClick={addJob}>
           Add job
         </button>
+        <button type="button" class="menu-secondary-button" disabled={testing()} onClick={() => void handleTest()}>
+          {testing() ? "Testing..." : "Test connection"}
+        </button>
         <button type="button" class="menu-primary-button" onClick={handleSave}>
           Save Jenkins settings
         </button>
       </div>
+
+      <Show when={testResult()}>
+        {(result) => (
+          <div ref={testResultRef} class="menu-test-result" classList={{ success: result().ok, error: !result().ok }}>
+            {result().message}
+          </div>
+        )}
+      </Show>
 
       <Show when={jenkinsConfigError()}>
         <div class="menu-error">{jenkinsConfigError()}</div>

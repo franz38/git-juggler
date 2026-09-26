@@ -309,6 +309,31 @@ def poll_runs(
     return get_builds_by_url(repo_path, jenkins_config, run_ids)
 
 
+def test_connection(jenkins_config: dict | None) -> tuple[bool, str]:
+    """Read-only connectivity check for the settings screen."""
+    if not jenkins_config:
+        return False, "Jenkins settings are empty."
+
+    urls: list[str] = []
+    base_url = jenkins_config.get("base_url")
+    if isinstance(base_url, str) and base_url.strip():
+        urls.append(f"{base_url.strip().rstrip('/')}/api/json")
+
+    for job in jenkins_config.get("jobs", []):
+        job_url = job.get("job_url") if isinstance(job, dict) else None
+        if isinstance(job_url, str) and job_url.strip():
+            urls.append(f"{job_url.strip().rstrip('/')}/api/json")
+
+    if not urls:
+        return False, "Set a Jenkins base URL or at least one job URL first."
+
+    headers = _headers(jenkins_config)
+    for url in urls:
+        if _fetch_json(url, headers) is not None:
+            return True, f"Connected to {url.removesuffix('/api/json')}."
+    return False, "Could not reach Jenkins with the current settings."
+
+
 def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config: dict | None) -> dict[str, list[CiRunInfo]]:
     if not commit_hashes or not jenkins_config:
         return {}

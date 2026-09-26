@@ -1,9 +1,11 @@
 import { Show } from "solid-js";
 import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
+import { useOverlay } from "../../state/overlayStack";
 import { activeRepo, closeTagContextMenu, openDeleteTagModal, runInTerminal, scheduleGraphRefresh, shellQuote, tagContextMenu } from "../../state/store";
 
 export function TagContextMenu() {
   let panelRef: HTMLDivElement | undefined;
+  useOverlay("tag-context-menu", () => !!tagContextMenu(), closeTagContextMenu);
 
   const handleDelete = () => {
     const menu = tagContextMenu();

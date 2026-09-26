@@ -285,6 +285,26 @@
   font-size: 12px;
 }
 
+.menu-test-result {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-dim) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-dim) 12%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.menu-test-result.success {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.menu-test-result.error {
+  border-color: color-mix(in srgb, var(--danger-fg) 45%, transparent);
+  background: color-mix(in srgb, var(--danger-fg) 12%, transparent);
+}
+
 .menu-field {
   display: flex;
   flex-direction: column;
@@ -1404,6 +1424,10 @@ body.tab-dragging * {
   font-style: italic;
 }
 
+.tab.unavailable {
+  opacity: 0.65;
+}
+
 .tab.active {
   background: var(--active-bg);
   color: var(--text-h);
@@ -1696,6 +1720,12 @@ body.tab-dragging * {
 .empty-state {
   margin: auto;
   color: var(--text-dim);
+}
+
+.unavailable-state {
+  max-width: 360px;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .graph-and-list {

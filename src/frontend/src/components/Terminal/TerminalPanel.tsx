@@ -27,7 +27,7 @@ const FETCH_COMMAND_RE = /\bgit\s+fetch\b/;
 const CHECKOUT_COMMAND_RE = /\bgit\s+(checkout|switch)\b/;
 const COMMIT_COMMAND_RE = /\bgit\s+commit\b/;
 const PUSH_COMMAND_RE = /\bgit\s+push\b/;
-const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
+const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|pull|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
 const LINE_BUFFER_MAX = 200;
 
 export function TerminalPanel(props: { repo: string | null }) {

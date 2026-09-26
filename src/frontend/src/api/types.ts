@@ -109,6 +109,11 @@ export interface JenkinsConfig {
   jobs: JenkinsJobConfig[];
 }
 
+export interface CiConnectionTestResponse {
+  ok: boolean;
+  message: string;
+}
+
 export interface PersonInfo {
   name: string;
   email: string;

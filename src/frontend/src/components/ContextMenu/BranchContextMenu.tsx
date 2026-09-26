@@ -1,9 +1,11 @@
 import { Show } from "solid-js";
 import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
+import { useOverlay } from "../../state/overlayStack";
 import { branchContextMenu, closeBranchContextMenu, openDeleteBranchModal } from "../../state/store";
 
 export function BranchContextMenu() {
   let panelRef: HTMLDivElement | undefined;
+  useOverlay("branch-context-menu", () => !!branchContextMenu(), closeBranchContextMenu);
 
   const handleDelete = () => {
     const menu = branchContextMenu();
