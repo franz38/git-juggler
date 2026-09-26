@@ -1865,6 +1865,27 @@ export function closeCreateTagModal(): void {
   setCreateTagModal(null);
 }
 
+// --- Create branch modal --------------------------------------------------
+
+export interface CreateBranchTarget {
+  repoId: string;
+  repoName?: string;
+  hash?: string;
+  shortHash?: string;
+  subject?: string;
+}
+
+const [createBranchModal, setCreateBranchModal] = createSignal<CreateBranchTarget | null>(null);
+export { createBranchModal };
+
+export function openCreateBranchModal(target: CreateBranchTarget): void {
+  setCreateBranchModal(target);
+}
+
+export function closeCreateBranchModal(): void {
+  setCreateBranchModal(null);
+}
+
 // Side-by-side diff of one file. `hash` is null for a working-tree (uncommitted) file.
 export interface FileDiffTarget {
   repo: string;

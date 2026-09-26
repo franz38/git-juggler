@@ -4,6 +4,7 @@ import { GraphPanel } from "./components/Graph/GraphPanel";
 import { DeleteBranchModal } from "./components/Branches/DeleteBranchModal";
 import { BranchContextMenu } from "./components/ContextMenu/BranchContextMenu";
 import { CommitContextMenu } from "./components/ContextMenu/CommitContextMenu";
+import { CreateBranchModal } from "./components/ContextMenu/CreateBranchModal";
 import { CreateTagModal } from "./components/ContextMenu/CreateTagModal";
 import { NewGroupModal } from "./components/Sidebar/NewGroupModal";
 import { FileDiffModal } from "./components/Diff/FileDiffModal";
@@ -165,6 +166,7 @@ function App() {
       <CommandPalette />
       <BranchContextMenu />
       <CommitContextMenu />
+      <CreateBranchModal />
       <CreateTagModal />
       <NewGroupModal />
       <FileDiffModal />

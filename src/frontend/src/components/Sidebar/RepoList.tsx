@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { RepoSummary } from "../../api/types";
 import { flipTranslate } from "../../lib/flip";
+import { useOverlay } from "../../state/overlayStack";
 import {
   activeRepo,
   agentActivityByRepositoryId,
@@ -300,6 +301,8 @@ export function RepoList() {
   // in flight.
   let groupSwapPending = false;
   let repoSwapPending = false;
+
+  useOverlay("repo-group-menu", () => !!groupMenu(), () => setGroupMenu(null));
 
   function toggleGroupCollapsed(groupId: string): void {
     const next = new Set(collapsedGroupIds());

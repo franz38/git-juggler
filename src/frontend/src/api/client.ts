@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GraphResponse, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiConnectionTestResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GitHubConfig, GraphResponse, JenkinsConfig, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -100,6 +100,27 @@ export function fetchRunStages(repoId: string, provider: string, runId: string):
 
 export function fetchActivePipelines(): Promise<ActivePipeline[]> {
   return getJson(`${API_BASE}/ci/active`);
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new Error(errBody?.detail ?? `request failed (${res.status})`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export function testGitHubConnection(config: GitHubConfig): Promise<CiConnectionTestResponse> {
+  return postJson(`${API_BASE}/ci/github/test`, config);
+}
+
+export function testJenkinsConnection(config: JenkinsConfig): Promise<CiConnectionTestResponse> {
+  return postJson(`${API_BASE}/ci/jenkins/test`, config);
 }
 
 export function fetchAgentActivity(): Promise<AgentActivityResponse> {

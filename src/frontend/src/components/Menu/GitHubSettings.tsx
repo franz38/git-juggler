@@ -1,4 +1,5 @@
 import { Index, Show, createEffect, createSignal } from "solid-js";
+import { testGitHubConnection } from "../../api/client";
 import type { GitHubConfig } from "../../api/types";
 import { CiPollField } from "./CiPollField";
 import { TextField } from "../inputs/TextField";
@@ -18,6 +19,9 @@ const emptyGitHubConfig: GitHubConfig = {
 // aren't committed until "Save GitHub settings" is clicked.
 export function GitHubSettings() {
   const [draft, setDraft] = createSignal<GitHubConfig>(emptyGitHubConfig);
+  const [testing, setTesting] = createSignal(false);
+  const [testResult, setTestResult] = createSignal<{ ok: boolean; message: string } | null>(null);
+  let testResultRef: HTMLDivElement | undefined;
 
   createEffect(() => {
     const config = githubConfig();
@@ -49,16 +53,38 @@ export function GitHubSettings() {
     }));
   };
 
+  const normalizedDraft = (): GitHubConfig => ({
+    ...draft(),
+    api_base_url: draft().api_base_url.trim() || "https://api.github.com",
+    token_env: draft().token_env.trim() || "GITHUB_TOKEN",
+    repos: draft().repos
+      .map((repo) => ({ repo_path: repo.repo_path.trim(), owner: repo.owner.trim(), repo: repo.repo.trim() }))
+      .filter((repo) => repo.repo_path && repo.owner && repo.repo),
+  });
+
   const handleSave = () => {
-    void saveGitHubConfig({
-      ...draft(),
-      api_base_url: draft().api_base_url.trim() || "https://api.github.com",
-      token_env: draft().token_env.trim() || "GITHUB_TOKEN",
-      repos: draft().repos
-        .map((repo) => ({ repo_path: repo.repo_path.trim(), owner: repo.owner.trim(), repo: repo.repo.trim() }))
-        .filter((repo) => repo.repo_path && repo.owner && repo.repo),
-    });
+    void saveGitHubConfig(normalizedDraft());
   };
+
+  const handleTest = async () => {
+    if (testing()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      setTestResult(await testGitHubConnection(normalizedDraft()));
+    } catch (e) {
+      setTestResult({ ok: false, message: (e as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  createEffect(() => {
+    if (!testResult()) return;
+    requestAnimationFrame(() => {
+      testResultRef?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  });
 
   return (
     <>
@@ -128,10 +154,21 @@ export function GitHubSettings() {
         <button type="button" class="menu-secondary-button" onClick={addRepo}>
           Add override
         </button>
+        <button type="button" class="menu-secondary-button" disabled={testing()} onClick={() => void handleTest()}>
+          {testing() ? "Testing..." : "Test connection"}
+        </button>
         <button type="button" class="menu-primary-button" onClick={handleSave}>
           Save GitHub settings
         </button>
       </div>
+
+      <Show when={testResult()}>
+        {(result) => (
+          <div ref={testResultRef} class="menu-test-result" classList={{ success: result().ok, error: !result().ok }}>
+            {result().message}
+          </div>
+        )}
+      </Show>
 
       <Show when={githubConfigError()}>
         <div class="menu-error">{githubConfigError()}</div>
