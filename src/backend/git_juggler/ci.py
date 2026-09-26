@@ -120,6 +120,13 @@ def _active_runs_for_repo(repo: RepoSummary, github_config: dict | None, jenkins
     return [ActivePipeline(repo_id=repo.id, repo_name=repo.name, run=run) for run in runs]
 
 
+def _pipeline_key(pipeline: ActivePipeline) -> tuple[str, str]:
+    run = pipeline.run
+    if run.run_id:
+        return (run.provider, run.run_id)
+    return (run.provider, run.url)
+
+
 def get_active_pipelines(
     repos: list[RepoSummary],
     github_config: dict | None,
@@ -132,4 +139,8 @@ def get_active_pipelines(
     with ThreadPoolExecutor(max_workers=min(8, len(repos))) as pool:
         per_repo = pool.map(lambda repo: _active_runs_for_repo(repo, github_config, jenkins_config), repos)
         pipelines = [item for group in per_repo for item in group]
-    return sorted(pipelines, key=lambda item: item.run.created_at or "", reverse=True)
+    deduped_by_key: dict[tuple[str, str], ActivePipeline] = {}
+    for pipeline in pipelines:
+        deduped_by_key.setdefault(_pipeline_key(pipeline), pipeline)
+    deduped = list(deduped_by_key.values())
+    return sorted(deduped, key=lambda item: item.run.created_at or "", reverse=True)

@@ -12,7 +12,7 @@ def _repo(name: str) -> RepoSummary:
 
 
 def _run(number: int, created_at: str, provider: str = "github_actions") -> CiRunInfo:
-    return CiRunInfo(provider=provider, status="running", name="CI", number=number, url="u", created_at=created_at)
+    return CiRunInfo(provider=provider, status="running", name="CI", number=number, url=f"u{number}", created_at=created_at)
 
 
 class ActivePipelinesTest(unittest.TestCase):
@@ -42,6 +42,17 @@ class ActivePipelinesTest(unittest.TestCase):
 
     def test_no_repos(self) -> None:
         self.assertEqual(ci.get_active_pipelines([], None, None), [])
+
+    def test_deduplicates_same_active_run_across_repo_entries(self) -> None:
+        run = _run(1, "2026-01-01T10:00:00Z")
+        run.run_id = "123"
+        with (
+            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: [run]),
+            patch.object(jenkins, "get_active_builds", lambda path, cfg: []),
+        ):
+            result = ci.get_active_pipelines([_repo("a"), _repo("a-worktree")], None, None)
+
+        self.assertEqual([(p.repo_name, p.run.run_id) for p in result], [("a", "123")])
 
     def test_stage_dispatch_by_provider(self) -> None:
         stages = [CiStage(name="build", status="success")]
