@@ -9,6 +9,7 @@ import {
   moveTab,
   openRepoContextMenu,
   pinTab,
+  repoUnavailable,
   repoCurrentBranch,
   repos,
   tabs,
@@ -156,7 +157,7 @@ export function TabsBar() {
           <div
             ref={(el) => tabElements.set(tab.id, el)}
             class="tab"
-            classList={{ active: activeRepo() === tab.id, preview: !tab.pinned, dragging: draggedTabId() === tab.id }}
+            classList={{ active: activeRepo() === tab.id, preview: !tab.pinned, dragging: draggedTabId() === tab.id, unavailable: repoUnavailable(tab.id) }}
             onPointerDown={(e) => startPress(e, tab.id)}
             onClick={() => {
               if (!suppressClick) activateTab(tab.id);
@@ -166,12 +167,15 @@ export function TabsBar() {
               e.preventDefault();
               openRepoContextMenu(e.clientX, e.clientY, tab.id, tab.name);
             }}
-            title={tab.pinned ? tab.name : `${tab.name} (double-click to pin)`}
+            title={repoUnavailable(tab.id) ? `${tab.name} is no longer in configured scan paths` : tab.pinned ? tab.name : `${tab.name} (double-click to pin)`}
           >
             <span class="tab-names">
               <span class="tab-label">{tab.name}</span>
-              <Show when={repoCurrentBranch(tab.id)}>
+              <Show when={!repoUnavailable(tab.id) && repoCurrentBranch(tab.id)}>
                 <span class="tab-branch">{repoCurrentBranch(tab.id)}</span>
+              </Show>
+              <Show when={repoUnavailable(tab.id)}>
+                <span class="tab-branch">Unavailable</span>
               </Show>
             </span>
             <Show when={agentCounts(tab.id).total > 0}>

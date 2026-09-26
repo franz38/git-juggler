@@ -34,6 +34,7 @@ import {
   refreshPipelines,
   refreshActiveRepoCiRuns,
   CI_COMPLETED_REFRESH_INTERVAL_MS,
+  repoUnavailable,
   setSidebarWidth,
   sidebarTab,
   setTerminalHeight,
@@ -63,7 +64,7 @@ function App() {
 
   createEffect(() => {
     const repo = activeRepo();
-    if (!repo) return;
+    if (!repo || repoUnavailable(repo)) return;
     const timer = window.setInterval(() => {
       void pollRepoStatus(repo);
     }, 2500);
@@ -186,14 +187,16 @@ function App() {
         </Show>
         <div class="content">
           <Show when={activeRepo()} fallback={<div class="empty-state">Select a repository to see its graph</div>}>
-            <div class="graph-and-list">
-              <div class="graph-column">
-                <GraphPanel />
+            <Show when={!repoUnavailable(activeRepo()!)} fallback={<div class="empty-state unavailable-state">Repository is no longer in the configured scan paths.</div>}>
+              <div class="graph-and-list">
+                <div class="graph-column">
+                  <GraphPanel />
+                </div>
+                <div class="list-column">
+                  <CommitList />
+                </div>
               </div>
-              <div class="list-column">
-                <CommitList />
-              </div>
-            </div>
+            </Show>
           </Show>
         </div>
         <div

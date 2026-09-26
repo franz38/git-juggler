@@ -73,6 +73,7 @@ function loadTabsState(): PersistedTabsState {
 const restoredTabsState = loadTabsState();
 const [repos, setRepos] = createSignal<RepoSummary[]>([]);
 const [reposLoading, setReposLoading] = createSignal(false);
+const [reposLoaded, setReposLoaded] = createSignal(false);
 const [reposFound, setReposFound] = createSignal(0);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
@@ -140,7 +141,7 @@ export function observeRowHeight(el: Element, key: string): () => void {
   };
 }
 
-export { repos, reposLoading, reposFound, tabs, activeRepo };
+export { repos, reposLoading, reposLoaded, reposFound, tabs, activeRepo };
 
 // --- Repos sidebar -------------------------------------------------------
 
@@ -185,12 +186,26 @@ export async function loadRepos(): Promise<void> {
   }, 150);
   try {
     setRepos(await fetchRepos());
+    setReposLoaded(true);
+    loadActiveTabGraph();
   } catch {
     // The sidebar just stays empty; nowhere good to surface this yet.
   } finally {
     window.clearInterval(progressPoll);
     setReposLoading(false);
   }
+}
+
+function repoKnown(repoId: string): boolean {
+  return repos().some((repo) => repo.id === repoId);
+}
+
+export function repoUnavailable(repoId: string): boolean {
+  return reposLoaded() && !repoKnown(repoId);
+}
+
+function repoLoadDeferred(repoId: string): boolean {
+  return !reposLoaded() && !repoKnown(repoId);
 }
 
 // --- Directory browser -----------------------------------------------------
@@ -801,6 +816,7 @@ async function loadGraphInto(name: string): Promise<void> {
 }
 
 async function loadRepoGraphIfNeeded(name: string): Promise<void> {
+  if (repoUnavailable(name) || repoLoadDeferred(name)) return;
   ensureRepoState(name);
   if (repoStates[name].commits.length > 0 || repoStates[name].loading) return;
   await loadGraphInto(name);
@@ -810,6 +826,7 @@ async function loadRepoGraphIfNeeded(name: string): Promise<void> {
 // to pick up HEAD moving after a checkout (see the terminal's command
 // detection), since the initial load only happens once per repo otherwise.
 export async function refreshRepoGraph(repoId: string): Promise<void> {
+  if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return;
   ensureRepoState(repoId);
   if (repoStates[repoId].loading) {
     pendingGraphRefreshes.add(repoId);
@@ -819,6 +836,7 @@ export async function refreshRepoGraph(repoId: string): Promise<void> {
 }
 
 export async function pollRepoStatus(repoId: string): Promise<void> {
+  if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return;
   const state = repoStates[repoId];
   if (!state || state.loading || state.commits.length === 0) return;
   try {
@@ -1622,6 +1640,7 @@ export async function loadConfig(): Promise<void> {
 }
 
 async function loadCiRunsInto(repoId: string): Promise<void> {
+  if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return;
   ensureRepoState(repoId);
   if (!githubConfig().enabled && !jenkinsConfig().enabled) {
     clearCiPoll(repoId);
@@ -1650,7 +1669,7 @@ async function loadCiRunsInto(repoId: string): Promise<void> {
 export const CI_COMPLETED_REFRESH_INTERVAL_MS = CI_COMPLETED_REFRESH_MS;
 export function refreshActiveRepoCiRuns(): void {
   const repoId = activeRepo();
-  if (!repoId || document.hidden || ciPollTimers.has(repoId)) return;
+  if (!repoId || repoUnavailable(repoId) || repoLoadDeferred(repoId) || document.hidden || ciPollTimers.has(repoId)) return;
   void loadCiRunsInto(repoId);
 }
 
@@ -1788,6 +1807,7 @@ setTimeout(() => setBackgroundTerminalsReady(true), BACKGROUND_TERMINAL_FALLBACK
 export function shouldConnectTerminal(repoId: string | null): boolean {
   // The repo-less shell is only visible when no tabs are open.
   if (repoId === null) return tabs().length === 0 || backgroundTerminalsReady();
+  if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return false;
   return backgroundTerminalsReady() || repoId === activeRepo() || demandedTerminals().has(repoId);
 }
 
