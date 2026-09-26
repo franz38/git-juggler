@@ -1567,6 +1567,7 @@ async function trackCiRuns(repoId: string): Promise<void> {
   if (refs.length === 0) return;
   try {
     const finished = applyPolledRuns(repoId, await pollCiRuns(repoId, refs));
+    void refreshPipelines();
     if (finished.length > 0) void loadCiRunsInto(repoId);
     else scheduleCiTrackingIfNeeded(repoId);
   } catch {
@@ -1580,6 +1581,7 @@ async function trackCiRuns(repoId: string): Promise<void> {
 async function discoverCiRuns(repoId: string): Promise<void> {
   try {
     applyPolledRuns(repoId, await pollCiRuns(repoId));
+    void refreshPipelines();
   } catch {
     // Opportunistic; the next discovery delay or the completed refresh catches up.
   }
