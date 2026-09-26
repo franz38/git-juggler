@@ -247,15 +247,21 @@ def _build_history(
         if r.name.startswith(_REMOTES) and r.commit and not _is_remote_head(r)
     ]
 
-    # Walk history reachable from branches and tags, then explicitly add stash
-    # commits as side nodes. We still avoid `--all` so remote-tracking branches
-    # do not silently expand the local graph.
+    # Walk history reachable from branches, tags, remotes, and stash bases, then
+    # explicitly add stash commits as side nodes. Including stash bases keeps a
+    # stash attached after its original base was abandoned by a rebase.
+    # We still avoid `--all` so remote-tracking branches do not silently expand
+    # the local graph.
     tips: list[str] = []
     seen_tips: set[str] = set()
     for ref in [*heads, *tags, *remote_refs]:
         if ref.commit not in seen_tips:
             seen_tips.add(ref.commit)
             tips.append(ref.commit)
+    for stash in stashes:
+        if stash.base_sha not in seen_tips:
+            seen_tips.add(stash.base_sha)
+            tips.append(stash.base_sha)
 
     # One light listing of the whole history (sha, parents, date). Per-commit
     # metadata is only fetched later, for the page actually being returned.

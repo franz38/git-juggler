@@ -44,6 +44,37 @@ class GitGraphTest(unittest.TestCase):
             self.assertEqual(stash_node.refs.stashes, ["stash@{0}"])
             self.assertEqual(by_hash[base_commit.hexsha].refs.stashes, [])
 
+    def test_stash_base_abandoned_by_rebase_is_returned_as_graph_node(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+
+            tracked_file = path / "notes.txt"
+            tracked_file.write_text("initial\n", encoding="utf-8")
+            repo.index.add(["notes.txt"])
+            initial_commit = repo.index.commit("initial commit", author=author, committer=author)
+
+            tracked_file.write_text("initial\nold base\n", encoding="utf-8")
+            repo.index.add(["notes.txt"])
+            old_base_commit = repo.index.commit("old base", author=author, committer=author)
+
+            tracked_file.write_text("initial\nold base\nstashed\n", encoding="utf-8")
+            repo.git.stash("push", "-m", "work in progress")
+            stash_commit = repo.commit("stash@{0}")
+
+            repo.git.reset("--hard", initial_commit.hexsha)
+            tracked_file.write_text("initial\nrebased main\n", encoding="utf-8")
+            repo.index.add(["notes.txt"])
+            repo.index.commit("rebased main", author=author, committer=author)
+
+            commits, *_ = get_graph(path)
+            by_hash = {commit.hash: commit for commit in commits}
+
+            self.assertIn(old_base_commit.hexsha, by_hash)
+            self.assertIn(stash_commit.hexsha, by_hash)
+            self.assertEqual(by_hash[stash_commit.hexsha].parents, [old_base_commit.hexsha])
+
     def test_rows_follow_commit_dates_not_branch_grouping(self) -> None:
         author = Actor("Test User", "test@example.com")
         with tempfile.TemporaryDirectory() as directory:
