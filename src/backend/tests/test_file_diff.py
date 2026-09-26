@@ -60,10 +60,22 @@ class FileDiffTest(unittest.TestCase):
         detail = get_commit_detail(self.path, sha)
         self.assertEqual(detail.files[0].path, "new.txt")
         self.assertEqual(detail.files[0].old_path, "old.txt")
+        self.assertEqual((detail.files[0].additions, detail.files[0].deletions), (0, 0))
 
         result = get_commit_file_diff(self.path, sha, "new.txt", "old.txt")
         self.assertIn("rename from old.txt", result.patch)
         self.assertNotIn("+line1", result.patch)
+
+    def test_detail_reports_line_counts(self) -> None:
+        (self.path / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
+        root = self._commit("init", "a.txt")
+        (self.path / "a.txt").write_text("one\nthree\nfour\n", encoding="utf-8")
+        edit = self._commit("edit", "a.txt")
+
+        root_file = get_commit_detail(self.path, root).files[0]
+        self.assertEqual((root_file.additions, root_file.deletions), (2, 0))
+        edit_file = get_commit_detail(self.path, edit).files[0]
+        self.assertEqual((edit_file.additions, edit_file.deletions), (2, 1))
 
     def test_full_flag_includes_unchanged_lines(self) -> None:
         lines = [f"line{i}\n" for i in range(40)]

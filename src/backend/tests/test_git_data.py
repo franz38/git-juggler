@@ -312,6 +312,7 @@ class GitGraphTest(unittest.TestCase):
             repo = self._init_repo(path, author)
             for name in ("staged.txt", "both.txt", "gone.txt", "old name.txt", "plain.txt"):
                 (path / name).write_text("base\n", encoding="utf-8")
+            (path / "gone.txt").write_text("gone\n", encoding="utf-8")
             repo.index.add(["staged.txt", "both.txt", "gone.txt", "old name.txt", "plain.txt"])
             repo.index.commit("base", author=author, committer=author)
 
@@ -340,6 +341,36 @@ class GitGraphTest(unittest.TestCase):
                 },
             )
             self.assertTrue(status.is_dirty)
+            self.assertEqual(
+                {f.path: (f.additions, f.deletions) for f in status.uncommitted_files},
+                {
+                    "staged.txt": (1, 1),
+                    "both.txt": (1, 1),
+                    "gone.txt": (0, 1),
+                    "new name.txt": (0, 0),
+                    "brand new.txt": (1, 0),
+                    "dir/a.txt": (1, 0),
+                },
+            )
+
+    def test_line_counts_are_unknown_for_binary_files(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+            (path / "blob.bin").write_bytes(b"\x00\x01")
+            repo.index.add(["blob.bin"])
+            repo.index.commit("base", author=author, committer=author)
+            (path / "blob.bin").write_bytes(b"\x00\x02")
+            (path / "new.bin").write_bytes(b"\x00\x03")
+
+            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[]):
+                status = get_repo_status(path)
+
+            self.assertEqual(
+                {f.path: (f.additions, f.deletions) for f in status.uncommitted_files},
+                {"blob.bin": (None, None), "new.bin": (None, None)},
+            )
 
     def test_upstream_is_reported_for_tracked_branch(self) -> None:
         author = Actor("Test User", "test@example.com")

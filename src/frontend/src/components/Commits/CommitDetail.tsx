@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import type { CommitDetail } from "../../api/types";
 import { formatDate } from "../../lib/formatDate";
 import { activeRepo, openFileDiff } from "../../state/store";
+import { LineCounts } from "./LineCounts";
 
 export function CommitDetailView(props: { detail?: CommitDetail }) {
   return (
@@ -39,6 +40,7 @@ export function CommitDetailView(props: { detail?: CommitDetail }) {
               >
                 <span class="file-status">{f.status[0]?.toUpperCase()}</span>
                 <span class="file-path">{f.path}</span>
+                <LineCounts file={f} />
               </div>
             )}
           </For>

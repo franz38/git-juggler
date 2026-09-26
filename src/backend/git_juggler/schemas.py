@@ -174,6 +174,9 @@ class FileChange(BaseModel):
     path: str
     status: str
     old_path: str | None = None
+    # Changed line counts; None when unknown (binary, too large, or not computed).
+    additions: int | None = None
+    deletions: int | None = None
 
 
 class FileDiff(BaseModel):

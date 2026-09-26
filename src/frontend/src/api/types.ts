@@ -166,6 +166,9 @@ export interface FileChange {
   path: string;
   status: string;
   old_path?: string | null;
+  /** Changed line counts; null when unknown (binary, too large). */
+  additions?: number | null;
+  deletions?: number | null;
 }
 
 export interface FileDiff {

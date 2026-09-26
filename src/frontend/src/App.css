@@ -1849,74 +1849,291 @@ body.tab-dragging * {
   color: var(--text-dim);
 }
 
-.uncommitted-detail-body {
+/* Commit panel: message + actions on the left, selectable changed files with
+   per-file +/− line counts on the right. Stacks when the pane is narrow. */
+.commit-panel-container {
+  container-type: inline-size;
+}
+
+.commit-panel {
+  max-width: 820px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 1.25fr);
+  gap: 24px;
+}
+
+@container (max-width: 560px) {
+  .commit-panel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+.commit-panel-compose {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.commit-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.uncommitted-action-panel {
-  flex: 0 0 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-}
-
-.uncommitted-message-label {
+.commit-panel-label {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-dim);
+}
+
+.commit-panel-subject-count {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 11px;
+  color: var(--text-dim);
 }
 
-.uncommitted-message-input {
+.commit-panel-subject-count.over {
+  color: var(--danger);
+}
+
+.commit-panel-message {
   resize: vertical;
-  min-height: 72px;
-  background: var(--panel-bg);
+  min-height: 116px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
+  color: var(--text-h);
   font: inherit;
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.uncommitted-message-input:focus {
+.commit-panel-message:focus {
   outline: none;
   border-color: var(--accent);
 }
 
-.uncommitted-action-buttons {
+.commit-panel-actions {
   display: flex;
   gap: 8px;
 }
 
-.uncommitted-action-buttons button {
-  flex: 1;
-  background: var(--active-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-h);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  padding: 5px 8px;
-}
-
-.uncommitted-action-buttons button:disabled {
-  cursor: not-allowed;
+/* Commit and Stash use the shared .menu-primary-button / .menu-secondary-button
+   look; only the panel-specific bits live here. */
+.commit-panel-actions button:disabled {
+  cursor: default;
   opacity: 0.45;
+  pointer-events: none;
 }
 
-.uncommitted-files {
-  flex: 1 1 auto;
+.commit-panel-commit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.commit-panel-commit-count {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.commit-panel-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.commit-panel-changes {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
-.uncommitted-file-checkbox {
-  flex: 0 0 auto;
+.commit-panel-changes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.commit-panel-toggle-all {
+  display: flex;
+  cursor: pointer;
+}
+
+.commit-panel-changes-title {
+  flex: 1;
+}
+
+.commit-panel-totals {
+  display: flex;
+  gap: 8px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.lines-added {
+  color: var(--success);
+}
+
+.lines-deleted {
+  color: var(--danger);
+}
+
+.line-counts {
+  display: flex;
+  gap: 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.commit-file .line-counts {
+  flex: none;
+}
+
+.commit-panel-checkbox {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--text-dim);
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+  transition: background-color 120ms ease;
+}
+
+.commit-panel-checkbox.on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.commit-panel-files {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+/* Same density as a commit's file list (.commit-file). */
+.commit-panel-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.commit-panel-file:hover {
+  background: var(--hover-bg);
+}
+
+.commit-panel-toggle-all:focus-visible,
+.commit-panel-file:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.commit-panel-file .file-status {
+  flex: none;
+}
+
+.commit-panel-file.status-untracked .file-status,
+.commit-panel-file.status-added .file-status {
+  color: var(--success);
+}
+
+.commit-panel-file.status-deleted .file-status {
+  color: var(--danger);
+}
+
+.commit-panel-file.status-modified .file-status {
+  color: var(--warning);
+}
+
+.commit-panel-file.status-renamed .file-status {
+  color: var(--accent);
+}
+
+.commit-panel-file-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.commit-panel-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-panel-file-name:hover {
+  text-decoration: underline;
+}
+
+.commit-panel-file-dir {
+  min-width: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-panel-file-stats {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.commit-panel-file-stats .lines-added,
+.commit-panel-file-stats .lines-deleted {
+  width: 30px;
+  text-align: right;
+}
+
+.commit-panel-ratio {
+  display: flex;
+  gap: 2px;
+}
+
+.commit-panel-ratio > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--active-bg);
+}
+
+.commit-panel-ratio > .ratio-add {
+  background: var(--success);
+}
+
+.commit-panel-ratio > .ratio-del {
+  background: var(--danger);
 }
 
 .commit-hash {

@@ -467,14 +467,75 @@ def _parse_status(raw: str) -> _ParsedStatus:
     return parsed
 
 
+_NUMSTAT_ARGS = ("diff", "HEAD", "--numstat", "-z")
+# Untracked files bigger than this aren't read just to count their lines.
+_UNTRACKED_COUNT_LIMIT = 1024 * 1024
+
+
+def _parse_numstat(raw: str) -> dict[str, tuple[int, int] | None]:
+    """Parse `git diff --numstat -z`: path -> (additions, deletions), or None
+    for binary files. Renames list the destination path."""
+    stats: dict[str, tuple[int, int] | None] = {}
+    tokens = raw.split("\x00")
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        i += 1
+        if not token:
+            continue
+        added, _, rest = token.partition("\t")
+        deleted, _, path = rest.partition("\t")
+        if not path:
+            # Rename/copy: source and destination follow as their own fields.
+            path = tokens[i + 1] if i + 1 < len(tokens) else ""
+            i += 2
+        if not path:
+            continue
+        stats[path] = (
+            (int(added), int(deleted))
+            if added.isdigit() and deleted.isdigit()
+            else None
+        )
+    return stats
+
+
+def _count_untracked_lines(repo_path: Path, path: str) -> int | None:
+    try:
+        file_path = repo_path / path
+        if file_path.stat().st_size > _UNTRACKED_COUNT_LIMIT:
+            return None
+        data = file_path.read_bytes()
+    except OSError:
+        return None
+    if b"\x00" in data[:8192]:
+        return None
+    return data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+
+
 def _uncommitted_files(
-    parsed: _ParsedStatus, excluded_paths: list[str]
+    parsed: _ParsedStatus,
+    excluded_paths: list[str],
+    numstat_raw: str = "",
+    repo_path: Path | None = None,
 ) -> list[FileChange]:
-    return [
-        FileChange(path=path, status=status)
-        for path, status in sorted(parsed.changes.items())
-        if not _is_excluded(path, excluded_paths)
-    ]
+    stats = _parse_numstat(numstat_raw)
+    files: list[FileChange] = []
+    for path, status in sorted(parsed.changes.items()):
+        if _is_excluded(path, excluded_paths):
+            continue
+        counts = stats.get(path)
+        if status == "untracked" and repo_path is not None:
+            lines = _count_untracked_lines(repo_path, path)
+            counts = (lines, 0) if lines is not None else None
+        files.append(
+            FileChange(
+                path=path,
+                status=status,
+                additions=counts[0] if counts else None,
+                deletions=counts[1] if counts else None,
+            )
+        )
+    return files
 
 
 @dataclass
@@ -509,10 +570,16 @@ def _current_upstream(
 
 
 def _status_response(
-    refs: list[_Ref], worktree_raw: str, status_raw: str
+    refs: list[_Ref],
+    worktree_raw: str,
+    status_raw: str,
+    numstat_raw: str = "",
+    repo_path: Path | None = None,
 ) -> RepoStatusResponse:
     parsed = _parse_status(status_raw)
-    files = _uncommitted_files(parsed, config.load_excluded_paths())
+    files = _uncommitted_files(
+        parsed, config.load_excluded_paths(), numstat_raw, repo_path
+    )
     refs_by_name = {ref.name: ref for ref in refs}
     upstream = _current_upstream(parsed.current_branch, refs_by_name)
     return RepoStatusResponse(
@@ -535,10 +602,13 @@ def get_repo_status(repo_path: Path) -> RepoStatusResponse:
         _run_git_or_empty, repo_path, "worktree", "list", "--porcelain"
     )
     status_future = _pool.submit(_run_git, repo_path, *_STATUS_ARGS)
+    numstat_future = _pool.submit(_run_git_or_empty, repo_path, *_NUMSTAT_ARGS)
     return _status_response(
         _parse_refs(refs_future.result()),
         worktree_future.result(),
         status_future.result(),
+        numstat_future.result(),
+        repo_path,
     )
 
 
@@ -612,10 +682,19 @@ def get_graph(
         )
         stash_future = _pool.submit(_run_git_or_empty, repo_path, *_STASH_ARGS)
         status_future = _pool.submit(_run_git, repo_path, *_STATUS_ARGS)
+        numstat_future = _pool.submit(
+            _run_git_or_empty, repo_path, *_NUMSTAT_ARGS
+        )
         refs = _parse_refs(refs_future.result())
         worktree_raw = worktree_future.result()
         stash_raw = stash_future.result()
-        status = _status_response(refs, worktree_raw, status_future.result())
+        status = _status_response(
+            refs,
+            worktree_raw,
+            status_future.result(),
+            numstat_future.result(),
+            repo_path,
+        )
         checked_out = parse_worktree_branches(worktree_raw)
         key = _history_key(refs, stash_raw, status.current_branch)
         history = _cache_get(repo_key, key)

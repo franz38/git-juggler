@@ -4,6 +4,7 @@ from pathlib import Path
 
 from git import NULL_TREE, Repo
 
+from .git_data import _parse_numstat, _run_git_or_empty
 from .schemas import CommitDetail, FileChange, PersonInfo
 
 _STATUS_MAP = {
@@ -22,15 +23,33 @@ def get_commit_detail(repo_path: Path, sha: str) -> CommitDetail:
 
     if commit.parents:
         diffs = commit.parents[0].diff(commit)
+        numstat_raw = _run_git_or_empty(
+            repo_path, "diff", "--numstat", "-z", "-M",
+            commit.parents[0].hexsha, commit.hexsha,
+        )
     else:
         diffs = commit.diff(NULL_TREE)
+        numstat_raw = _run_git_or_empty(
+            repo_path, "diff-tree", "--root", "--no-commit-id", "-r", "--numstat", "-z", "-M",
+            commit.hexsha,
+        )
+    stats = _parse_numstat(numstat_raw)
 
     files: list[FileChange] = []
     for d in diffs:
         status = _STATUS_MAP.get(d.change_type or "M", "modified")
         path = d.b_path or d.a_path or "?"
         old_path = d.a_path if d.a_path and d.a_path != path else None
-        files.append(FileChange(path=path, status=status, old_path=old_path))
+        counts = stats.get(path)
+        files.append(
+            FileChange(
+                path=path,
+                status=status,
+                old_path=old_path,
+                additions=counts[0] if counts else None,
+                deletions=counts[1] if counts else None,
+            )
+        )
     files.sort(key=lambda f: f.path)
 
     subject = commit.summary if isinstance(commit.summary, str) else commit.summary.decode()
