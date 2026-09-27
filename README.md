@@ -4,6 +4,11 @@ A local Git dashboard for people juggling agents and too many repos.
 
 git-juggler is a local dashboard for agent-heavy workflows and multi-repo projects. Watch agents work live, follow every repo’s git graph, and see what changed across your workspace without opening a dozen editors.
 
+<img src="https://github.com/franz38/git-juggler/blob/main/resources/git-juggler-demo-1.gif?raw=true" alt="git-juggler" width="100%">
+
+<img src="https://github.com/franz38/git-juggler/blob/main/resources/git-juggler-demo-4.png?raw=true" alt="git-juggler" width="100%">
+
+
 ## How to install
 
 git-juggler is published on PyPI. The recommended way to install it is with
