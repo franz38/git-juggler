@@ -1,4 +1,4 @@
-# git-juggler
+<img src="https://github.com/franz38/git-juggler/blob/main/src/frontend/public/logo.png?raw=true" alt="git-juggler" width="400">
 
 A local Git dashboard for people juggling agents and too many repos.
 
