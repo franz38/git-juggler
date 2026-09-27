@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from git_juggler import pick_folder as pf
+from git_juggler.ui import folder_picker as pf
 
 
 def _fake_run(returncode, stdout):

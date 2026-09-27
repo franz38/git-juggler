@@ -6,7 +6,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from .. import config
-from ..pick_folder import NativePickerUnavailable, pick_folder
 from ..schemas import (
     ConfigResponse,
     ConfigUpdateRequest,
@@ -16,6 +15,7 @@ from ..schemas import (
     VscodeTheme,
 )
 from ..themes import discover_themes
+from ..ui.folder_picker import NativePickerUnavailable, pick_folder
 
 
 def create_config_router(root_path: Path) -> APIRouter:

@@ -14,7 +14,6 @@ from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_ho
 from .agent_tracking.activity_models import AgentRepositoryScan
 from .api.config import create_config_router
 from .api.terminal import create_terminal_router
-from .browse import browse_directory
 from .ci import github_actions, jenkins
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs, poll_ci_runs
 from .git.data import (
@@ -46,6 +45,7 @@ from .schemas import (
     RepoStatusResponse,
     RepoSummary,
 )
+from .ui.folder_picker import browse_directory
 
 
 def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
