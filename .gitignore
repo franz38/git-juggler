@@ -27,3 +27,5 @@ secrets.env
 
 # Personal task notes (see CLAUDE.md)
 todo.txt
+
+plans/
