@@ -2,7 +2,7 @@
 
 A local Git dashboard for people juggling agents and too many repos.
 
-git-juggler is a local dashboard for agent-heavy workflows and multi-repo projects. Watch agents work live, follow every repo’s git graph, and see what changed across your workspace without opening a dozen editors.
+Watch agents work live, follow every repo’s git graph, and catch what changed across your workspace — all from one place, without opening a dozen editors.
 
 <img src="https://github.com/franz38/git-juggler/blob/main/resources/git-juggler-demo-1.gif?raw=true" alt="git-juggler" width="100%">
 
