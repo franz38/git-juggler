@@ -9,7 +9,7 @@ from .. import config
 from ..ci import github_actions, jenkins
 from ..ci import get_active_pipelines, get_ci_run_stages, get_ci_runs, poll_ci_runs
 from ..git.data import get_commit_hashes
-from ..repos import list_repos, resolve_repo_path
+from ..repo_discovery import list_repos, resolve_repo_path
 from ..schemas import (
     ActivePipeline,
     CiConnectionTestResponse,

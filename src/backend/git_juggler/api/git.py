@@ -8,7 +8,7 @@ from .. import config
 from ..git.data import GRAPH_PAGE_SIZE, HistoryChangedError, get_graph, get_repo_status
 from ..git.detail import get_commit_detail
 from ..git.diff import get_commit_file_diff, get_working_file_diff
-from ..repos import resolve_repo_path
+from ..repo_discovery import resolve_repo_path
 from ..schemas import CommitDetail, FileDiff, GraphResponse, RepoStatusResponse
 
 

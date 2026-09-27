@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .. import config
-from ..repos import get_scan_progress, list_repos
+from ..repo_discovery import get_scan_progress, list_repos
 from ..schemas import BrowseDirectoryResponse, RepoScanProgress, RepoSummary
 from ..ui.folder_picker import browse_directory
 

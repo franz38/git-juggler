@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from git_juggler.repos import get_scan_progress, list_repos
+from git_juggler.repo_discovery import get_scan_progress, list_repos
 
 
 class RepoListTest(unittest.TestCase):

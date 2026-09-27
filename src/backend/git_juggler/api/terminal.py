@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from .. import config
-from ..repos import resolve_repo_path
+from ..repo_discovery import resolve_repo_path
 from ..terminal import run_terminal_session
 
 
