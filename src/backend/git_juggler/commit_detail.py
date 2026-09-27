@@ -4,7 +4,8 @@ from pathlib import Path
 
 from git import NULL_TREE, Repo
 
-from .git_data import _parse_numstat, _run_git_or_empty
+from .git.command import run_git_or_empty
+from .git.status import parse_numstat
 from .schemas import CommitDetail, FileChange, PersonInfo
 
 _STATUS_MAP = {
@@ -23,17 +24,17 @@ def get_commit_detail(repo_path: Path, sha: str) -> CommitDetail:
 
     if commit.parents:
         diffs = commit.parents[0].diff(commit)
-        numstat_raw = _run_git_or_empty(
+        numstat_raw = run_git_or_empty(
             repo_path, "diff", "--numstat", "-z", "-M",
             commit.parents[0].hexsha, commit.hexsha,
         )
     else:
         diffs = commit.diff(NULL_TREE)
-        numstat_raw = _run_git_or_empty(
+        numstat_raw = run_git_or_empty(
             repo_path, "diff-tree", "--root", "--no-commit-id", "-r", "--numstat", "-z", "-M",
             commit.hexsha,
         )
-    stats = _parse_numstat(numstat_raw)
+    stats = parse_numstat(numstat_raw)
 
     files: list[FileChange] = []
     for d in diffs:

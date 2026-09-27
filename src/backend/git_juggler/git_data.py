@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
 import threading
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
 from . import config
+from .git.command import GIT_POOL as _pool
+from .git.command import GitCommandError, run_git as _run_git, run_git_or_empty as _run_git_or_empty
+from .git.refs import HEADS as _HEADS
+from .git.refs import REF_FORMAT as _REF_FORMAT
+from .git.refs import REMOTES as _REMOTES
+from .git.refs import TAGS as _TAGS
+from .git.refs import Ref as _Ref
+from .git.refs import is_remote_head as _is_remote_head
+from .git.refs import parse_refs as _parse_refs
+from .git.refs import refs_signature as _refs_signature
+from .git.status import NUMSTAT_ARGS as _NUMSTAT_ARGS
+from .git.status import STATUS_ARGS as _STATUS_ARGS
+from .git.status import ParsedStatus as _ParsedStatus
+from .git.status import parse_numstat as _parse_numstat
+from .git.status import parse_status as _parse_status
+from .git.status import uncommitted_files as _uncommitted_files
 from .git_utils import parse_worktree_branches
 from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
 
@@ -17,119 +31,11 @@ from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatus
 # the frontend asks for the next (older) page when the user scrolls to the end.
 GRAPH_PAGE_SIZE = 1000
 
-# On Windows every git.exe launch would otherwise flash a console window.
-_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-
-# Process spawn (and the pipe round trip) dominates the cost of every call
-# here, most of all on Windows, so independent git invocations run concurrently.
-_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="git-data")
-
-
-class GitCommandError(RuntimeError):
-    pass
-
-
 class HistoryChangedError(LookupError):
     """The page cursor is no longer part of the repo's history."""
 
 
-def _run_git(repo_path: Path, *args: str, stdin: str | None = None) -> str:
-    """Run one read-only git command and return its stdout.
-
-    `--no-optional-locks` keeps `git status` from refreshing (and so locking)
-    the index behind the user's back while they run their own git commands.
-    Output is decoded leniently: a commit message in some odd encoding must not
-    take the whole graph down.
-    """
-    proc = subprocess.run(
-        ["git", "--no-optional-locks", *args],
-        cwd=repo_path,
-        input=stdin.encode("utf-8") if stdin is not None else None,
-        stdin=None if stdin is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        creationflags=_CREATE_NO_WINDOW,
-        check=False,
-    )
-    if proc.returncode != 0:
-        detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise GitCommandError(
-            f"git {' '.join(args[:2])} failed ({proc.returncode}): {detail}"
-        )
-    return proc.stdout.decode("utf-8", errors="replace")
-
-
-def _run_git_or_empty(repo_path: Path, *args: str) -> str:
-    try:
-        return _run_git(repo_path, *args)
-    except GitCommandError:
-        return ""
-
-
 # --- refs -------------------------------------------------------------------
-
-_REF_FORMAT = "%(refname)%09%(objectname)%09%(objecttype)%09%(*objectname)%09%(*objecttype)%09%(committerdate:unix)%09%(upstream)%09%(upstream:remotename)"
-_HEADS = "refs/heads/"
-_TAGS = "refs/tags/"
-_REMOTES = "refs/remotes/"
-
-
-@dataclass(frozen=True)
-class _Ref:
-    name: str  # full ref name, e.g. refs/heads/main
-    object_sha: (
-        str  # what the ref itself points at (the tag object, for annotated tags)
-    )
-    commit: str | None  # the commit it resolves to, None when it isn't one
-    date: int  # committer date of that commit (0 when unknown)
-    upstream: str
-    upstream_remote: str
-
-    @property
-    def short(self) -> str:
-        for prefix in (_HEADS, _TAGS, _REMOTES):
-            if self.name.startswith(prefix):
-                return self.name[len(prefix) :]
-        return self.name
-
-
-def _parse_refs(raw: str) -> list[_Ref]:
-    refs: list[_Ref] = []
-    for line in raw.split("\n"):
-        fields = line.split("\t")
-        if len(fields) < 8:
-            continue
-        name, sha, kind, peeled_sha, peeled_kind, date, upstream, upstream_remote = (
-            fields[:8]
-        )
-        commit = (
-            sha
-            if kind == "commit"
-            else (peeled_sha if peeled_kind == "commit" else None)
-        )
-        refs.append(
-            _Ref(
-                name=name,
-                object_sha=sha,
-                commit=commit,
-                date=int(date) if date.isdigit() else 0,
-                upstream=upstream,
-                upstream_remote=upstream_remote,
-            )
-        )
-    return refs
-
-
-def _is_remote_head(ref: _Ref) -> bool:
-    return ref.name.startswith(_REMOTES) and ref.name.endswith("/HEAD")
-
-
-def _refs_signature(refs: list[_Ref], worktree_branches: list[str]) -> str:
-    """Cheap fingerprint of every ref plus the worktree branch set, so the
-    frontend can notice new/moved/deleted branches, tags and worktrees."""
-    parts = [f"{ref.name}={ref.object_sha}" for ref in refs]
-    parts.extend(f"wt:{b}" for b in sorted(worktree_branches))
-    return hashlib.sha1("\n".join(sorted(parts)).encode()).hexdigest()
 
 
 # --- stashes ----------------------------------------------------------------
@@ -395,147 +301,6 @@ def _commit_metadata(repo_path: Path, shas: list[str]) -> dict[str, tuple[str, .
 
 
 # --- status -----------------------------------------------------------------
-
-
-def _diff_status(change_type: str) -> str:
-    return {
-        "A": "added",
-        "D": "deleted",
-        "M": "modified",
-        "R": "renamed",
-        "T": "modified",
-    }.get(change_type, "modified")
-
-
-def _is_excluded(path: str, excluded_paths: list[str]) -> bool:
-    normalized = path.strip("/")
-    for excluded in excluded_paths:
-        norm = excluded.strip().strip("/")
-        if norm and (normalized == norm or normalized.startswith(f"{norm}/")):
-            return True
-    return False
-
-
-@dataclass
-class _ParsedStatus:
-    current_branch: str | None = None
-    head_commit: str | None = None
-    changes: dict[str, str] = field(default_factory=dict)
-
-
-_STATUS_ARGS = ("status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all")
-
-
-def _parse_status(raw: str) -> _ParsedStatus:
-    """Parse `git status --porcelain=v2 --branch -z`: the branch header plus
-    staged, unstaged and untracked changes in a single pass over the tree."""
-    parsed = _ParsedStatus()
-    tokens = raw.split("\x00")
-    i = 0
-    while i < len(tokens):
-        token = tokens[i]
-        i += 1
-        if not token:
-            continue
-        kind = token[0]
-        if kind == "#":
-            header, _, value = token[2:].partition(" ")
-            if header == "branch.oid":
-                parsed.head_commit = None if value == "(initial)" else value
-            elif header == "branch.head":
-                parsed.current_branch = None if value == "(detached)" else value
-            continue
-        if kind == "?":
-            parsed.changes[token[2:]] = "untracked"
-            continue
-        if kind == "1":
-            fields = token.split(" ", 8)
-            xy, path = fields[1], fields[8]
-        elif kind == "2":
-            fields = token.split(" ", 9)
-            xy, path = fields[1], fields[9]
-            i += 1  # the rename source path follows as its own NUL-terminated field
-        elif kind == "u":
-            fields = token.split(" ", 10)
-            xy, path = "MM", fields[10]
-        else:
-            continue
-        staged, unstaged = xy[0], xy[1]
-        # An unstaged change on top of a staged one wins, as before.
-        change = unstaged if unstaged != "." else staged
-        parsed.changes[path] = _diff_status(change)
-    return parsed
-
-
-_NUMSTAT_ARGS = ("diff", "HEAD", "--numstat", "-z")
-# Untracked files bigger than this aren't read just to count their lines.
-_UNTRACKED_COUNT_LIMIT = 1024 * 1024
-
-
-def _parse_numstat(raw: str) -> dict[str, tuple[int, int] | None]:
-    """Parse `git diff --numstat -z`: path -> (additions, deletions), or None
-    for binary files. Renames list the destination path."""
-    stats: dict[str, tuple[int, int] | None] = {}
-    tokens = raw.split("\x00")
-    i = 0
-    while i < len(tokens):
-        token = tokens[i]
-        i += 1
-        if not token:
-            continue
-        added, _, rest = token.partition("\t")
-        deleted, _, path = rest.partition("\t")
-        if not path:
-            # Rename/copy: source and destination follow as their own fields.
-            path = tokens[i + 1] if i + 1 < len(tokens) else ""
-            i += 2
-        if not path:
-            continue
-        stats[path] = (
-            (int(added), int(deleted))
-            if added.isdigit() and deleted.isdigit()
-            else None
-        )
-    return stats
-
-
-def _count_untracked_lines(repo_path: Path, path: str) -> int | None:
-    try:
-        file_path = repo_path / path
-        if file_path.stat().st_size > _UNTRACKED_COUNT_LIMIT:
-            return None
-        data = file_path.read_bytes()
-    except OSError:
-        return None
-    if b"\x00" in data[:8192]:
-        return None
-    return data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
-
-
-def _uncommitted_files(
-    parsed: _ParsedStatus,
-    excluded_paths: list[str],
-    numstat_raw: str = "",
-    repo_path: Path | None = None,
-) -> list[FileChange]:
-    stats = _parse_numstat(numstat_raw)
-    files: list[FileChange] = []
-    for path, status in sorted(parsed.changes.items()):
-        if _is_excluded(path, excluded_paths):
-            continue
-        counts = stats.get(path)
-        if status == "untracked" and repo_path is not None:
-            lines = _count_untracked_lines(repo_path, path)
-            counts = (lines, 0) if lines is not None else None
-        files.append(
-            FileChange(
-                path=path,
-                status=status,
-                additions=counts[0] if counts else None,
-                deletions=counts[1] if counts else None,
-            )
-        )
-    return files
 
 
 @dataclass

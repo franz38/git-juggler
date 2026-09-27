@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import base64
-import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
+from .ci_http import fetch_json
 from .schemas import CiRunInfo, CiStage
 
 
@@ -42,17 +41,7 @@ def _headers(jenkins_config: dict) -> dict[str, str]:
 
 
 def _fetch_json(url: str, headers: dict[str, str]) -> dict | None:
-    request = Request(url, headers=headers)
-    try:
-        with urlopen(request, timeout=10) as response:  # noqa: S310 - configured user URL, read-only local app integration
-            body = response.read().decode("utf-8")
-    except (HTTPError, URLError, TimeoutError, OSError):
-        return None
-    try:
-        data = json.loads(body)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    return fetch_json(url, headers, opener=urlopen)
 
 
 def _normalize_status(result: object, building: object) -> str:

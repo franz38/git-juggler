@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 
 from git import Repo
 
+from .ci_http import fetch_json
 from .schemas import CiRunInfo, CiStage
 
 
@@ -130,17 +131,7 @@ def _repo_api_url(github_config: dict, repo_config: dict) -> str | None:
 
 
 def _get_json(url: str, headers: dict[str, str]) -> dict | None:
-    request = Request(url, headers=headers)
-    try:
-        with urlopen(request, timeout=10) as response:  # noqa: S310 - configured user URL, read-only local app integration
-            body = response.read().decode("utf-8")
-    except (HTTPError, URLError, TimeoutError, OSError):
-        return None
-    try:
-        data = json.loads(body)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    return fetch_json(url, headers, opener=urlopen)
 
 
 # Conditional-request cache for the polling calls: GitHub answers a request
