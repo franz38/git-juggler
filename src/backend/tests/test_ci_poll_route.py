@@ -7,6 +7,7 @@ from unittest.mock import patch
 from fastapi.routing import APIRoute
 
 from git_juggler import app as app_module
+from git_juggler.api import ci as ci_api
 from git_juggler.schemas import CiRunInfo
 
 
@@ -16,7 +17,11 @@ class CiPollRouteTest(unittest.TestCase):
 
     def _route(self) -> APIRoute:
         app = app_module.create_app(Path("/tmp"))
-        return next(r for r in app.routes if isinstance(r, APIRoute) and r.path == "/api/repos/{repo_id}/ci/poll")
+        routes = list(app.routes)
+        for route in app.routes:
+            if hasattr(route, "original_router"):
+                routes.extend(route.original_router.routes)
+        return next(r for r in routes if isinstance(r, APIRoute) and r.path == "/api/repos/{repo_id}/ci/poll")
 
     def test_run_is_a_repeatable_query_param_and_head_sha_is_optional(self) -> None:
         route = self._route()
@@ -37,8 +42,8 @@ class CiPollRouteTest(unittest.TestCase):
 
         route = self._route()
         with (
-            patch.object(app_module, "resolve_repo_path", lambda paths, repo_id: Path("/tmp/repo")),
-            patch.object(app_module, "poll_ci_runs", fake_poll),
+            patch.object(ci_api, "resolve_repo_path", lambda paths, repo_id: Path("/tmp/repo")),
+            patch.object(ci_api, "poll_ci_runs", fake_poll),
         ):
             runs = route.endpoint(repo_id="k::x", run=["github_actions:1"], head_sha="abc")
             self.assertEqual(captured, {"path": Path("/tmp/repo"), "refs": ["github_actions:1"], "head_sha": "abc"})
