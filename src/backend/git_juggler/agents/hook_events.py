@@ -12,12 +12,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from .agent_hooks import EVENT_PATH
-from .agent_tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity, SessionDetails
-from .agent_tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
-from .agent_tracking.claude_transcripts import CLAUDE_PROJECTS_DIR, TranscriptInfo, find_transcript, read_transcript_info, transcript_signature
-from .agent_tracking.git_resolver import GitResolver, GitWorktreeInfo
-from .agent_tracking.opencode_sessions import OPENCODE_DB_PATH, OpenCodeSession, db_signature, read_session
+from .hooks import EVENT_PATH
+from .tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity, SessionDetails
+from .tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
+from .tracking.claude_transcripts import CLAUDE_PROJECTS_DIR, TranscriptInfo, find_transcript, read_transcript_info, transcript_signature
+from .tracking.git_resolver import GitResolver, GitWorktreeInfo
+from .tracking.opencode_sessions import OPENCODE_DB_PATH, OpenCodeSession, db_signature, read_session
 
 
 HOOK_ACTIVITY_TTL_MS = 120_000

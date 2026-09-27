@@ -10,10 +10,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from git_juggler import agent_hooks
-from git_juggler.agent_hook_events import AgentHookEventReader
-from git_juggler.agent_tracking import text
-from git_juggler.agent_tracking.opencode_sessions import BUSY_STALE_MS, db_signature, read_session
+from git_juggler.agents import hooks as agent_hooks
+from git_juggler.agents.hook_events import AgentHookEventReader
+from git_juggler.agents.tracking import text
+from git_juggler.agents.tracking.opencode_sessions import BUSY_STALE_MS, db_signature, read_session
 
 NOW = 1_800_000_000_000
 
@@ -145,7 +145,7 @@ class OpenCodeReaderTest(unittest.TestCase):
         return AgentHookEventReader(event_path=root / "events.jsonl", claude_sessions_dir=None, claude_projects_dir=None, opencode_db_path=db)
 
     def test_details_state_home_and_lifecycle(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
             root = Path(directory)
             repo, worktree = self._repo(root)
             db = root / "opencode.db"
@@ -176,7 +176,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             self.assertEqual(reader.recent_scans(), [])
 
     def test_home_is_the_worktree_of_the_session_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
             root = Path(directory)
             repo, worktree = self._repo(root)
             db = root / "opencode.db"
@@ -197,7 +197,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             self.assertEqual({Path(w.worktree_path).name: w.is_home for w in scan.worktrees}, {"repo": False, "repo-wt": True})
 
     def test_child_archived_and_sessionless_events_are_skipped_when_the_db_exists(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+        with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
             root = Path(directory)
             repo, _ = self._repo(root)
             db = root / "opencode.db"
@@ -218,9 +218,9 @@ class OpenCodeReaderTest(unittest.TestCase):
             add_session(make_db(self, db), directory=str(repo))
             self._events(root / "events.jsonl", repo, "ses_1")
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=False):
                 self.assertEqual(self._reader(root, db).recent_scans(), [])
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 fallback = self._reader(root, root / "missing.db").recent_scans()
             self.assertEqual(len(fallback), 1)
             self.assertIsNone(fallback[0].details)

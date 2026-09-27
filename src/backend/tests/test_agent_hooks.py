@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from git_juggler import agent_hooks
-from git_juggler.agent_hook_events import AgentHookEventReader
+from git_juggler.agents import hooks as agent_hooks
+from git_juggler.agents.hook_events import AgentHookEventReader
 
 
 class AgentHooksTest(unittest.TestCase):
@@ -166,9 +166,9 @@ class AgentHooksTest(unittest.TestCase):
             self._write_events(event_path, [{"provider": "opencode", "phase": "SessionStart", "cwd": str(repo), "pid": 4242, "timestamp": start, "raw": {"cwd": str(repo)}}])
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 self.assertEqual(len(reader.recent_scans(now=start + 60_000)), 1)
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=False):
                 self.assertEqual(reader.recent_scans(now=start + 60_000), [])
 
     def test_opencode_plugin_pid_is_used_as_agent_pid_and_deleted_ends_session(self) -> None:
@@ -183,7 +183,7 @@ class AgentHooksTest(unittest.TestCase):
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
 
             seen: list[int] = []
-            with patch("git_juggler.agent_hook_events._pid_alive", side_effect=lambda pid: (seen.append(pid), True)[1]):
+            with patch("git_juggler.agents.hook_events._pid_alive", side_effect=lambda pid: (seen.append(pid), True)[1]):
                 self.assertEqual(len(reader.recent_scans(now=start + 1000)), 1)
             self.assertEqual(seen, [999])
 
@@ -214,7 +214,7 @@ class AgentHooksTest(unittest.TestCase):
             self._card(sessions, 111, "open", status="busy")
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None, opencode_db_path=None)
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 # 10 minutes after the last event: the timer alone says idle, but Claude says busy.
                 scans = reader.recent_scans(now=start + 10 * 60_000)
 
@@ -224,11 +224,11 @@ class AgentHooksTest(unittest.TestCase):
             self.assertEqual((scan.state, [w.state for w in scan.worktrees]), ("active", ["active"]))
 
             self._card(sessions, 111, "open", status="idle")
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 scan = reader.recent_scans(now=start + 30_000)[0]
             self.assertEqual((scan.state, [w.state for w in scan.worktrees]), ("idle", ["idle"]))
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=False):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=False):
                 self.assertEqual(reader.recent_scans(now=start + 30_000), [])
 
     def test_claude_waiting_card_is_active_and_reports_what_it_waits_for(self) -> None:
@@ -244,7 +244,7 @@ class AgentHooksTest(unittest.TestCase):
             self._card(sessions, 111, "s1", status="waiting", waiting_for="input needed")
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None, opencode_db_path=None)
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 scan = reader.recent_scans(now=start + 10 * 60_000)[0]
                 self.assertEqual((scan.state, scan.waiting_for), ("active", "input needed"))
 
@@ -266,7 +266,7 @@ class AgentHooksTest(unittest.TestCase):
             self._card(sessions, 111, "s1", status="busy")
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=sessions, claude_projects_dir=None, opencode_db_path=None)
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 self.assertEqual(reader.recent_scans()[0].state, "active")
                 self._card(sessions, 111, "s1", status="idle")
                 self.assertEqual(reader.recent_scans()[0].state, "idle")
@@ -390,7 +390,7 @@ class AgentHooksTest(unittest.TestCase):
             events = [event("PreToolUse", start, tool="bash", args={"command": f"cd {feature} && ls"})]
             self._write_events(event_path, events)
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 self.assertIn("repo-feature", self._names(reader.recent_scans(now=start + 1000)[0]))
 
                 events.append(event("UserPromptSubmit", start + 2000))

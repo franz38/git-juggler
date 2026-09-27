@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from git_juggler.agent_hook_events import AgentHookEventReader
-from git_juggler.agent_tracking import claude_transcripts
-from git_juggler.agent_tracking.claude_transcripts import find_transcript, read_transcript_info
+from git_juggler.agents.hook_events import AgentHookEventReader
+from git_juggler.agents.tracking import claude_transcripts
+from git_juggler.agents.tracking.claude_transcripts import find_transcript, read_transcript_info
 
 
 def _lines(*records: dict) -> str:
@@ -117,7 +117,7 @@ class SessionDetailsTest(unittest.TestCase):
             )
             reader = AgentHookEventReader(event_path=events, claude_sessions_dir=sessions, claude_projects_dir=projects, opencode_db_path=None)
 
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 scan = reader.recent_scans()[0]
 
             details = scan.details
@@ -129,7 +129,7 @@ class SessionDetailsTest(unittest.TestCase):
             # A new turn (transcript grows) is picked up on the next poll.
             with (projects / "-proj" / "sid.jsonl").open("a", encoding="utf-8") as file:
                 file.write(_lines({"type": "ai-title", "aiTitle": "T2"}))
-            with patch("git_juggler.agent_hook_events._pid_alive", return_value=True):
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 self.assertEqual(reader.recent_scans()[0].details.title, "T2")
 
 

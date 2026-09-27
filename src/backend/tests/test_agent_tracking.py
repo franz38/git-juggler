@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from git_juggler.agent_tracking.git_resolver import GitResolver
+from git_juggler.agents.tracking.git_resolver import GitResolver
 
 
 class GitResolverIntegrationTest(unittest.TestCase):

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..agent_hook_events import AgentHookEventReader
-from ..agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
-from ..agent_tracking.activity_models import AgentRepositoryScan
+from ..agents.hook_events import AgentHookEventReader
+from ..agents.hooks import hooks_status, install_claude_hooks, install_opencode_hooks
+from ..agents.tracking.activity_models import AgentRepositoryScan
 from ..schemas import (
     AgentActivityResponse,
     AgentHookProviderStatusResponse,
