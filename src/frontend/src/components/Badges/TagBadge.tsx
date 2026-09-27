@@ -1,5 +1,5 @@
 import { tagColor } from "../Graph/branchColor";
-import { TagIcon } from "./icons";
+import { TagIcon } from "../icons";
 
 export function TagBadge(props: { name: string; onContextMenu?: (event: MouseEvent) => void }) {
   return (

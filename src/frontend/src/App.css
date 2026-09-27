@@ -1074,22 +1074,13 @@
   color: var(--text-h);
 }
 
-.repo-list h2 {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-  padding: 16px 16px 8px;
-  margin: 0;
-}
-
 .repo-item {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 40px;
   margin: 1px 0;
-  padding: 0 16px;
+  padding: 0 12px 0 8px;
   cursor: pointer;
   color: var(--text);
   border-left: 3px solid transparent;
@@ -1163,13 +1154,22 @@
   white-space: nowrap;
 }
 
+/* Every h2 in the repo panel (the "Pinned" label and each group heading)
+   shares this look — same box, same type. */
+.repo-list h2,
 .repo-list .repo-group-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  margin: 0;
+  padding: 8px 12px 8px 8px;
   overflow: hidden;
   box-sizing: border-box;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: normal;
   transition: height 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
 }
 

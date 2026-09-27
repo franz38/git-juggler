@@ -20,6 +20,7 @@ import {
   setTagFilter,
   tagFilter,
 } from "../../state/store";
+import { BranchIcon, FilterIcon } from "../icons";
 import { MultiSelect } from "./MultiSelect";
 import { TriSwitch } from "./TriSwitch";
 
@@ -77,9 +78,7 @@ export function SearchBox() {
         title="Filter commits"
         onClick={() => togglePanel("filter")}
       >
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <path d="M2 3h12L9.5 8v4l-3 1V8L2 3z" fill="currentColor" />
-        </svg>
+        <FilterIcon />
         <Show when={activeFilterCount() > 0}>
           <span class="filter-count">{activeFilterCount()}</span>
         </Show>
@@ -91,12 +90,7 @@ export function SearchBox() {
         title="Choose which branches are shown"
         onClick={() => togglePanel("branches")}
       >
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <circle cx="4" cy="3" r="1.7" fill="currentColor" />
-          <circle cx="4" cy="13" r="1.7" fill="currentColor" />
-          <circle cx="12" cy="8" r="1.7" fill="currentColor" />
-          <path d="M4 4.7v6.6M4 8h8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-        </svg>
+        <BranchIcon size={11} />
         <Show when={activeBranchFilterCount() > 0}>
           <span class="filter-count">{activeBranchFilterCount()}</span>
         </Show>

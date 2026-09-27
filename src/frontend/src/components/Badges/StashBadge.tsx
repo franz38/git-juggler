@@ -1,5 +1,5 @@
 import { tagColor } from "../Graph/branchColor";
-import { StashIcon } from "./icons";
+import { StashIcon } from "../icons";
 
 export function StashBadge(props: { name: string }) {
   return (

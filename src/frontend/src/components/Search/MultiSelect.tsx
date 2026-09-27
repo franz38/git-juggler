@@ -1,4 +1,5 @@
 import { For, Show, createSignal } from "solid-js";
+import { CaretDownIcon } from "../icons";
 
 interface MultiSelectProps {
   options: string[];
@@ -26,9 +27,7 @@ export function MultiSelect(props: MultiSelectProps) {
     <div class="multiselect">
       <button type="button" class="multiselect-trigger" classList={{ active: props.selected.length > 0 }} onClick={() => setOpen((o) => !o)}>
         <span class="multiselect-trigger-label">{label()}</span>
-        <svg class="multiselect-caret" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
-          <path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <CaretDownIcon />
       </button>
       <Show when={open()}>
         <div class="multiselect-overlay" onClick={() => setOpen(false)} />

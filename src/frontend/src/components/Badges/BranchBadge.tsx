@@ -1,5 +1,5 @@
 import { colorForBranch } from "../Graph/branchColor";
-import { BranchIcon } from "./icons";
+import { BranchIcon } from "../icons";
 
 export function BranchBadge(props: { name: string; remote?: boolean; onContextMenu?: (event: MouseEvent) => void }) {
   const color = () => colorForBranch(props.name);
