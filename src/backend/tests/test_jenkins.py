@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from git_juggler import jenkins
+from git_juggler.ci import jenkins
 
 
 class JenkinsBuildParsingTest(unittest.TestCase):

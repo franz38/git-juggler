@@ -10,8 +10,8 @@ from urllib.request import Request, urlopen
 
 from git import Repo
 
-from .ci_http import fetch_json
-from .schemas import CiRunInfo, CiStage
+from .http import fetch_json
+from ..schemas import CiRunInfo, CiStage
 
 
 GITHUB_RUNS_PER_PAGE = 100

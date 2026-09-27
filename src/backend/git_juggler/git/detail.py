@@ -4,9 +4,9 @@ from pathlib import Path
 
 from git import NULL_TREE, Repo
 
-from .git.command import run_git_or_empty
-from .git.status import parse_numstat
-from .schemas import CommitDetail, FileChange, PersonInfo
+from ..schemas import CommitDetail, FileChange, PersonInfo
+from .command import run_git_or_empty
+from .status import parse_numstat
 
 _STATUS_MAP = {
     "A": "added",

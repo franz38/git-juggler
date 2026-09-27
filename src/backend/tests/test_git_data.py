@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from git import Actor, Repo
 
-from git_juggler import git_data
-from git_juggler.git_data import HistoryChangedError, get_commit_hashes, get_graph, get_repo_status
+from git_juggler.git import data as git_data
+from git_juggler.git.data import HistoryChangedError, get_commit_hashes, get_graph, get_repo_status
 
 
 class GitGraphTest(unittest.TestCase):
@@ -147,7 +147,7 @@ class GitGraphTest(unittest.TestCase):
             (path / ".claude" / "session.json").write_text("{}", encoding="utf-8")
             (path / "real_change.txt").write_text("oops\n", encoding="utf-8")
 
-            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[".claude"]):
+            with patch("git_juggler.git.data.config.load_excluded_paths", return_value=[".claude"]):
                 status = get_repo_status(path)
 
             paths = {f.path for f in status.uncommitted_files}
@@ -168,7 +168,7 @@ class GitGraphTest(unittest.TestCase):
             (path / ".claude").mkdir()
             (path / ".claude" / "session.json").write_text("{}", encoding="utf-8")
 
-            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[".claude"]):
+            with patch("git_juggler.git.data.config.load_excluded_paths", return_value=[".claude"]):
                 status = get_repo_status(path)
 
             self.assertFalse(status.is_dirty)
@@ -326,7 +326,7 @@ class GitGraphTest(unittest.TestCase):
             (path / "dir").mkdir()
             (path / "dir" / "a.txt").write_text("a\n", encoding="utf-8")
 
-            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[]):
+            with patch("git_juggler.git.data.config.load_excluded_paths", return_value=[]):
                 status = get_repo_status(path)
 
             self.assertEqual(
@@ -364,7 +364,7 @@ class GitGraphTest(unittest.TestCase):
             (path / "blob.bin").write_bytes(b"\x00\x02")
             (path / "new.bin").write_bytes(b"\x00\x03")
 
-            with patch("git_juggler.git_data.config.load_excluded_paths", return_value=[]):
+            with patch("git_juggler.git.data.config.load_excluded_paths", return_value=[]):
                 status = get_repo_status(path)
 
             self.assertEqual(

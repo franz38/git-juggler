@@ -7,7 +7,7 @@ from pathlib import Path
 
 from git import Repo
 
-from .git_utils import get_current_branch
+from .git.utils import get_current_branch
 from .schemas import RepoSummary
 
 # Lets the frontend poll a live "N found" count while list_repos() is

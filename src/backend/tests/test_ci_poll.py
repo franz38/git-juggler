@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from git_juggler import ci, github_actions, jenkins
+from git_juggler import ci
+from git_juggler.ci import github_actions, jenkins
 from git_juggler.schemas import CiRunInfo, CiStage
 
 

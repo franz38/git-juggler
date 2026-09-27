@@ -8,23 +8,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, github_actions, jenkins
+from . import config
 from .agent_hook_events import AgentHookEventReader
 from .agent_hooks import hooks_status, install_claude_hooks, install_opencode_hooks
 from .agent_tracking.activity_models import AgentRepositoryScan
 from .api.config import create_config_router
 from .api.terminal import create_terminal_router
 from .browse import browse_directory
+from .ci import github_actions, jenkins
 from .ci import get_active_pipelines, get_ci_run_stages, get_ci_runs, poll_ci_runs
-from .commit_detail import get_commit_detail
-from .file_diff import get_commit_file_diff, get_working_file_diff
-from .git_data import (
+from .git.data import (
     GRAPH_PAGE_SIZE,
     HistoryChangedError,
     get_commit_hashes,
     get_graph,
     get_repo_status,
 )
+from .git.detail import get_commit_detail
+from .git.diff import get_commit_file_diff, get_working_file_diff
 from .repos import get_scan_progress, list_repos, resolve_repo_path
 from .schemas import (
     ActivePipeline,

@@ -7,8 +7,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import urlopen
 
-from .ci_http import fetch_json
-from .schemas import CiRunInfo, CiStage
+from .http import fetch_json
+from ..schemas import CiRunInfo, CiStage
 
 
 def _matching_job_configs(jenkins_config: dict, repo_path: Path) -> list[dict]:

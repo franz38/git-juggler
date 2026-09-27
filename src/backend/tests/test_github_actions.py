@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 from git import Repo
 
-from git_juggler import github_actions
-from git_juggler.github_actions import _inferred_repo_config, _matching_run_sha, _repo_config_from_remote_url
+from git_juggler.ci import github_actions
+from git_juggler.ci.github_actions import _inferred_repo_config, _matching_run_sha, _repo_config_from_remote_url
 
 
 class FakeResponse:

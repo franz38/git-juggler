@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 from git import Actor, Repo
 
-from git_juggler import file_diff
-from git_juggler.commit_detail import get_commit_detail
-from git_juggler.file_diff import get_commit_file_diff, get_working_file_diff
+from git_juggler.git import diff as file_diff
+from git_juggler.git.detail import get_commit_detail
+from git_juggler.git.diff import get_commit_file_diff, get_working_file_diff
 
 AUTHOR = Actor("Test User", "test@example.com")
 

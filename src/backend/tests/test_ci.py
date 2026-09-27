@@ -3,7 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from git_juggler import ci, github_actions, jenkins
+from git_juggler import ci
+from git_juggler.ci import github_actions, jenkins
 from git_juggler.schemas import ActivePipeline, CiRunInfo, CiStage, RepoSummary
 
 

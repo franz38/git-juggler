@@ -5,7 +5,7 @@ from pathlib import Path
 
 from git import Repo
 
-from .schemas import FileDiff
+from ..schemas import FileDiff
 
 # Patches beyond this size are cut off; a side-by-side view of a multi-MB diff
 # would freeze the browser anyway.

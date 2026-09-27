@@ -7,25 +7,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-from . import config
-from .git.command import GIT_POOL as _pool
-from .git.command import GitCommandError, run_git as _run_git, run_git_or_empty as _run_git_or_empty
-from .git.refs import HEADS as _HEADS
-from .git.refs import REF_FORMAT as _REF_FORMAT
-from .git.refs import REMOTES as _REMOTES
-from .git.refs import TAGS as _TAGS
-from .git.refs import Ref as _Ref
-from .git.refs import is_remote_head as _is_remote_head
-from .git.refs import parse_refs as _parse_refs
-from .git.refs import refs_signature as _refs_signature
-from .git.status import NUMSTAT_ARGS as _NUMSTAT_ARGS
-from .git.status import STATUS_ARGS as _STATUS_ARGS
-from .git.status import ParsedStatus as _ParsedStatus
-from .git.status import parse_numstat as _parse_numstat
-from .git.status import parse_status as _parse_status
-from .git.status import uncommitted_files as _uncommitted_files
-from .git_utils import parse_worktree_branches
-from .schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
+from .. import config
+from ..schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
+from .command import GIT_POOL as _pool
+from .command import GitCommandError, run_git as _run_git, run_git_or_empty as _run_git_or_empty
+from .refs import HEADS as _HEADS
+from .refs import REF_FORMAT as _REF_FORMAT
+from .refs import REMOTES as _REMOTES
+from .refs import TAGS as _TAGS
+from .refs import Ref as _Ref
+from .refs import is_remote_head as _is_remote_head
+from .refs import parse_refs as _parse_refs
+from .refs import refs_signature as _refs_signature
+from .status import NUMSTAT_ARGS as _NUMSTAT_ARGS
+from .status import STATUS_ARGS as _STATUS_ARGS
+from .status import ParsedStatus as _ParsedStatus
+from .status import parse_numstat as _parse_numstat
+from .status import parse_status as _parse_status
+from .status import uncommitted_files as _uncommitted_files
+from .utils import parse_worktree_branches
 
 # Commits per graph page. The graph endpoint returns the newest page first and
 # the frontend asks for the next (older) page when the user scrolls to the end.

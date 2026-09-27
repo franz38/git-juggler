@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from . import github_actions, jenkins
-from .schemas import ActivePipeline, CiRunInfo, CiStage, RepoSummary
+from ..schemas import ActivePipeline, CiRunInfo, CiStage, RepoSummary
 
 
 class CiProvider(Protocol):
