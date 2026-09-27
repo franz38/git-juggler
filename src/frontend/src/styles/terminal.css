@@ -1,0 +1,64 @@
+.terminal-container {
+  flex: 0 0 auto;
+  height: 260px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  position: relative;
+}
+
+.terminal-container.collapsed {
+  height: auto;
+}
+
+.terminal-container.collapsed .terminal-body {
+  display: none;
+}
+
+.terminal-resize-handle {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 5;
+}
+
+.terminal-resize-handle:hover,
+.terminal-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.terminal-header {
+  height: 26px;
+  padding: 0 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.terminal-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.terminal-instance {
+  height: 100%;
+}
+
+.terminal-instance.hidden {
+  display: none;
+}
+
+.terminal-panel {
+  height: 100%;
+  padding: 4px 8px;
+}

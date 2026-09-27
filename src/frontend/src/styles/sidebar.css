@@ -1,0 +1,544 @@
+.sidebar {
+  width: 250px;
+  min-width: 200px;
+  flex: 0 0 auto;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 2px solid transparent;
+  margin-top: -1px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.sidebar-tab:hover {
+  color: var(--text-h);
+  background: var(--hover-bg);
+}
+
+.sidebar-tab.active {
+  color: var(--text-h);
+  border-top-color: var(--accent);
+}
+
+.sidebar-tab-badge,
+.tab-agent-badge {
+  flex: 0 0 auto;
+  min-width: 15px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* All the sessions counted here are idle: no accent, just the secondary tone. */
+.sidebar-tab-badge.idle,
+.tab-agent-badge.idle {
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.sidebar-resize-handle {
+  flex: 0 0 5px;
+  margin-left: -3px;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.repo-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 4px;
+}
+
+.agent-activity-panel {
+  margin: 10px 10px 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.agent-activity-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-scan-time {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.agent-discovery-row {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.agent-error {
+  margin-top: 8px;
+  color: var(--danger-fg);
+  font-size: 11px;
+}
+
+.agent-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.agent-summary,
+.agent-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.agent-worktree-card {
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+}
+
+.agent-worktree-card.active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-bg));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.agent-scan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  padding-left: 8px;
+  border-top: 1px solid var(--border);
+  border-left: 2px solid transparent;
+}
+
+/* An active session stands out from the idle ones around it. */
+.agent-scan-card.active {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+.agent-scan-title {
+  color: var(--text-h);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-command {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-session-directory {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-worktree-title {
+  overflow: hidden;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-worktree-meta {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-hover-target {
+  pointer-events: all;
+}
+
+.agent-hover-card {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.agent-state-pill {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.agent-state-pill.idle {
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.agent-evidence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.agent-evidence-pill {
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 9px;
+}
+
+.repo-search input {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.repo-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.repo-bulk-button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.repo-bulk-button:hover {
+  border-color: var(--accent);
+  color: var(--text-h);
+}
+
+.repo-list h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding: 16px 16px 8px;
+  margin: 0;
+}
+
+.repo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin: 1px 0;
+  padding: 0 16px;
+  cursor: pointer;
+  color: var(--text);
+  border-left: 3px solid transparent;
+}
+
+.repo-item:hover {
+  background: var(--hover-bg);
+}
+
+.repo-item.active {
+  background: var(--active-bg);
+  border-left-color: var(--accent);
+  color: var(--text-h);
+}
+
+.repo-item[draggable="true"] {
+  cursor: grab;
+}
+
+.repo-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.repo-item.dragging {
+  opacity: 0.45;
+}
+
+.repo-names {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.repo-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-name-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.repo-agent-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.repo-agent-dot.idle {
+  background: var(--text-dim);
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.repo-branch {
+  font-size: 10px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-list .repo-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: height 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
+}
+
+.repo-group-heading:hover {
+  background: var(--hover-bg);
+}
+
+.repo-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+  margin: -8px 0;
+  padding: 8px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+
+.repo-group-display-name {
+  text-transform: uppercase;
+}
+
+.repo-group-name:active {
+  cursor: grabbing;
+}
+
+.repo-group-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: -3px 0 -3px -5px;
+  padding: 2px 4px;
+  font: inherit;
+  letter-spacing: normal;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.repo-group-collapse {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.repo-group-collapse:hover {
+  color: var(--text-h);
+}
+
+.repo-group-collapse svg {
+  transition: transform 120ms ease;
+}
+
+.repo-group-collapse.collapsed svg {
+  transform: rotate(-90deg);
+}
+
+.repo-select,
+.repo-group-select {
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+  /* Zero the browser's default checkbox margin so repo and group checkboxes
+     share the same right edge. */
+  margin: 0;
+}
+
+.repo-select {
+  margin-left: auto;
+}
+
+.repo-group-heading.dragging {
+  opacity: 0.45;
+}
+
+.repo-group-section {
+  padding-top: 4px;
+  padding-bottom: 8px;
+  transition: background-color 150ms ease;
+}
+
+.repo-group-section.collapsed {
+  padding-bottom: 0;
+}
+
+.repo-bookmark-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+}
+
+.repo-bookmark-menu {
+  position: fixed;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 6px;
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px var(--shadow-soft);
+}
+
+.repo-bookmark-menu-item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repo-bookmark-menu-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-h);
+}
+
+.repo-bookmark-menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.repo-bookmark-menu-item:disabled:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.repo-bookmark-menu-separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border);
+}
+
+.repo-empty {
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+}

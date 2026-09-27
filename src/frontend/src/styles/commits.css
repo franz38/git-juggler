@@ -1,0 +1,778 @@
+.error-banner {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.loading-banner {
+  color: var(--text-dim);
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* Watched by CommitList to fetch the next page of older commits; only takes
+   up space while that page is loading. */
+.load-more-sentinel {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+  min-height: 1px;
+}
+
+.load-more-sentinel--visible {
+  height: var(--load-more-height);
+}
+
+.ghost-row-spacer {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    height 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.ghost-row-spacer--visible {
+  height: var(--ghost-row-height);
+  opacity: 0.7;
+}
+
+.commit-row {
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+}
+
+.commit-row.match {
+  border-left-color: var(--warning);
+}
+
+.commit-row.match .commit-subject {
+  color: var(--warning);
+}
+
+@keyframes commit-row-flash {
+  from {
+    background-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.commit-row.flash .commit-row-main {
+  animation: commit-row-flash 700ms ease-out;
+}
+
+.commit-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.commit-row-main:hover {
+  background: var(--hover-bg);
+}
+
+.commit-row.expanded .commit-row-main {
+  background: var(--active-bg);
+}
+
+.uncommitted-row .commit-row-main {
+  color: var(--text-h);
+}
+
+.uncommitted-badge {
+  background: color-mix(in srgb, var(--text-dim) 15%, transparent);
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+}
+
+/* Commit panel: message + actions on the left, selectable changed files with
+   per-file +/− line counts on the right. Stacks when the pane is narrow. */
+.commit-panel-container {
+  container-type: inline-size;
+}
+
+.commit-panel {
+  max-width: 820px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 1.25fr);
+  gap: 24px;
+}
+
+@container (max-width: 560px) {
+  .commit-panel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+.commit-panel-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.commit-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.commit-panel-label {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.commit-panel-subject-count {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.commit-panel-subject-count.over {
+  color: var(--danger);
+}
+
+.commit-panel-message {
+  resize: vertical;
+  min-height: 116px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.commit-panel-message:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.commit-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Commit and Stash use the shared .menu-primary-button / .menu-secondary-button
+   look; only the panel-specific bits live here. */
+.commit-panel-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.commit-panel-commit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.commit-panel-commit-count {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.commit-panel-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.commit-panel-changes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.commit-panel-changes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.commit-panel-toggle-all {
+  display: flex;
+  cursor: pointer;
+}
+
+.commit-panel-changes-title {
+  flex: 1;
+}
+
+.commit-panel-totals {
+  display: flex;
+  gap: 8px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.lines-added {
+  color: var(--success);
+}
+
+.lines-deleted {
+  color: var(--danger);
+}
+
+.line-counts {
+  display: flex;
+  gap: 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.commit-file .line-counts {
+  flex: none;
+}
+
+.commit-panel-checkbox {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--text-dim);
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+  transition: background-color 120ms ease;
+}
+
+.commit-panel-checkbox.on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.commit-panel-files {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+/* Same density as a commit's file list (.commit-file). */
+.commit-panel-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.commit-panel-file:hover {
+  background: var(--hover-bg);
+}
+
+.commit-panel-toggle-all:focus-visible,
+.commit-panel-file:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.commit-panel-file .file-status {
+  flex: none;
+}
+
+.commit-panel-file.status-untracked .file-status,
+.commit-panel-file.status-added .file-status {
+  color: var(--success);
+}
+
+.commit-panel-file.status-deleted .file-status {
+  color: var(--danger);
+}
+
+.commit-panel-file.status-modified .file-status {
+  color: var(--warning);
+}
+
+.commit-panel-file.status-renamed .file-status {
+  color: var(--accent);
+}
+
+.commit-panel-file-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.commit-panel-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-panel-file-name:hover {
+  text-decoration: underline;
+}
+
+.commit-panel-file-dir {
+  min-width: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-panel-file-stats {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.commit-panel-file-stats .lines-added,
+.commit-panel-file-stats .lines-deleted {
+  width: 30px;
+  text-align: right;
+}
+
+.commit-panel-ratio {
+  display: flex;
+  gap: 2px;
+}
+
+.commit-panel-ratio > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--active-bg);
+}
+
+.commit-panel-ratio > .ratio-add {
+  background: var(--success);
+}
+
+.commit-panel-ratio > .ratio-del {
+  background: var(--danger);
+}
+
+.commit-hash {
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+.commit-subject {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.commit-refs {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.commit-author {
+  flex: 0 0 120px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.commit-date {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.branch-badge.remote {
+  border-style: dashed;
+}
+
+.badge-icon {
+  flex: 0 0 auto;
+}
+
+
+.commit-detail {
+  padding: 12px 16px 16px 46px;
+  background: var(--panel-bg);
+  border-top: 1px dashed var(--border);
+}
+
+.commit-detail-loading {
+  color: var(--text-dim);
+  font-size: 13px;
+  height: 20px;
+}
+
+.commit-meta {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.commit-meta dt {
+  color: var(--text-dim);
+}
+
+.commit-meta dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.commit-message {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commit-files {
+  font-size: 13px;
+}
+
+.commit-file {
+  display: flex;
+  gap: 8px;
+  height: 20px;
+  align-items: center;
+}
+
+.file-status {
+  width: 14px;
+  text-align: center;
+  font-weight: 600;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.commit-file.status-added .file-status {
+  color: var(--success);
+}
+
+.commit-file.status-deleted .file-status {
+  color: var(--danger);
+}
+
+.commit-file.status-modified .file-status {
+  color: var(--warning);
+}
+
+.commit-file.status-renamed .file-status {
+  color: var(--accent);
+}
+
+.commit-file.clickable,
+.file-path.clickable {
+  cursor: pointer;
+}
+
+.commit-file.clickable:hover .file-path,
+.file-path.clickable:hover {
+  color: var(--text-h);
+  text-decoration: underline;
+}
+
+.file-diff-overlay {
+  align-items: center;
+  padding-top: 0;
+}
+
+.file-diff-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1400px, calc(100vw - 48px));
+  height: calc(100vh - 64px);
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px var(--shadow);
+  overflow: hidden;
+}
+
+.file-diff-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-diff-title {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.file-diff-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-diff-full-toggle {
+  flex: none;
+  gap: 8px !important;
+}
+
+.file-diff-full-toggle label {
+  white-space: nowrap;
+}
+
+.file-diff-message {
+  padding: 24px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+.file-diff-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.file-diff-files {
+  flex: 0 0 260px;
+  overflow: auto;
+  padding: 6px 0;
+  border-right: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.file-diff-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.file-diff-file:hover {
+  background: var(--hover-bg);
+}
+
+.file-diff-file.active {
+  background: var(--active-bg);
+  color: var(--text-h);
+}
+
+.file-diff-file-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-diff-file.status-added .file-status {
+  color: var(--success);
+}
+
+.file-diff-file.status-deleted .file-status {
+  color: var(--danger);
+}
+
+.file-diff-file.status-modified .file-status {
+  color: var(--warning);
+}
+
+.file-diff-file.status-renamed .file-status {
+  color: var(--accent);
+}
+
+.file-diff-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-diff-panes {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The overview sits under the right pane's (wide, translucent) scrollbar, so
+   the scrollbar thumb slides over the change bars like an editor minimap. */
+.file-diff-overview {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  border-left: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text-dim) 6%, transparent);
+}
+
+.file-diff-pane {
+  position: relative;
+  z-index: 1;
+}
+
+.file-diff-pane::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.file-diff-pane-right::-webkit-scrollbar {
+  width: 28px;
+}
+
+.file-diff-pane::-webkit-scrollbar-track,
+.file-diff-pane::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.file-diff-pane::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-dim) 25%, transparent);
+  border-radius: 5px;
+}
+
+.file-diff-pane::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-dim) 45%, transparent);
+}
+
+.overview-bar {
+  position: absolute;
+  width: 45%;
+  min-height: 2px;
+}
+
+.overview-delete {
+  left: 2px;
+  background: var(--danger);
+}
+
+.overview-insert {
+  right: 2px;
+  background: var(--success);
+}
+
+.file-diff-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.file-diff-pane-left {
+  border-right: 1px solid var(--border);
+}
+
+.file-diff-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.file-diff-table tr {
+  height: 18px;
+}
+
+.file-diff-table td {
+  padding: 0 6px;
+  vertical-align: top;
+}
+
+.diff-num {
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.diff-code {
+  white-space: pre;
+  color: var(--text);
+}
+
+.diff-delete {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.diff-insert {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+}
+
+.diff-empty {
+  background: color-mix(in srgb, var(--text-dim) 8%, transparent);
+}
+
+.file-diff-table tr.diff-hunk {
+  height: 26px;
+}
+
+.diff-hunk td {
+  padding: 0 8px;
+  vertical-align: middle;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}

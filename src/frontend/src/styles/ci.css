@@ -1,0 +1,174 @@
+.ci-active-dot {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 80%, transparent));
+}
+
+.ci-run-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 1px 7px 1px 3px;
+  border-radius: 999px;
+  border: 1px solid #fff;
+  background: #fff;
+  color: #24292f;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ci-run-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+/* The Jenkins butler is portrait: fit it whole inside its square. */
+.ci-provider-logo {
+  object-fit: contain;
+}
+
+.ci-run-status {
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Only positions the popovers (CIRunPopover draws its own card), one per run.
+   Rendered in a portal on <body> and placed by CiRunBadge, so it floats above
+   everything, the terminal included, instead of being clipped by the graph. */
+.ci-run-tooltip {
+  position: fixed;
+  z-index: 95;
+  width: 480px;
+  white-space: normal;
+  cursor: default;
+}
+
+.ci-run-tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Pipelines tab + stage strips */
+.pipelines-panel {
+  margin: 10px 10px 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.pipeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+}
+
+.pipeline-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.pipeline-title:hover .pipeline-name {
+  text-decoration: underline;
+}
+
+.pipeline-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.pipeline-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pipeline-meta {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.stage-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-strip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 4px;
+  font-size: 10px;
+}
+
+.stage-arrow {
+  color: var(--text-dim);
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-h);
+}
+
+.stage-chip.pending {
+  color: var(--text-dim);
+}
+
+.stage-mark {
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stage-duration {
+  color: var(--text-dim);
+}
+
+.stage-steps {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.stage-steps summary {
+  cursor: pointer;
+}
+
+.stage-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  color: var(--text);
+}

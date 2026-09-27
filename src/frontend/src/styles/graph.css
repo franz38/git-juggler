@@ -1,0 +1,45 @@
+.graph-and-list {
+  flex: 1;
+  display: flex;
+  overflow-y: auto;
+}
+
+.graph-column {
+  flex: 0 0 auto;
+  background: var(--panel-bg);
+}
+
+.list-column {
+  flex: 1;
+  min-width: 0;
+}
+
+
+.graph-panel {
+  transition: height 0.18s ease;
+}
+
+.fetch-band-shift {
+  transition: transform 0.18s ease;
+}
+
+@keyframes push-edge-flash {
+  0%,
+  100% {
+    opacity: 0.45;
+    stroke-width: 2;
+  }
+
+  50% {
+    opacity: 1;
+    stroke-width: 4;
+  }
+}
+
+.push-edge {
+  animation: push-edge-flash 900ms ease-in-out infinite;
+}
+
+.push-spinner {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
+}
