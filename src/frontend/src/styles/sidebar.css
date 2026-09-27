@@ -87,7 +87,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px 4px;
+  /* Left padding is 3px wider than the right to match .repo-item, whose
+     3px transparent border-left (reserved for the active-row accent)
+     pushes its content in by that much. */
+  padding: 10px 16px 4px 19px;
 }
 
 .agent-activity-panel {
