@@ -96,6 +96,21 @@ def _matching_job_configs(jenkins_config: dict, repo_path: Path, branch_name: st
     return _matching_rule_job_configs(jenkins_config, repo_path, values, branch_name)
 
 
+def _repo_job_configs(jenkins_config: dict, repo_path: Path, branch_name: str | None = None) -> list[dict]:
+    """The repo's jobs to query. A per-branch job URL (e.g. a multibranch
+    pipeline) only renders with a branch: without one, every branch's job is
+    returned (branches Jenkins has no job for just 404 → no builds)."""
+    jobs = _matching_job_configs(jenkins_config, repo_path, branch_name)
+    if jobs or branch_name:
+        return jobs
+    by_url = {
+        str(job["job_url"]): job
+        for name in _branch_names(repo_path)
+        for job in _matching_job_configs(jenkins_config, repo_path, name)
+    }
+    return list(by_url.values())
+
+
 def _job_url_prefixes(jenkins_config: dict, repo_path: Path) -> list[str]:
     values = _repo_template_values(repo_path)
     prefixes: list[str] = []
@@ -367,7 +382,7 @@ def get_active_builds(repo_path: Path, jenkins_config: dict | None, branch_name:
         "actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]]]{0,10}"
     )
     result: list[CiRunInfo] = []
-    for job in _matching_job_configs(jenkins_config, repo_path, branch_name):
+    for job in _repo_job_configs(jenkins_config, repo_path, branch_name):
         job_url = str(job["job_url"])
         data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
         builds = data.get("builds") if isinstance(data, dict) else None
@@ -472,16 +487,7 @@ def test_rule_connection(jenkins_config: dict | None, rule: dict, repo_path: Pat
 def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config: dict | None) -> dict[str, list[CiRunInfo]]:
     if not commit_hashes or not jenkins_config:
         return {}
-    jobs = _matching_job_configs(jenkins_config, repo_path)
-    if not jobs:
-        # A per-branch job URL only renders with a branch: look at every
-        # branch's job (branches Jenkins has no job for just 404 → no builds).
-        by_url = {
-            str(job["job_url"]): job
-            for branch_name in _branch_names(repo_path)
-            for job in _matching_job_configs(jenkins_config, repo_path, branch_name)
-        }
-        jobs = list(by_url.values())
+    jobs = _repo_job_configs(jenkins_config, repo_path)
     if not jobs:
         return {}
 
