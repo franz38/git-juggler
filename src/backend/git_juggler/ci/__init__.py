@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -27,6 +28,11 @@ class CiProvider(Protocol):
         Stages are included for runs that are still going."""
         ...
 
+    def recent_runs(self, repo_path: Path, limit: int) -> list[CiRunInfo]:
+        """The repo's latest runs (at most `limit` per job/workflow listing),
+        running or finished, without stages."""
+        ...
+
 
 @dataclass
 class GitHubActionsProvider:
@@ -39,6 +45,9 @@ class GitHubActionsProvider:
     def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None, branch_name: str | None) -> list[CiRunInfo]:
         return github_actions.poll_runs(repo_path, self.config, run_ids, head_sha)
 
+    def recent_runs(self, repo_path: Path, limit: int) -> list[CiRunInfo]:
+        return github_actions.get_recent_runs(repo_path, self.config, limit)
+
 
 @dataclass
 class JenkinsProvider:
@@ -50,6 +59,9 @@ class JenkinsProvider:
 
     def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None, branch_name: str | None) -> list[CiRunInfo]:
         return jenkins.poll_runs(repo_path, self.config, run_ids, head_sha, branch_name)
+
+    def recent_runs(self, repo_path: Path, limit: int) -> list[CiRunInfo]:
+        return jenkins.get_recent_builds(repo_path, self.config, limit)
 
 
 def enabled_providers(github_config: dict | None, jenkins_config: dict | None) -> list[CiProvider]:
@@ -116,32 +128,54 @@ def get_ci_run_stages(
     return None
 
 
-def _active_runs_for_repo(repo: RepoSummary, github_config: dict | None, jenkins_config: dict | None) -> list[ActivePipeline]:
-    runs = poll_ci_runs(Path(repo.path), None, None, None, github_config, jenkins_config)
-    return [ActivePipeline(repo_id=repo.id, repo_name=repo.name, run=run) for run in runs]
+def _recent_runs_for_repo(
+    repo: RepoSummary, github_config: dict | None, jenkins_config: dict | None, limit: int
+) -> list[tuple[RepoSummary, CiRunInfo]]:
+    providers = enabled_providers(github_config, jenkins_config)
+    return [(repo, run) for provider in providers for run in provider.recent_runs(Path(repo.path), limit)]
 
 
-def _pipeline_key(pipeline: ActivePipeline) -> tuple[str, str]:
-    run = pipeline.run
-    if run.run_id:
-        return (run.provider, run.run_id)
-    return (run.provider, run.url)
+def _run_key(run: CiRunInfo) -> tuple[str, str]:
+    return (run.provider, run.run_id or run.url)
 
 
-def get_active_pipelines(
+def _created_at_key(run: CiRunInfo) -> datetime:
+    # Providers format timestamps differently ("Z" vs "+00:00"), so compare
+    # parsed values rather than strings.
+    try:
+        parsed = datetime.fromisoformat((run.created_at or "").replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def get_recent_pipelines(
     repos: list[RepoSummary],
     github_config: dict | None,
     jenkins_config: dict | None,
+    limit: int = 10,
 ) -> list[ActivePipeline]:
-    """Queued/running pipelines across every known repo. Repos are queried
-    concurrently since each one is a network round trip."""
-    if not repos:
+    """The `limit` most recent pipelines across every known repo, running or
+    finished, newest first, with their stages. Repos are queried concurrently
+    since each one is a network round trip; stages are only fetched for the
+    runs that make the cut."""
+    if not repos or limit <= 0:
         return []
     with ThreadPoolExecutor(max_workers=min(8, len(repos))) as pool:
-        per_repo = pool.map(lambda repo: _active_runs_for_repo(repo, github_config, jenkins_config), repos)
-        pipelines = [item for group in per_repo for item in group]
-    deduped_by_key: dict[tuple[str, str], ActivePipeline] = {}
-    for pipeline in pipelines:
-        deduped_by_key.setdefault(_pipeline_key(pipeline), pipeline)
-    deduped = list(deduped_by_key.values())
-    return sorted(deduped, key=lambda item: item.run.created_at or "", reverse=True)
+        per_repo = pool.map(lambda repo: _recent_runs_for_repo(repo, github_config, jenkins_config, limit), repos)
+        found = [item for group in per_repo for item in group]
+    deduped: dict[tuple[str, str], tuple[RepoSummary, CiRunInfo]] = {}
+    for repo, run in found:
+        deduped.setdefault(_run_key(run), (repo, run))
+    newest = sorted(deduped.values(), key=lambda item: _created_at_key(item[1]), reverse=True)[:limit]
+
+    def with_stages(item: tuple[RepoSummary, CiRunInfo]) -> ActivePipeline:
+        repo, run = item
+        if run.run_id:
+            run.stages = get_ci_run_stages(Path(repo.path), run.provider, run.run_id, github_config, jenkins_config)
+        return ActivePipeline(repo_id=repo.id, repo_name=repo.name, run=run)
+
+    if not newest:
+        return []
+    with ThreadPoolExecutor(max_workers=min(8, len(newest))) as pool:
+        return list(pool.map(with_stages, newest))

@@ -226,6 +226,28 @@ class JenkinsBuildParsingTest(unittest.TestCase):
 
         self.assertEqual([(build.name, build.number, build.status) for build in builds], [("api/main", 4, "running")])
 
+    def test_recent_builds_include_finished_ones_from_each_branch_job(self) -> None:
+        repo_path = Path("/tmp/api")
+        config = {"rules": [{"id": "r1", "name": "Rule", "repo_paths": [str(repo_path)], "job_url": "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}"}]}
+        fetched: list[str] = []
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            fetched.append(url)
+            if url.startswith("https://jenkins.example.com/job/api/job/main/api/json"):
+                return {
+                    "builds": [
+                        {"number": 5, "url": "https://jenkins.example.com/job/api/job/main/5/", "building": True, "result": None},
+                        {"number": 4, "url": "https://jenkins.example.com/job/api/job/main/4/", "building": False, "result": "FAILURE"},
+                    ]
+                }
+            return None
+
+        with patch.object(jenkins, "_branch_names", lambda path: ["main", "dev"]), patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            builds = jenkins.get_recent_builds(repo_path, config, 3)
+
+        self.assertEqual([(b.number, b.status) for b in builds], [(5, "running"), (4, "failure")])
+        self.assertIn("%7B0%2C3%7D", fetched[0])  # tree=...{0,3}
+
     def test_build_url_tracking_allows_branch_template_prefix(self) -> None:
         repo_path = Path("/tmp/api")
         sha = "a" * 40

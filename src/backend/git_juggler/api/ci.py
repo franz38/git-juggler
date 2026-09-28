@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from .. import config
 from ..ci import github_actions, jenkins
-from ..ci import get_active_pipelines, get_ci_run_stages, get_ci_runs, poll_ci_runs
+from ..ci import get_ci_run_stages, get_ci_runs, get_recent_pipelines, poll_ci_runs
 from ..git.data import get_commit_hashes
 from ..repo_discovery import list_repos, resolve_repo_path
 from ..schemas import (
@@ -77,13 +77,15 @@ def api_ci_stages(repo_id: str, provider: str, run_id: str) -> list[CiStage]:
     return stages
 
 
-# Queued/running pipelines across all repos, for the Pipelines tab.
-@router.get("/api/ci/active", response_model=list[ActivePipeline])
-def api_ci_active() -> list[ActivePipeline]:
-    return get_active_pipelines(
+# The most recent pipelines (running or finished) across all repos, for the
+# Pipelines tab.
+@router.get("/api/ci/recent", response_model=list[ActivePipeline])
+def api_ci_recent(limit: Annotated[int, Query(ge=1, le=50)] = 10) -> list[ActivePipeline]:
+    return get_recent_pipelines(
         list_repos(config.load_repo_paths()),
         config.load_github_config(),
         config.load_jenkins_config(),
+        limit,
     )
 
 

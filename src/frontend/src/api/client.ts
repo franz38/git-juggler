@@ -99,8 +99,8 @@ export function fetchRunStages(repoId: string, provider: string, runId: string):
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/stages?${query}`);
 }
 
-export function fetchActivePipelines(): Promise<ActivePipeline[]> {
-  return getJson(`${API_BASE}/ci/active`);
+export function fetchRecentPipelines(): Promise<ActivePipeline[]> {
+  return getJson(`${API_BASE}/ci/recent`);
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {

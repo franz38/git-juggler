@@ -472,6 +472,27 @@ def get_active_builds(repo_path: Path, jenkins_config: dict | None, branch_name:
     return result
 
 
+def get_recent_builds(repo_path: Path, jenkins_config: dict | None, limit: int) -> list[CiRunInfo]:
+    """The latest builds of the repo's jobs, running or finished, without
+    stages (one call per job)."""
+    if not jenkins_config:
+        return []
+    headers = _headers(jenkins_config)
+    tree = (
+        "builds[number,url,result,building,timestamp,duration,"
+        f"actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]]]{{0,{max(1, limit)}}}"
+    )
+    result: list[CiRunInfo] = []
+    for job in _repo_job_configs(jenkins_config, repo_path):
+        job_url = str(job["job_url"])
+        data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
+        builds = data.get("builds") if isinstance(data, dict) else None
+        for build in builds if isinstance(builds, list) else []:
+            if isinstance(build, dict):
+                result.append(_build_info(build, _job_name(job_url), job_url))
+    return result
+
+
 def get_builds_by_url(repo_path: Path, jenkins_config: dict | None, build_urls: list[str]) -> list[CiRunInfo]:
     """Current state of specific builds (`wfapi/describe` also carries the stages
     of one that is still going, so that is one extra call per running build).
