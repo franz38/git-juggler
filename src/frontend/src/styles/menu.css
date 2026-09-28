@@ -462,6 +462,58 @@
   align-items: center;
 }
 
+.jenkins-rule-repo-tests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jenkins-rule-repo-test {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.jenkins-rule-play {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--success);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 22px;
+}
+
+.jenkins-rule-play:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.jenkins-rule-repo-name,
+.jenkins-rule-test-log {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jenkins-rule-test-log {
+  color: var(--text-dim);
+}
+
+.jenkins-rule-test-log.success {
+  color: var(--success);
+}
+
+.jenkins-rule-test-log.error {
+  color: var(--danger);
+}
+
 .menu-actions {
   display: flex;
   justify-content: flex-end;

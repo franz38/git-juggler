@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiConnectionTestResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GitHubConfig, GraphResponse, JenkinsConfig, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiConnectionTestResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GitHubConfig, GraphResponse, JenkinsConfig, JenkinsRuleTestRequest, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -122,6 +122,10 @@ export function testGitHubConnection(config: GitHubConfig): Promise<CiConnection
 
 export function testJenkinsConnection(config: JenkinsConfig): Promise<CiConnectionTestResponse> {
   return postJson(`${API_BASE}/ci/jenkins/test`, config);
+}
+
+export function testJenkinsRule(request: JenkinsRuleTestRequest): Promise<CiConnectionTestResponse> {
+  return postJson(`${API_BASE}/ci/jenkins/rule-test`, request);
 }
 
 export function fetchAgentActivity(): Promise<AgentActivityResponse> {

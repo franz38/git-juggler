@@ -112,6 +112,12 @@ export interface JenkinsConfig {
   rules: JenkinsRuleConfig[];
 }
 
+export interface JenkinsRuleTestRequest {
+  config: JenkinsConfig;
+  rule: JenkinsRuleConfig;
+  repo_path: string;
+}
+
 export interface CiConnectionTestResponse {
   ok: boolean;
   message: string;

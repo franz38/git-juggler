@@ -17,6 +17,7 @@ from ..schemas import (
     CiStage,
     GitHubConfig,
     JenkinsConfig,
+    JenkinsRuleTestRequest,
 )
 
 
@@ -95,4 +96,10 @@ def api_test_github_connection(body: GitHubConfig) -> CiConnectionTestResponse:
 @router.post("/api/ci/jenkins/test", response_model=CiConnectionTestResponse)
 def api_test_jenkins_connection(body: JenkinsConfig) -> CiConnectionTestResponse:
     ok, message = jenkins.test_connection(body.model_dump())
+    return CiConnectionTestResponse(ok=ok, message=message)
+
+
+@router.post("/api/ci/jenkins/rule-test", response_model=CiConnectionTestResponse)
+def api_test_jenkins_rule(body: JenkinsRuleTestRequest) -> CiConnectionTestResponse:
+    ok, message = jenkins.test_rule_connection(body.config.model_dump(), body.rule.model_dump(), Path(body.repo_path))
     return CiConnectionTestResponse(ok=ok, message=message)
