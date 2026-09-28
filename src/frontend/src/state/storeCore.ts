@@ -978,6 +978,13 @@ export function closeTab(id: string): void {
   }
 }
 
+export function closeOtherTabs(id: string): void {
+  const tab = tabs().find((t) => t.id === id);
+  if (!tab) return;
+  setTabs([tab]);
+  setActiveRepo(id);
+}
+
 // --- Active repo's commit graph ---------------------------------------------
 
 export const commits = createMemo<CommitSummary[]>(() => {
@@ -2188,13 +2195,14 @@ export interface RepoContextMenuState {
   repoId: string;
   repoName: string;
   repoPath: string | null;
+  source: "repo-list" | "tab";
 }
 
 const [repoContextMenu, setRepoContextMenu] = createSignal<RepoContextMenuState | null>(null);
 export { repoContextMenu };
 
-export function openRepoContextMenu(x: number, y: number, repoId: string, repoName: string, repoPath?: string): void {
-  setRepoContextMenu({ x, y, repoId, repoName, repoPath: repoPath ?? null });
+export function openRepoContextMenu(x: number, y: number, repoId: string, repoName: string, repoPath?: string, source: "repo-list" | "tab" = "repo-list"): void {
+  setRepoContextMenu({ x, y, repoId, repoName, repoPath: repoPath ?? null, source });
 }
 
 export function closeRepoContextMenu(): void {

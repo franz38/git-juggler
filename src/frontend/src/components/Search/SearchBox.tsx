@@ -37,7 +37,7 @@ export function SearchBox() {
     if (openPanel() === null) return;
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as Element | null;
-      if (target?.closest(".filter-popover, .filter-button")) return;
+      if (target?.closest(".filter-popover, .filter-button, .multiselect-panel")) return;
       // Closing the popover is all a click on the graph should do: it must not
       // also select the commit underneath.
       if (e.button === 0 && target?.closest(".graph-and-list")) swallowNextClick();

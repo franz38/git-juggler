@@ -1,6 +1,7 @@
 export {
   activateAdjacentTab,
   activateTab,
+  closeOtherTabs,
   closeTab,
   loadActiveTabGraph,
   moveTab,

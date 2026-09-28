@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { dismissOnOutsideClick } from "../../lib/dismissOnOutsideClick";
 import { useOverlay } from "../../state/overlayStack";
-import { closeRepoContextMenu, fetchRepo, openNewGroupModal, openRepoTab, pinnedRepos, repoContextMenu, repoGroups, runInTerminal, scheduleGraphRefresh, setRepoInGroup, setRepoPinned } from "../../state/store";
+import { closeOtherTabs, closeRepoContextMenu, fetchRepo, openNewGroupModal, openRepoTab, pinnedRepos, repoContextMenu, repoGroups, runInTerminal, scheduleGraphRefresh, setRepoInGroup, setRepoPinned } from "../../state/store";
 
 export function RepoContextMenu() {
   let panelRef: HTMLDivElement | undefined;
@@ -43,6 +43,13 @@ export function RepoContextMenu() {
     openNewGroupModal(repoPath);
   };
 
+  const handleCloseOthers = () => {
+    const menu = repoContextMenu();
+    if (!menu) return;
+    closeOtherTabs(menu.repoId);
+    closeRepoContextMenu();
+  };
+
   return (
     <Show when={repoContextMenu()}>
       {(menu) => {
@@ -55,6 +62,12 @@ export function RepoContextMenu() {
             <div class="context-menu-item" onClick={() => runRepoCommand("git pull")}>
               Pull
             </div>
+            <Show when={menu().source === "tab"}>
+              <div class="context-menu-separator" />
+              <div class="context-menu-item" onClick={handleCloseOthers}>
+                Close others
+              </div>
+            </Show>
             <Show when={menu().repoPath}>
               {(repoPath) => (
                 <>

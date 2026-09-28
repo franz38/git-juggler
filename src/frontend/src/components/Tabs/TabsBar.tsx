@@ -165,7 +165,7 @@ export function TabsBar() {
             onDblClick={() => pinTab(tab.id)}
             onContextMenu={(e) => {
               e.preventDefault();
-              openRepoContextMenu(e.clientX, e.clientY, tab.id, tab.name);
+              openRepoContextMenu(e.clientX, e.clientY, tab.id, tab.name, undefined, "tab");
             }}
             title={repoUnavailable(tab.id) ? `${tab.name} is no longer in configured scan paths` : tab.pinned ? tab.name : `${tab.name} (double-click to pin)`}
           >
