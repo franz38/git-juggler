@@ -248,53 +248,53 @@ export function JenkinsSettings() {
       />
 
       <div class="menu-field">
-      <span>Rules</span>
-      <p class="menu-hint">
-        Each repo can belong to one rule. The pipeline URL supports <span class="mono">{"{repo_name}"}</span>, <span class="mono">{"{repo_name_url}"}</span>, <span class="mono">{"{repo_slug}"}</span>, <span class="mono">{"{repo_slug_url}"}</span>, <span class="mono">{"{branch_name}"}</span>, and <span class="mono">{"{branch_name_url}"}</span>. Branch placeholders are resolved after pushes; git-juggler does not query every branch.
-      </p>
-      <div class="jenkins-rules">
-        <Show when={ruleCount() > 0} fallback={<div class="menu-empty">No Jenkins rules configured</div>}>
-          <Index each={draft().rules}>
-            {(rule, ruleIndex) => (
-              <div class="jenkins-rule-card">
-                <div class="jenkins-rule-heading">
-                  <input type="text" value={rule().name} placeholder="Rule name" onInput={(e) => updateRule(ruleIndex, "name", e.currentTarget.value)} />
-                  <Show
-                    when={ruleDirty(rule())}
-                    fallback={<button type="button" class="menu-secondary-button" onClick={() => removeRule(ruleIndex)}>Remove rule</button>}
-                  >
-                    <button type="button" class="menu-primary-button" disabled={!ruleCanSave(rule())} onClick={() => saveRule(ruleIndex)}>Save rule</button>
+        <span>Rules</span>
+        <p class="menu-hint">
+          Each repo can belong to one rule. The pipeline URL supports <span class="mono">{"{repo_name}"}</span>, <span class="mono">{"{repo_name_url}"}</span>, <span class="mono">{"{repo_slug}"}</span>, <span class="mono">{"{repo_slug_url}"}</span>, <span class="mono">{"{branch_name}"}</span>, and <span class="mono">{"{branch_name_url}"}</span>. Branch placeholders are resolved after pushes; git-juggler does not query every branch.
+        </p>
+        <div class="jenkins-rules">
+          <Show when={ruleCount() > 0} fallback={<div class="menu-empty">No Jenkins rules configured</div>}>
+            <Index each={draft().rules}>
+              {(rule, ruleIndex) => (
+                <div class="jenkins-rule-card">
+                  <div class="jenkins-rule-heading">
+                    <input type="text" value={rule().name} placeholder="Rule name" onInput={(e) => updateRule(ruleIndex, "name", e.currentTarget.value)} />
+                    <Show
+                      when={ruleDirty(rule())}
+                      fallback={<button type="button" class="menu-secondary-button" onClick={() => removeRule(ruleIndex)}>Remove rule</button>}
+                    >
+                      <button type="button" class="menu-primary-button" disabled={!ruleCanSave(rule())} onClick={() => saveRule(ruleIndex)}>Save rule</button>
+                    </Show>
+                  </div>
+                  <MultiSelect options={repoOptionsForRule(ruleIndex)} selected={rule().repo_paths} onChange={(next) => updateRule(ruleIndex, "repo_paths", next)} placeholder="Select repos" />
+                  <input type="text" value={rule().job_url} placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}" onInput={(e) => updateRule(ruleIndex, "job_url", e.currentTarget.value)} />
+                  <Show when={rule().repo_paths.length > 0}>
+                    <div class="jenkins-rule-repo-tests">
+                      <Index each={rule().repo_paths}>
+                        {(repoPath) => {
+                          const key = () => `${rule().id}:${repoPath()}`;
+                          const result = () => ruleTestResults()[key()];
+                          const running = () => testingRuleKey() === key();
+                          return (
+                            <div class="jenkins-rule-repo-test">
+                              <button type="button" class="jenkins-rule-play" title={`Check ${repoName(repoPath())} on main/master`} disabled={running() || !ruleCanSave(rule())} onClick={() => void testRuleForRepo(rule(), repoPath())}>
+                                ▶
+                              </button>
+                              <span class="jenkins-rule-repo-name">{repoName(repoPath())}</span>
+                              <Show when={result()}>
+                                {(item) => <span class="jenkins-rule-test-log" classList={{ success: item().ok, error: !item().ok }}>{running() ? `${repoName(repoPath())}: checking Jenkins pipeline...` : item().message}</span>}
+                              </Show>
+                            </div>
+                          );
+                        }}
+                      </Index>
+                    </div>
                   </Show>
                 </div>
-                <MultiSelect options={repoOptionsForRule(ruleIndex)} selected={rule().repo_paths} onChange={(next) => updateRule(ruleIndex, "repo_paths", next)} placeholder="Select repos" />
-                <input type="text" value={rule().job_url} placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}" onInput={(e) => updateRule(ruleIndex, "job_url", e.currentTarget.value)} />
-                <Show when={rule().repo_paths.length > 0}>
-                  <div class="jenkins-rule-repo-tests">
-                    <Index each={rule().repo_paths}>
-                      {(repoPath) => {
-                        const key = () => `${rule().id}:${repoPath()}`;
-                        const result = () => ruleTestResults()[key()];
-                        const running = () => testingRuleKey() === key();
-                        return (
-                          <div class="jenkins-rule-repo-test">
-                            <button type="button" class="jenkins-rule-play" title={`Check ${repoName(repoPath())} on main/master`} disabled={running() || ruleDirty(rule()) || !ruleCanSave(rule())} onClick={() => void testRuleForRepo(rule(), repoPath())}>
-                              ▶
-                            </button>
-                            <span class="jenkins-rule-repo-name">{repoName(repoPath())}</span>
-                            <Show when={result()}>
-                              {(item) => <span class="jenkins-rule-test-log" classList={{ success: item().ok, error: !item().ok }}>{running() ? `${repoName(repoPath())}: checking Jenkins pipeline...` : item().message}</span>}
-                            </Show>
-                          </div>
-                        );
-                      }}
-                    </Index>
-                  </div>
-                </Show>
-              </div>
-            )}
-          </Index>
-        </Show>
-      </div>
+              )}
+            </Index>
+          </Show>
+        </div>
       </div>
 
       <div class="menu-actions">
