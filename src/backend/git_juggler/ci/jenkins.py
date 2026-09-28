@@ -148,6 +148,21 @@ def _default_branch(repo_path: Path) -> str | None:
     return None
 
 
+def _branch_names(repo_path: Path) -> list[str]:
+    """Local branches plus remote-tracking ones (remote prefix stripped), for
+    rules whose job URL is per branch (e.g. a multibranch pipeline)."""
+    try:
+        repo = Repo(repo_path)
+        names = [head.name for head in repo.heads]
+        for remote in repo.remotes:
+            for ref in remote.refs:
+                if ref.remote_head != "HEAD":
+                    names.append(ref.remote_head)
+    except (InvalidGitRepositoryError, NoSuchPathError, OSError, ValueError):
+        return []
+    return list(dict.fromkeys(names))
+
+
 def _fetch_json(url: str, headers: dict[str, str]) -> dict | None:
     return fetch_json(url, headers, opener=urlopen)
 
@@ -458,6 +473,15 @@ def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config:
     if not commit_hashes or not jenkins_config:
         return {}
     jobs = _matching_job_configs(jenkins_config, repo_path)
+    if not jobs:
+        # A per-branch job URL only renders with a branch: look at every
+        # branch's job (branches Jenkins has no job for just 404 → no builds).
+        by_url = {
+            str(job["job_url"]): job
+            for branch_name in _branch_names(repo_path)
+            for job in _matching_job_configs(jenkins_config, repo_path, branch_name)
+        }
+        jobs = list(by_url.values())
     if not jobs:
         return {}
 
