@@ -18,6 +18,8 @@ import {
   type TabInfo,
 } from "../../state/store";
 
+const SPLIT_DROP_START_RATIO = 0.72;
+
 // Agent sessions working in this tab's repository (none when agent detection
 // is off), for the badge next to the tab name.
 function agentCounts(tabId: string): AgentSessionCounts {
@@ -40,6 +42,11 @@ export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
   const clearDrag = () => {
     setDraggedTabId(null);
     document.body.classList.remove("tab-dragging");
+    document.body.classList.remove("tab-split-preview");
+  };
+
+  const updateSplitPreview = (clientX: number) => {
+    document.body.classList.toggle("tab-split-preview", props.tabs.length > 1 && clientX > window.innerWidth * SPLIT_DROP_START_RATIO);
   };
 
   // Tabs are reordered with pointer events rather than native HTML5 drag and
@@ -86,6 +93,7 @@ export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
         document.body.classList.add("tab-dragging");
         createGhost();
       }
+      updateSplitPreview(e.clientX);
       moveGhost(e);
       maybeSwap(tabId, e.clientX);
     };
@@ -98,7 +106,7 @@ export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
         suppressClick = true;
         setTimeout(() => (suppressClick = false), 0);
         const dropPane = paneFromPoint(lastClientX);
-        if (dropPane && dropPane !== props.pane) moveTabToPane(tabId, dropPane);
+        if (props.tabs.length > 1 && dropPane && dropPane !== props.pane) moveTabToPane(tabId, dropPane);
       }
       clearDrag();
     };
@@ -158,7 +166,7 @@ export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
 
   const paneFromPoint = (clientX: number): PaneId | null => {
     const el = document.elementFromPoint(clientX, 40) as HTMLElement | null;
-    if (!el?.closest("[data-tab-pane]") && clientX > window.innerWidth * 0.72) return "right";
+    if (props.tabs.length > 1 && clientX > window.innerWidth * SPLIT_DROP_START_RATIO) return "right";
     return el?.closest<HTMLElement>("[data-tab-pane]")?.dataset.tabPane === "right" ? "right" : el?.closest("[data-tab-pane]") ? "left" : null;
   };
 

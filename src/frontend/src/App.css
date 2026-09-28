@@ -32,6 +32,37 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+.workspace-panes::after {
+  content: "Drop to open split";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text-h);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent), 0 16px 40px var(--shadow-soft);
+  opacity: 0;
+  transform: translateX(12px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+  z-index: 20;
+}
+
+body.tab-split-preview .workspace-panes::after {
+  opacity: 1;
+  transform: translateX(0) scale(1);
 }
 
 .workspace-pane {
@@ -440,7 +471,5 @@ body.tab-dragging * {
   text-align: center;
   line-height: 1.4;
 }
-
-
 
 

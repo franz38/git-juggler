@@ -122,6 +122,19 @@ function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo(), next
 }
 
 function setTabs(nextTabs: TabInfo[]): void {
+  const hasLeft = nextTabs.some((tab) => tab.pane === "left");
+  const hasRight = nextTabs.some((tab) => tab.pane === "right");
+  if (!hasLeft && hasRight) {
+    nextTabs = nextTabs.map((tab) => ({ ...tab, pane: "left" }));
+  } else if (hasLeft && !hasRight) {
+    nextTabs = nextTabs.map((tab) => ({ ...tab, pane: "left" }));
+  }
+  if (!nextTabs.some((tab) => tab.pane === "right")) {
+    const active = activeRepo();
+    const leftActive = active && nextTabs.some((tab) => tab.id === active) ? active : nextTabs[0]?.id ?? null;
+    setActivePaneSignal("left");
+    setActiveRepoByPane({ left: leftActive, right: null });
+  }
   setTabsSignal(nextTabs);
   persistTabsState(nextTabs, activeRepo());
 }
@@ -969,12 +982,13 @@ function scheduleTimedGraphRefreshes(repoId: string, delays: number[]): void {
 
 export function openRepoTab(id: string, name: string, pane: PaneId = activePane()): void {
   const current = tabs();
-  if (!current.some((t) => t.id === id)) {
+  const existing = current.find((t) => t.id === id);
+  if (!existing) {
     setTabs([...current, { id, name, pinned: false, pane }]);
-  } else if (!current.some((t) => t.id === id && t.pane === pane)) {
-    setTabs(current.map((t) => (t.id === id ? { ...t, pane } : t)));
+    setActivePane(pane);
+  } else {
+    setActivePane(existing.pane);
   }
-  setActivePane(pane);
   setActiveRepo(id);
   void loadRepoGraphIfNeeded(id);
 }
@@ -1051,7 +1065,7 @@ export function closeTab(id: string): void {
 export function closeOtherTabs(id: string): void {
   const tab = tabs().find((t) => t.id === id);
   if (!tab) return;
-  setTabs([tab]);
+  setTabs(tabs().filter((t) => t.pane !== tab.pane || t.id === id));
   setActivePane(tab.pane);
   setActiveRepo(id);
 }

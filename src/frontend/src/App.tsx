@@ -199,11 +199,13 @@ function App() {
         <Show when={paneTabs().length > 0}>
           <div class="main-header">
             <TabsBar pane={pane} tabs={paneTabs()} />
-            <SearchBox />
+            <Show when={pane === (splitActive() ? "right" : "left")}>
+              <SearchBox />
+            </Show>
           </div>
         </Show>
         <div class="content">
-          <Show when={paneRepo()} fallback={<div class="empty-state">Drop a tab here to split the view</div>}>
+          <Show when={paneRepo()} fallback={<div class="empty-state">{tabs().length === 0 ? "Select a repository to see its graph" : "Drop a tab here to split the view"}</div>}>
             {(repo) => (
               <Show when={!repoUnavailable(repo())} fallback={<div class="empty-state unavailable-state">Repository is no longer in the configured scan paths.</div>}>
                 <div class="graph-and-list">
