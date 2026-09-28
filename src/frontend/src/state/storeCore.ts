@@ -3,7 +3,7 @@ import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
 import { ApiError, browseDirectory, pickFolderNative, pollCiRuns, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoSummary, TerminalShell } from "../api/types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
@@ -841,6 +841,7 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
   if (!state || state.loading || state.commits.length === 0) return;
   try {
     const status = await fetchRepoStatus(repoId);
+    maybeDetectExternalPush(repoId, status, state.upstreamCommit);
     if (status.head_commit !== state.headCommit || status.current_branch !== state.currentBranch) {
       await refreshRepoGraph(repoId);
       return;
@@ -1409,7 +1410,8 @@ const defaultJenkinsConfig: JenkinsConfig = {
   username: "",
   api_token_env: "JENKINS_API_TOKEN",
   build_limit: 50,
-  jobs: [],
+  detect_external_pushes: true,
+  rules: [],
 };
 
 const [githubConfig, setGitHubConfig] = createSignal<GitHubConfig>(defaultGitHubConfig);
@@ -1490,6 +1492,7 @@ export async function loadRunStages(repoId: string, run: CiRunInfo): Promise<voi
 //    ciPollSeconds (Menu > CI); a run that finishes triggers one completed refresh.
 const CI_DISCOVERY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 const CI_COMPLETED_REFRESH_MS = 60000;
+const CI_EXTERNAL_PUSH_DEDUPE_MS = 20 * 60 * 1000;
 export const DEFAULT_CI_POLL_SECONDS = 10;
 export const MAX_CI_POLL_SECONDS = 3600;
 const CI_POLL_SECONDS_KEY = "git-juggler:ciPollSeconds";
@@ -1522,6 +1525,7 @@ export function setCiPollSeconds(seconds: number): void {
 
 const ciPollTimers = new Map<string, ReturnType<typeof setTimeout>>(); // tracking timers
 const ciPushRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>(); // discovery timers
+const ciExternalPushDetections = new Map<string, number>();
 
 function clearCiPoll(repoId: string): void {
   const timer = ciPollTimers.get(repoId);
@@ -1581,6 +1585,16 @@ async function trackCiRuns(repoId: string): Promise<void> {
 async function discoverCiRuns(repoId: string): Promise<void> {
   try {
     applyPolledRuns(repoId, await pollCiRuns(repoId));
+    void refreshPipelines();
+  } catch {
+    // Opportunistic; the next discovery delay or the completed refresh catches up.
+  }
+  if (!ciPollTimers.has(repoId)) scheduleCiTrackingIfNeeded(repoId);
+}
+
+async function discoverCiRunsForBranch(repoId: string, branchName: string, headSha?: string | null): Promise<void> {
+  try {
+    applyPolledRuns(repoId, await pollCiRuns(repoId, undefined, headSha ?? undefined, branchName));
     void refreshPipelines();
   } catch {
     // Opportunistic; the next discovery delay or the completed refresh catches up.
@@ -1675,10 +1689,16 @@ export function refreshActiveRepoCiRuns(): void {
   void loadCiRunsInto(repoId);
 }
 
-export function scheduleCiRefreshAfterPush(repoId: string): void {
+function pushedBranchForRepo(repoId: string, branchName?: string | null): string | null {
+  return branchName || repoStates[repoId]?.upstreamBranch || repoStates[repoId]?.currentBranch || null;
+}
+
+export function scheduleCiRefreshAfterPush(repoId: string, branchName?: string | null): void {
   scheduleGraphRefresh(repoId);
   if (!githubConfig().enabled && !jenkinsConfig().enabled) return;
   clearCiPushRefresh(repoId);
+  const pushedBranch = pushedBranchForRepo(repoId, branchName);
+  const headSha = repoStates[repoId]?.headCommit ?? null;
   const timers: ReturnType<typeof setTimeout>[] = [];
   for (const delay of CI_DISCOVERY_DELAYS_MS) {
     const timer = setTimeout(() => {
@@ -1686,11 +1706,27 @@ export function scheduleCiRefreshAfterPush(repoId: string): void {
       const remaining = current.filter((item) => item !== timer);
       if (remaining.length > 0) ciPushRefreshTimers.set(repoId, remaining);
       else ciPushRefreshTimers.delete(repoId);
-      void discoverCiRuns(repoId);
+      if (pushedBranch) void discoverCiRunsForBranch(repoId, pushedBranch, headSha);
+      else void discoverCiRuns(repoId);
     }, delay);
     timers.push(timer);
   }
   ciPushRefreshTimers.set(repoId, timers);
+}
+
+function maybeDetectExternalPush(repoId: string, status: RepoStatusResponse, previousUpstream: string | null): void {
+  if (!jenkinsConfig().enabled || !jenkinsConfig().detect_external_pushes || repoId !== activeRepo()) return;
+  if (!previousUpstream || !status.upstream_commit || previousUpstream === status.upstream_commit) return;
+  if (!status.current_branch || status.head_commit !== status.upstream_commit) return;
+  const key = `${repoId}:${status.current_branch}:${status.upstream_commit}`;
+  const now = Date.now();
+  const previousDetection = ciExternalPushDetections.get(key);
+  if (previousDetection && now - previousDetection < CI_EXTERNAL_PUSH_DEDUPE_MS) return;
+  ciExternalPushDetections.set(key, now);
+  for (const [storedKey, detectedAt] of ciExternalPushDetections) {
+    if (now - detectedAt > CI_EXTERNAL_PUSH_DEDUPE_MS) ciExternalPushDetections.delete(storedKey);
+  }
+  scheduleCiRefreshAfterPush(repoId, status.current_branch);
 }
 
 export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {

@@ -95,8 +95,10 @@ export interface GitHubConfig {
   repos: GitHubRepoConfig[];
 }
 
-export interface JenkinsJobConfig {
-  repo_path: string;
+export interface JenkinsRuleConfig {
+  id: string;
+  name: string;
+  repo_paths: string[];
   job_url: string;
 }
 
@@ -106,7 +108,8 @@ export interface JenkinsConfig {
   username: string;
   api_token_env: string;
   build_limit: number;
-  jobs: JenkinsJobConfig[];
+  detect_external_pushes: boolean;
+  rules: JenkinsRuleConfig[];
 }
 
 export interface CiConnectionTestResponse {

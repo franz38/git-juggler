@@ -51,10 +51,11 @@ def api_ci_poll(
     repo_id: str,
     run: Annotated[list[str] | None, Query()] = None,
     head_sha: str | None = None,
+    branch_name: str | None = None,
 ) -> list[CiRunInfo]:
     path = _resolve_repo_path(repo_id)
     return poll_ci_runs(
-        path, run, head_sha, config.load_github_config(), config.load_jenkins_config()
+        path, run, head_sha, branch_name, config.load_github_config(), config.load_jenkins_config()
     )
 
 

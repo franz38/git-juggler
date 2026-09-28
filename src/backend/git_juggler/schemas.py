@@ -72,9 +72,11 @@ class GitHubConfig(BaseModel):
     repos: list[GitHubRepoConfig] = Field(default_factory=list)
 
 
-class JenkinsJobConfig(BaseModel):
-    repo_path: str
-    job_url: str
+class JenkinsRuleConfig(BaseModel):
+    id: str
+    name: str
+    repo_paths: list[str] = Field(default_factory=list)
+    job_url: str = ""
 
 
 class JenkinsConfig(BaseModel):
@@ -83,7 +85,8 @@ class JenkinsConfig(BaseModel):
     username: str = ""
     api_token_env: str = "JENKINS_API_TOKEN"
     build_limit: int = 50
-    jobs: list[JenkinsJobConfig] = Field(default_factory=list)
+    detect_external_pushes: bool = True
+    rules: list[JenkinsRuleConfig] = Field(default_factory=list)
 
 
 class CiConnectionTestResponse(BaseModel):

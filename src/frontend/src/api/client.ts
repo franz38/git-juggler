@@ -39,10 +39,11 @@ export function browseDirectory(path?: string): Promise<BrowseDirectoryResponse>
  * provider can filter). With `runRefs` (`<provider>:<run_id>`): only those
  * runs, including their final status once finished.
  */
-export function pollCiRuns(repoId: string, runRefs?: string[], headSha?: string): Promise<CiRunInfo[]> {
+export function pollCiRuns(repoId: string, runRefs?: string[], headSha?: string, branchName?: string): Promise<CiRunInfo[]> {
   const params = new URLSearchParams();
   for (const ref of runRefs ?? []) params.append("run", ref);
   if (headSha) params.set("head_sha", headSha);
+  if (branchName) params.set("branch_name", branchName);
   const query = params.toString();
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/ci/poll${query ? `?${query}` : ""}`);
 }

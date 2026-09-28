@@ -19,16 +19,16 @@ class PollDispatchTest(unittest.TestCase):
     def test_discovery_asks_every_enabled_provider_for_all_active_runs(self) -> None:
         calls: list[tuple[str, object, object]] = []
 
-        def gh(path, cfg, run_ids, head_sha=None):
+        def gh(path, cfg, run_ids, head_sha=None, branch_name=None):
             calls.append(("gh", run_ids, head_sha))
             return [_run("github_actions", "1")]
 
-        def jk(path, cfg, run_ids, head_sha=None):
+        def jk(path, cfg, run_ids, head_sha=None, branch_name=None):
             calls.append(("jk", run_ids, head_sha))
             return [_run("jenkins", "http://j/job/x/3/")]
 
         with patch.object(github_actions, "poll_runs", gh), patch.object(jenkins, "poll_runs", jk):
-            runs = ci.poll_ci_runs(Path("/tmp/a"), None, "abc", None, {"enabled": True})
+            runs = ci.poll_ci_runs(Path("/tmp/a"), None, "abc", None, None, {"enabled": True})
 
         self.assertEqual([r.provider for r in runs], ["github_actions", "jenkins"])
         self.assertEqual(calls, [("gh", None, "abc"), ("jk", None, "abc")])
@@ -36,25 +36,25 @@ class PollDispatchTest(unittest.TestCase):
     def test_tracking_only_asks_the_named_providers_about_their_runs(self) -> None:
         seen: dict[str, list[str] | None] = {}
 
-        def gh(path, cfg, run_ids, head_sha=None):
+        def gh(path, cfg, run_ids, head_sha=None, branch_name=None):
             seen["gh"] = run_ids
             return []
 
-        def jk(path, cfg, run_ids, head_sha=None):
+        def jk(path, cfg, run_ids, head_sha=None, branch_name=None):
             seen["jk"] = run_ids
             return []
 
         with patch.object(github_actions, "poll_runs", gh), patch.object(jenkins, "poll_runs", jk):
             # the Jenkins run id is a URL, so it contains ':' itself
-            ci.poll_ci_runs(Path("/tmp/a"), ["github_actions:11", "github_actions:12"], None, None, {"enabled": True})
+            ci.poll_ci_runs(Path("/tmp/a"), ["github_actions:11", "github_actions:12"], None, None, None, {"enabled": True})
             self.assertEqual(seen, {"gh": ["11", "12"]})
             seen.clear()
-            ci.poll_ci_runs(Path("/tmp/a"), ["jenkins:http://j/job/x/3/"], None, None, {"enabled": True})
+            ci.poll_ci_runs(Path("/tmp/a"), ["jenkins:http://j/job/x/3/"], None, None, None, {"enabled": True})
             self.assertEqual(seen, {"jk": ["http://j/job/x/3/"]})
 
     def test_malformed_refs_are_ignored(self) -> None:
         with patch.object(github_actions, "poll_runs", lambda *a, **k: self.fail("should not be called")):
-            self.assertEqual(ci.poll_ci_runs(Path("/tmp/a"), ["nonsense", "github_actions:"], None, None, None), [])
+            self.assertEqual(ci.poll_ci_runs(Path("/tmp/a"), ["nonsense", "github_actions:"], None, None, None, None), [])
 
 
 class GitHubTrackingTest(unittest.TestCase):
@@ -133,7 +133,7 @@ class EtagCacheTest(unittest.TestCase):
 
 
 class JenkinsTrackingTest(unittest.TestCase):
-    CONFIG = {"jobs": [{"repo_path": "/tmp/repo", "job_url": "http://j/job/app"}]}
+    CONFIG = {"rules": [{"id": "r1", "name": "Rule", "repo_paths": ["/tmp/repo"], "job_url": "http://j/job/app"}]}
 
     def test_only_urls_under_a_configured_job_are_fetched(self) -> None:
         fetched: list[str] = []

@@ -19,7 +19,7 @@ class CiProvider(Protocol):
         graph and refreshed on its own, slow, interval — never by the run poll."""
         ...
 
-    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None) -> list[CiRunInfo]:
+    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None, branch_name: str | None) -> list[CiRunInfo]:
         """`run_ids=None`: every active (queued/running) run of the repo, to
         discover a pipeline that just started (`head_sha` narrows it to one
         commit where the provider can filter). Otherwise exactly those runs,
@@ -36,7 +36,7 @@ class GitHubActionsProvider:
     def fetch_completed_runs(self, repo_path: Path, commit_hashes: set[str]) -> dict[str, list[CiRunInfo]]:
         return github_actions.get_github_actions_runs(repo_path, commit_hashes, self.config or {})
 
-    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None) -> list[CiRunInfo]:
+    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None, branch_name: str | None) -> list[CiRunInfo]:
         return github_actions.poll_runs(repo_path, self.config, run_ids, head_sha)
 
 
@@ -48,8 +48,8 @@ class JenkinsProvider:
     def fetch_completed_runs(self, repo_path: Path, commit_hashes: set[str]) -> dict[str, list[CiRunInfo]]:
         return jenkins.get_jenkins_builds(repo_path, commit_hashes, self.config)
 
-    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None) -> list[CiRunInfo]:
-        return jenkins.poll_runs(repo_path, self.config, run_ids, head_sha)
+    def poll_runs(self, repo_path: Path, run_ids: list[str] | None, head_sha: str | None, branch_name: str | None) -> list[CiRunInfo]:
+        return jenkins.poll_runs(repo_path, self.config, run_ids, head_sha, branch_name)
 
 
 def enabled_providers(github_config: dict | None, jenkins_config: dict | None) -> list[CiProvider]:
@@ -78,6 +78,7 @@ def poll_ci_runs(
     repo_path: Path,
     run_refs: list[str] | None,
     head_sha: str | None,
+    branch_name: str | None,
     github_config: dict | None,
     jenkins_config: dict | None,
 ) -> list[CiRunInfo]:
@@ -86,7 +87,7 @@ def poll_ci_runs(
     providers named there are asked, about just those runs."""
     providers = enabled_providers(github_config, jenkins_config)
     if run_refs is None:
-        return [run for provider in providers for run in provider.poll_runs(repo_path, None, head_sha)]
+        return [run for provider in providers for run in provider.poll_runs(repo_path, None, head_sha, branch_name)]
 
     ids_by_provider: dict[str, list[str]] = {}
     for ref in run_refs:
@@ -97,7 +98,7 @@ def poll_ci_runs(
         run
         for provider in providers
         if provider.name in ids_by_provider
-        for run in provider.poll_runs(repo_path, ids_by_provider[provider.name], head_sha)
+        for run in provider.poll_runs(repo_path, ids_by_provider[provider.name], head_sha, branch_name)
     ]
 
 
@@ -116,7 +117,7 @@ def get_ci_run_stages(
 
 
 def _active_runs_for_repo(repo: RepoSummary, github_config: dict | None, jenkins_config: dict | None) -> list[ActivePipeline]:
-    runs = poll_ci_runs(Path(repo.path), None, None, github_config, jenkins_config)
+    runs = poll_ci_runs(Path(repo.path), None, None, None, github_config, jenkins_config)
     return [ActivePipeline(repo_id=repo.id, repo_name=repo.name, run=run) for run in runs]
 
 

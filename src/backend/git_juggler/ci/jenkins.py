@@ -2,31 +2,125 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import unquote, urlencode, urlparse
+from urllib.parse import quote, unquote, urlencode, urlparse
 from urllib.request import urlopen
 
 from .http import fetch_json
 from ..schemas import CiRunInfo, CiStage
 
 
-def _matching_job_configs(jenkins_config: dict, repo_path: Path) -> list[dict]:
-    matches: list[dict] = []
-    for item in jenkins_config.get("jobs", []):
-        if not isinstance(item, dict):
+_TEMPLATE_RE = re.compile(r"\{([A-Za-z0-9_]+)\}")
+_BRANCH_TEMPLATE_RE = re.compile(r"\{branch_[A-Za-z0-9_]+\}")
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-") or value
+
+
+def _repo_template_values(repo_path: Path) -> dict[str, str]:
+    resolved = repo_path.expanduser().resolve()
+    repo_name = resolved.name
+    repo_slug = _slug(repo_name)
+    return {
+        "repo_path": str(resolved),
+        "repo_name": repo_name,
+        "repo_name_url": quote(repo_name, safe=""),
+        "repo_slug": repo_slug,
+        "repo_slug_url": quote(repo_slug, safe=""),
+    }
+
+
+def _branch_template_values(branch_name: str | None) -> dict[str, str]:
+    if not branch_name:
+        return {}
+    branch_slug = _slug(branch_name)
+    return {
+        "branch_name": branch_name,
+        "branch_name_url": quote(branch_name, safe=""),
+        "branch_slug": branch_slug,
+        "branch_slug_url": quote(branch_slug, safe=""),
+    }
+
+
+def _render_template(value: str, values: dict[str, str]) -> str:
+    return _TEMPLATE_RE.sub(lambda match: values.get(match.group(1), match.group(0)), value)
+
+
+def _has_branch_template(value: str) -> bool:
+    return _BRANCH_TEMPLATE_RE.search(value) is not None
+
+
+def _matches_repo_path(raw_path: str, repo_path: Path, values: dict[str, str]) -> bool:
+    rendered_path = _render_template(raw_path, values).strip()
+    if rendered_path == "*":
+        return True
+    try:
+        return Path(rendered_path).expanduser().resolve() == repo_path.resolve()
+    except Exception:
+        return False
+
+
+def _render_job_config(item: dict, repo_path: Path, values: dict[str, str], branch_name: str | None) -> dict | None:
+    job_url = item.get("job_url")
+    if not isinstance(job_url, str) or not job_url:
+        return None
+    if _has_branch_template(job_url) and not branch_name:
+        return None
+    rendered = _render_template(job_url, {**values, **_branch_template_values(branch_name)})
+    return {**item, "repo_path": str(repo_path.resolve()), "job_url": rendered}
+
+
+def _matching_rule_job_configs(jenkins_config: dict, repo_path: Path, values: dict[str, str], branch_name: str | None) -> list[dict]:
+    for rule in jenkins_config.get("rules", []):
+        if not isinstance(rule, dict):
             continue
-        raw_path = item.get("repo_path")
-        job_url = item.get("job_url")
-        if not isinstance(raw_path, str) or not isinstance(job_url, str) or not job_url:
+        repo_paths = rule.get("repo_paths")
+        if not isinstance(repo_paths, list) or not any(
+            isinstance(raw_path, str) and _matches_repo_path(raw_path, repo_path, values) for raw_path in repo_paths
+        ):
             continue
-        try:
-            configured_path = Path(raw_path).expanduser().resolve()
-        except Exception:
+        rendered = _render_job_config({"repo_path": str(repo_path), "job_url": rule.get("job_url")}, repo_path, values, branch_name)
+        if rendered is not None:
+            return [rendered]
+        return []
+    return []
+
+
+def _matching_job_configs(jenkins_config: dict, repo_path: Path, branch_name: str | None = None) -> list[dict]:
+    values = _repo_template_values(repo_path)
+    return _matching_rule_job_configs(jenkins_config, repo_path, values, branch_name)
+
+
+def _job_url_prefixes(jenkins_config: dict, repo_path: Path) -> list[str]:
+    values = _repo_template_values(repo_path)
+    prefixes: list[str] = []
+    for job in _matching_job_configs(jenkins_config, repo_path):
+        prefixes.append(str(job["job_url"]).rstrip("/"))
+
+    items: list[dict] = []
+    for rule in jenkins_config.get("rules", []):
+        if not isinstance(rule, dict):
             continue
-        if configured_path == repo_path.resolve():
-            matches.append(item)
-    return matches
+        repo_paths = rule.get("repo_paths")
+        if not isinstance(repo_paths, list) or not any(
+            isinstance(raw_path, str) and _matches_repo_path(raw_path, repo_path, values) for raw_path in repo_paths
+        ):
+            continue
+        items.append({"job_url": rule.get("job_url")})
+        break
+
+    for item in items:
+        raw_url = item.get("job_url")
+        if not isinstance(raw_url, str) or not _has_branch_template(raw_url):
+            continue
+        prefix_template = _BRANCH_TEMPLATE_RE.split(raw_url, maxsplit=1)[0]
+        prefix = _render_template(prefix_template, values).rstrip("/")
+        if prefix:
+            prefixes.append(prefix)
+    return list(dict.fromkeys(prefixes))
 
 
 def _headers(jenkins_config: dict) -> dict[str, str]:
@@ -228,14 +322,13 @@ def get_build_stages(repo_path: Path, jenkins_config: dict | None, build_url: st
     followed when it lives under a job configured for this repo."""
     if not jenkins_config:
         return None
-    wanted = build_url.rstrip("/") + "/"
-    for job in _matching_job_configs(jenkins_config, repo_path):
-        if wanted.startswith(str(job["job_url"]).rstrip("/") + "/"):
-            return _fetch_build_stages(build_url, _headers(jenkins_config))
+    wanted = build_url.rstrip("/")
+    if any(wanted.startswith(prefix + "/") for prefix in _job_url_prefixes(jenkins_config, repo_path)):
+        return _fetch_build_stages(build_url, _headers(jenkins_config))
     return None
 
 
-def get_active_builds(repo_path: Path, jenkins_config: dict | None) -> list[CiRunInfo]:
+def get_active_builds(repo_path: Path, jenkins_config: dict | None, branch_name: str | None = None) -> list[CiRunInfo]:
     """Builds running right now, with their stages."""
     if not jenkins_config:
         return []
@@ -245,7 +338,7 @@ def get_active_builds(repo_path: Path, jenkins_config: dict | None) -> list[CiRu
         "actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]]]{0,10}"
     )
     result: list[CiRunInfo] = []
-    for job in _matching_job_configs(jenkins_config, repo_path):
+    for job in _matching_job_configs(jenkins_config, repo_path, branch_name):
         job_url = str(job["job_url"])
         data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
         builds = data.get("builds") if isinstance(data, dict) else None
@@ -266,7 +359,7 @@ def get_builds_by_url(repo_path: Path, jenkins_config: dict | None, build_urls: 
     if not jenkins_config:
         return []
     headers = _headers(jenkins_config)
-    job_urls = [str(job["job_url"]).rstrip("/") for job in _matching_job_configs(jenkins_config, repo_path)]
+    job_urls = _job_url_prefixes(jenkins_config, repo_path)
 
     result: list[CiRunInfo] = []
     for build_url in build_urls:
@@ -289,12 +382,13 @@ def poll_runs(
     jenkins_config: dict | None,
     run_ids: list[str] | None,
     head_sha: str | None = None,
+    branch_name: str | None = None,
 ) -> list[CiRunInfo]:
     """`run_ids=None`: every running build of the repo's jobs (discovery).
     Otherwise exactly those builds, whatever their state. Jenkins can't filter
     builds by commit, so `head_sha` is accepted for interface parity only."""
     if run_ids is None:
-        return get_active_builds(repo_path, jenkins_config)
+        return get_active_builds(repo_path, jenkins_config, branch_name)
     return get_builds_by_url(repo_path, jenkins_config, run_ids)
 
 
@@ -308,10 +402,11 @@ def test_connection(jenkins_config: dict | None) -> tuple[bool, str]:
     if isinstance(base_url, str) and base_url.strip():
         urls.append(f"{base_url.strip().rstrip('/')}/api/json")
 
-    for job in jenkins_config.get("jobs", []):
-        job_url = job.get("job_url") if isinstance(job, dict) else None
-        if isinstance(job_url, str) and job_url.strip():
-            urls.append(f"{job_url.strip().rstrip('/')}/api/json")
+    for rule in jenkins_config.get("rules", []):
+        if isinstance(rule, dict):
+            job_url = rule.get("job_url")
+            if isinstance(job_url, str) and job_url.strip() and not _has_branch_template(job_url):
+                urls.append(f"{job_url.strip().rstrip('/')}/api/json")
 
     if not urls:
         return False, "Set a Jenkins base URL or at least one job URL first."

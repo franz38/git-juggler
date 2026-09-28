@@ -42,7 +42,14 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         config = {
             "enabled": True,
             "build_limit": 10,
-            "jobs": [{"repo_path": str(repo_path), "job_url": "https://jenkins.example.com/job/my-pipeline/job/main"}],
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": [str(repo_path)],
+                    "job_url": "https://jenkins.example.com/job/my-pipeline/job/main",
+                }
+            ],
         }
 
         def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
@@ -69,6 +76,119 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         self.assertEqual(builds[sha][0].number, 7)
         self.assertEqual(builds[sha][0].branch, "origin/main")
 
+    def test_renders_parameterized_rule_for_repo(self) -> None:
+        repo_path = Path("/tmp/widgets")
+        sha = "a" * 40
+        config = {
+            "enabled": True,
+            "build_limit": 10,
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": ["/tmp/{repo_name}"],
+                    "job_url": "https://jenkins.example.com/job/{repo_name_url}",
+                }
+            ],
+        }
+        fetched_urls: list[str] = []
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            fetched_urls.append(url)
+            if "tree=builds" in url:
+                return {"builds": [{"number": 7, "url": "https://jenkins.example.com/job/widgets/7/"}]}
+            return {
+                "number": 7,
+                "url": "https://jenkins.example.com/job/widgets/7/",
+                "result": "SUCCESS",
+                "building": False,
+                "actions": [{"lastBuiltRevision": {"SHA1": sha}}],
+                "changeSet": {"items": []},
+            }
+
+        with patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            builds = jenkins.get_jenkins_builds(repo_path, {sha}, config)
+
+        self.assertIn(sha, builds)
+        self.assertTrue(fetched_urls[0].startswith("https://jenkins.example.com/job/widgets/api/json"))
+
+    def test_wildcard_rule_matches_any_repo(self) -> None:
+        repo_path = Path("/tmp/repo with spaces")
+        matches = jenkins._matching_job_configs(
+            {"rules": [{"id": "r1", "name": "Rule", "repo_paths": ["*"], "job_url": "https://jenkins.example.com/job/{repo_name_url}"}]},
+            repo_path,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["job_url"], "https://jenkins.example.com/job/repo%20with%20spaces")
+
+    def test_rule_matches_many_repos_and_renders_each_repo_name(self) -> None:
+        config = {
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": ["/tmp/api", "/tmp/web"],
+                    "job_url": "https://jenkins.example.com/job/{repo_name_url}",
+                }
+            ]
+        }
+
+        api_matches = jenkins._matching_job_configs(config, Path("/tmp/api"))
+        web_matches = jenkins._matching_job_configs(config, Path("/tmp/web"))
+        other_matches = jenkins._matching_job_configs(config, Path("/tmp/other"))
+
+        self.assertEqual(api_matches[0]["job_url"], "https://jenkins.example.com/job/api")
+        self.assertEqual(web_matches[0]["job_url"], "https://jenkins.example.com/job/web")
+        self.assertEqual(other_matches, [])
+
+    def test_branch_pipeline_is_only_rendered_with_branch_context(self) -> None:
+        config = {
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": ["/tmp/api"],
+                    "job_url": "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}",
+                }
+            ]
+        }
+
+        self.assertEqual(jenkins._matching_job_configs(config, Path("/tmp/api")), [])
+        matches = jenkins._matching_job_configs(config, Path("/tmp/api"), "feature/foo")
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["job_url"], "https://jenkins.example.com/job/api/job/feature%2Ffoo")
+
+    def test_build_url_tracking_allows_branch_template_prefix(self) -> None:
+        repo_path = Path("/tmp/api")
+        sha = "a" * 40
+        config = {
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": [str(repo_path)],
+                    "job_url": "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}",
+                }
+            ]
+        }
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            return {
+                "number": 7,
+                "url": "https://jenkins.example.com/job/api/job/feature%2Ffoo/7/",
+                "result": None,
+                "building": True,
+                "actions": [{"lastBuiltRevision": {"SHA1": sha}}],
+            }
+
+        with patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            builds = jenkins.get_builds_by_url(repo_path, config, ["https://jenkins.example.com/job/api/job/feature%2Ffoo/7/"])
+
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(builds[0].head_sha, sha)
+
     def test_maps_wfapi_stages(self) -> None:
         payload = {
             "stages": [
@@ -91,7 +211,7 @@ class JenkinsBuildParsingTest(unittest.TestCase):
 
     def test_stages_only_followed_under_configured_job(self) -> None:
         repo_path = Path("/tmp/repo")
-        config = {"jobs": [{"repo_path": str(repo_path), "job_url": "https://jenkins.example.com/job/p"}]}
+        config = {"rules": [{"id": "r1", "name": "Rule", "repo_paths": [str(repo_path)], "job_url": "https://jenkins.example.com/job/p"}]}
         fetched: list[str] = []
 
         def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
@@ -106,7 +226,7 @@ class JenkinsBuildParsingTest(unittest.TestCase):
 
     def test_active_builds_only_include_building_ones(self) -> None:
         repo_path = Path("/tmp/repo")
-        config = {"jobs": [{"repo_path": str(repo_path), "job_url": "https://jenkins.example.com/job/p"}]}
+        config = {"rules": [{"id": "r1", "name": "Rule", "repo_paths": [str(repo_path)], "job_url": "https://jenkins.example.com/job/p"}]}
 
         def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
             if "wfapi" in url:

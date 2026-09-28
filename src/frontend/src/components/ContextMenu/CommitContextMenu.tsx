@@ -140,7 +140,7 @@ export function CommitContextMenu() {
     if (!menu || !repo || !canPushUpToHere() || !remote || !branch) return;
     startPush(repo, menu.hash);
     runInTerminal(repo, `git push ${shellQuote(remote)} ${shellQuote(`${menu.hash}:refs/heads/${branch}`)}`);
-    scheduleCiRefreshAfterPush(repo);
+    scheduleCiRefreshAfterPush(repo, branch);
     closeContextMenu();
   };
 
