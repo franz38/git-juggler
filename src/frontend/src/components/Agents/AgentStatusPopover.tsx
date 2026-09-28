@@ -27,6 +27,8 @@ export interface AgentSession {
   model?: string;
   /** e.g. "auto · bg". */
   mode?: string;
+  isSubagent?: boolean;
+  parentLabel?: string;
   pid?: number | string;
   version?: string;
   sessionId?: string;
@@ -114,6 +116,7 @@ export function AgentStatusPopover(props: AgentStatusPopoverProps) {
   const chips = () =>
     [
       s().model && { k: "model", v: s().model! },
+      s().isSubagent && { k: "role", v: "subagent", title: s().parentLabel },
       s().mode && { k: "mode", v: s().mode! },
       s().pid != null && { k: "pid", v: String(s().pid) },
       s().version && { k: "v", v: s().version!, title: s().sessionId ? `session ${s().sessionId}` : undefined },
@@ -132,6 +135,12 @@ export function AgentStatusPopover(props: AgentStatusPopoverProps) {
             <div style={{ "font-size": "14px", "font-weight": 600, "line-height": "18px", color: "var(--text-h)", "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}>{s().title}</div>
             <div style={{ display: "flex", "align-items": "center", gap: "6px", "font-size": "12px", "line-height": "16px", color: "var(--text-dim)" }}>
               <span>{s().agent}</span>
+              <Show when={s().parentLabel}>
+                <>
+                  <span>·</span>
+                  <span>{s().parentLabel}</span>
+                </>
+              </Show>
               <span>·</span>
               <span style={{ display: "flex", "align-items": "center", gap: "5px", color: look().color }}>
                 <span style={{ width: "6px", height: "6px", "border-radius": "3px", background: look().color }} />

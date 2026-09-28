@@ -331,6 +331,11 @@ class AgentRepositoryScanResponse(BaseModel):
     name: str | None = None
     details: AgentSessionDetails | None = None
     waiting_for: str | None = None
+    is_subagent: bool = False
+    parent_session_id: str | None = None
+    parent_title: str | None = None
+    parent_agent: str | None = None
+    parent_provider: str | None = None
 
 
 class AgentProcessCandidateResponse(BaseModel):

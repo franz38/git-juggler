@@ -78,6 +78,8 @@ export function toAgentSession(scan: AgentRepositoryScan, activities: AgentWorkt
     agent: AGENT_LABEL[scan.provider] ?? (scan.provider || "agent"),
     state,
     model: details?.model ?? undefined,
+    isSubagent: scan.is_subagent,
+    parentLabel: scan.is_subagent ? `subagent of ${scan.parent_title ?? scan.parent_agent ?? scan.parent_session_id?.slice(0, 8) ?? "parent"}` : undefined,
     mode: [details?.permission_mode, details?.agent, details?.kind].filter(Boolean).join(" · ") || undefined,
     pid: scan.process_pid ?? undefined,
     version: details?.version ?? undefined,

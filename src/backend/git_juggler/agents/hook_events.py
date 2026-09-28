@@ -150,6 +150,7 @@ class AgentHookEventReader:
             session_events = self._since_last_prompt(session_events)
             card: ClaudeSession | None = None
             opencode_session: OpenCodeSession | None = None
+            parent_opencode_session: OpenCodeSession | None = None
             busy: bool | None = None  # what the agent itself reports, when it does
             waiting_for: str | None = None
             if provider == "claude" and registry is not None and session_id:
@@ -169,9 +170,10 @@ class AgentHookEventReader:
                     if not session_id:
                         continue  # the plugin's start event: an instance, not yet a session
                     opencode_session = self._opencode_session(session_id, opencode_signature)
-                    # Deleted, archived, or a sub-agent's session (its parent is what the user sees).
-                    if opencode_session is None or opencode_session.archived or opencode_session.is_child:
+                    if opencode_session is None or opencode_session.archived:
                         continue
+                    if opencode_session.parent_id:
+                        parent_opencode_session = self._opencode_session(opencode_session.parent_id, opencode_signature)
                     busy = opencode_session.busy
 
             activities: dict[str, AgentWorktreeActivity] = {}
@@ -240,6 +242,11 @@ class AgentHookEventReader:
                     name=card.name if card is not None else (opencode_session.title if opencode_session is not None else None),
                     details=details,
                     waiting_for=waiting_for,
+                    is_subagent=opencode_session.is_child if opencode_session is not None else False,
+                    parent_session_id=opencode_session.parent_id if opencode_session is not None else None,
+                    parent_title=parent_opencode_session.title if parent_opencode_session is not None else None,
+                    parent_agent=parent_opencode_session.agent if parent_opencode_session is not None else None,
+                    parent_provider=provider if parent_opencode_session is not None else None,
                 )
             )
         return scans, next_change

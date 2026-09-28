@@ -27,9 +27,13 @@ class OpenCodeSession:
     time_created: int | None
     time_updated: int | None
     archived: bool
-    is_child: bool
+    parent_id: str | None
     busy: bool
     last_prompt: str | None
+
+    @property
+    def is_child(self) -> bool:
+        return self.parent_id is not None
 
 
 def db_signature(path: Path | None) -> tuple | None:
@@ -117,7 +121,7 @@ def read_session(path: Path | None, session_id: str, now_ms: int | None = None) 
             time_created=time_created if isinstance(time_created, int) else None,
             time_updated=time_updated if isinstance(time_updated, int) else None,
             archived=time_archived is not None,
-            is_child=parent_id is not None,
+            parent_id=parent_id if isinstance(parent_id, str) else None,
             busy=busy,
             last_prompt=last_prompt,
         )

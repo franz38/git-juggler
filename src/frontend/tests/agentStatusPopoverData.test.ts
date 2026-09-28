@@ -41,6 +41,11 @@ const scan = (over: Partial<AgentRepositoryScan> = {}): AgentRepositoryScan => (
     worktree_path: null, worktree_name: null, worktree_branch: null,
   },
   waiting_for: null,
+  is_subagent: false,
+  parent_session_id: null,
+  parent_title: null,
+  parent_agent: null,
+  parent_provider: null,
   ...over,
 });
 
@@ -90,4 +95,10 @@ test("several worktrees are all listed with home marked; none with the setting o
   assert.deepEqual(hidden.repos, []);
   // The pending tool call still shows in the waiting box.
   assert.equal(hidden.permission?.command, "npm test");
+});
+
+test("a subagent popover keeps parent context", () => {
+  const s = toAgentSession(scan({ is_subagent: true, parent_session_id: "parent-1234", parent_title: "Parent task" }), [activity()], NOW, true);
+  assert.equal(s.isSubagent, true);
+  assert.equal(s.parentLabel, "subagent of Parent task");
 });

@@ -29,12 +29,41 @@ export function compareSessions(a: AgentRepositoryScan, b: AgentRepositoryScan):
   return sessionLastActivity(b) - sessionLastActivity(a);
 }
 
+export interface AgentSessionGroup {
+  scan: AgentRepositoryScan;
+  subagents: AgentRepositoryScan[];
+}
+
+export function groupSubagentScans(scans: AgentRepositoryScan[]): AgentSessionGroup[] {
+  const bySession = new Map(scans.map((scan) => [scan.session_id, scan]));
+  const childrenByParent = new Map<string, AgentRepositoryScan[]>();
+  const topLevel: AgentRepositoryScan[] = [];
+
+  for (const scan of scans) {
+    if (scan.is_subagent && scan.parent_session_id && bySession.has(scan.parent_session_id)) {
+      childrenByParent.set(scan.parent_session_id, [...(childrenByParent.get(scan.parent_session_id) ?? []), scan]);
+    } else {
+      topLevel.push(scan);
+    }
+  }
+
+  return topLevel.sort(compareSessions).map((scan) => ({
+    scan,
+    subagents: scan.session_id ? [...(childrenByParent.get(scan.session_id) ?? [])].sort(compareSessions) : [],
+  }));
+}
+
 export function shortCommit(commit: string): string {
   return commit.slice(0, 8);
 }
 
 export function sessionTitle(scan: AgentRepositoryScan): string {
   return scan.details?.title ?? scan.name ?? scan.session_id?.slice(0, 8) ?? `session ${Math.abs(scan.agent_pid)}`;
+}
+
+export function subagentParentLabel(scan: AgentRepositoryScan): string {
+  const parent = scan.parent_title ?? scan.parent_agent ?? scan.parent_session_id?.slice(0, 8);
+  return parent ? `subagent of ${parent}` : "subagent";
 }
 
 // "claude · pid 84730 · c6a9aaf5"

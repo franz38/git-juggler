@@ -63,3 +63,8 @@ class AgentRepositoryScan:
     details: SessionDetails | None = None
     # What the agent is blocked on ("permission prompt", "input needed"), or None.
     waiting_for: str | None = None
+    is_subagent: bool = False
+    parent_session_id: str | None = None
+    parent_title: str | None = None
+    parent_agent: str | None = None
+    parent_provider: str | None = None

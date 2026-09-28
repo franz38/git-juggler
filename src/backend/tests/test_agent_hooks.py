@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -191,8 +192,52 @@ class AgentHooksTest(unittest.TestCase):
             self._write_events(event_path, events)
             self.assertEqual(reader.recent_scans(now=start + 6000), [])
 
+    def test_opencode_child_sessions_are_returned_as_subagents_with_parent_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            self._init_repo(repo)
+            event_path = root / "events.jsonl"
+            db_path = root / "opencode.db"
+            start = 1_000_000_000_000
+            self._write_events(
+                event_path,
+                [
+                    {"provider": "opencode", "phase": "UserPromptSubmit", "cwd": str(repo), "pid": 999, "timestamp": start, "raw": {"cwd": str(repo), "sessionID": "parent"}},
+                    {"provider": "opencode", "phase": "PostToolUse", "cwd": str(repo), "pid": 999, "timestamp": start + 1000, "raw": {"cwd": str(repo), "sessionID": "child", "tool": "bash", "args": {"command": "git status"}}},
+                ],
+            )
+            connection = sqlite3.connect(db_path)
+            try:
+                connection.execute("create table session (id text primary key, title text, directory text, version text, agent text, model text, time_created integer, time_updated integer, time_archived integer, parent_id text)")
+                connection.execute("create table message (id text primary key, session_id text, data text, time_created integer, time_updated integer)")
+                connection.execute("create table part (message_id text, data text, time_created integer)")
+                connection.execute("insert into session values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("parent", "Parent task", str(repo), "1.0", "build", '{"id":"gpt-5.5"}', start, start, None, None))
+                connection.execute("insert into session values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("child", "Child task", str(repo), "1.0", "review", '{"id":"gpt-5.5"}', start, start + 1000, None, "parent"))
+                connection.commit()
+            finally:
+                connection.close()
+
+            reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=db_path)
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
+                scans = reader.recent_scans(now=start + 2000)
+
+            by_session = {scan.session_id: scan for scan in scans}
+            self.assertEqual(set(by_session), {"parent", "child"})
+            self.assertFalse(by_session["parent"].is_subagent)
+            self.assertTrue(by_session["child"].is_subagent)
+            self.assertEqual(by_session["child"].parent_session_id, "parent")
+            self.assertEqual(by_session["child"].parent_title, "Parent task")
+            self.assertEqual(by_session["child"].parent_agent, "build")
+            self.assertEqual(by_session["child"].parent_provider, "opencode")
+
     def test_claude_install_includes_session_end_hook(self) -> None:
         self.assertIn("SessionEnd", agent_hooks._claude_snippet_dict()["hooks"])
+
+    def test_claude_hook_matcher_includes_task_tool(self) -> None:
+        hooks = agent_hooks._claude_snippet_dict()["hooks"]
+        self.assertIn("Task", hooks["PreToolUse"][0]["matcher"])
+        self.assertIn("Task", hooks["PostToolUse"][0]["matcher"])
 
     def _card(self, directory: Path, pid: int, session_id: str, status: str = "idle", name: str | None = "my session", waiting_for: str | None = None) -> None:
         card = {"pid": pid, "sessionId": session_id, "status": status, "kind": "bg", "name": name, "cwd": "/x"}

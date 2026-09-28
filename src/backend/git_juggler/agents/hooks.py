@@ -102,8 +102,8 @@ def _claude_snippet_dict() -> dict:
         "hooks": {
             "SessionStart": [_claude_hook_entry("SessionStart")],
             "UserPromptSubmit": [_claude_hook_entry("UserPromptSubmit")],
-            "PreToolUse": [_claude_hook_entry("PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
-            "PostToolUse": [_claude_hook_entry("PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS")],
+            "PreToolUse": [_claude_hook_entry("PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task")],
+            "PostToolUse": [_claude_hook_entry("PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task")],
             "SessionEnd": [_claude_hook_entry("SessionEnd")],
         }
     }

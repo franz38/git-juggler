@@ -46,6 +46,11 @@ def _agent_scan_response(scan: AgentRepositoryScan) -> AgentRepositoryScanRespon
         name=scan.name,
         details=scan.details.__dict__ if scan.details is not None else None,
         waiting_for=scan.waiting_for,
+        is_subagent=scan.is_subagent,
+        parent_session_id=scan.parent_session_id,
+        parent_title=scan.parent_title,
+        parent_agent=scan.parent_agent,
+        parent_provider=scan.parent_provider,
     )
 
 

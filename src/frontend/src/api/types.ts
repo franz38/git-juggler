@@ -300,6 +300,11 @@ export interface AgentRepositoryScan {
   details: AgentSessionDetails | null;
   /** Set while the agent is blocked on the user: "permission prompt" or "input needed". */
   waiting_for?: string | null;
+  is_subagent: boolean;
+  parent_session_id: string | null;
+  parent_title: string | null;
+  parent_agent: string | null;
+  parent_provider: string | null;
 }
 
 export interface AgentProcessCandidate {
