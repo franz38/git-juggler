@@ -160,6 +160,45 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["job_url"], "https://jenkins.example.com/job/api/job/feature%2Ffoo")
 
+    def test_maps_builds_from_each_branch_job_for_branch_template(self) -> None:
+        repo_path = Path("/tmp/api")
+        sha = "a" * 40
+        config = {
+            "build_limit": 10,
+            "rules": [
+                {
+                    "id": "r1",
+                    "name": "Rule",
+                    "repo_paths": [str(repo_path)],
+                    "job_url": "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}",
+                }
+            ],
+        }
+        fetched_urls: list[str] = []
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            fetched_urls.append(url)
+            if url.startswith("https://jenkins.example.com/job/api/job/feature%2Ffoo/"):
+                return None  # no Jenkins job for this branch
+            if "tree=builds" in url:
+                return {"builds": [{"number": 2, "url": "https://jenkins.example.com/job/api/job/main/2/"}]}
+            return {
+                "number": 2,
+                "url": "https://jenkins.example.com/job/api/job/main/2/",
+                "result": "FAILURE",
+                "building": False,
+                "actions": [{"lastBuiltRevision": {"SHA1": sha}}],
+                "changeSet": {"items": []},
+            }
+
+        with patch.object(jenkins, "_branch_names", lambda path: ["main", "feature/foo"]), patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            builds = jenkins.get_jenkins_builds(repo_path, {sha}, config)
+
+        self.assertEqual(list(builds), [sha])
+        self.assertEqual(builds[sha][0].name, "api/main")
+        self.assertEqual(builds[sha][0].status, "failure")
+        self.assertTrue(any(url.startswith("https://jenkins.example.com/job/api/job/feature%2Ffoo/api/json") for url in fetched_urls))
+
     def test_build_url_tracking_allows_branch_template_prefix(self) -> None:
         repo_path = Path("/tmp/api")
         sha = "a" * 40
