@@ -8,6 +8,8 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlencode, urlparse
 from urllib.request import urlopen
 
+from git import InvalidGitRepositoryError, NoSuchPathError, Repo
+
 from .http import fetch_json
 from ..schemas import CiRunInfo, CiStage
 
@@ -132,6 +134,18 @@ def _headers(jenkins_config: dict) -> dict[str, str]:
         encoded = base64.b64encode(f"{username}:{token}".encode("utf-8")).decode("ascii")
         headers["Authorization"] = f"Basic {encoded}"
     return headers
+
+
+def _default_branch(repo_path: Path) -> str | None:
+    try:
+        names = {head.name for head in Repo(repo_path).heads}
+    except (InvalidGitRepositoryError, NoSuchPathError, OSError):
+        return None
+    if "main" in names:
+        return "main"
+    if "master" in names:
+        return "master"
+    return None
 
 
 def _fetch_json(url: str, headers: dict[str, str]) -> dict | None:
@@ -416,6 +430,28 @@ def test_connection(jenkins_config: dict | None) -> tuple[bool, str]:
         if _fetch_json(url, headers) is not None:
             return True, f"Connected to {url.removesuffix('/api/json')}."
     return False, "Could not reach Jenkins with the current settings."
+
+
+def test_rule_connection(jenkins_config: dict | None, rule: dict, repo_path: Path) -> tuple[bool, str]:
+    """Render one rule for one repo's default branch and check the Jenkins job."""
+    if not jenkins_config:
+        return False, "Jenkins settings are empty."
+    branch = _default_branch(repo_path)
+    if not branch:
+        return False, f"{repo_path.name}: no local main or master branch found."
+
+    rendered = _render_job_config({"repo_path": str(repo_path), "job_url": rule.get("job_url")}, repo_path, _repo_template_values(repo_path), branch)
+    if rendered is None:
+        return False, f"{repo_path.name}: rule does not have a Jenkins job URL."
+
+    job_url = str(rendered["job_url"]).strip().rstrip("/")
+    if not job_url:
+        return False, f"{repo_path.name}: rule does not have a Jenkins job URL."
+
+    api_url = f"{job_url}/api/json"
+    if _fetch_json(api_url, _headers(jenkins_config)) is not None:
+        return True, f"{repo_path.name} ({branch}): connected to {job_url}."
+    return False, f"{repo_path.name} ({branch}): could not reach {job_url}."
 
 
 def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config: dict | None) -> dict[str, list[CiRunInfo]]:

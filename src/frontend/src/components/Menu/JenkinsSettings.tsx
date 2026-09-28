@@ -1,5 +1,5 @@
 import { Index, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
-import { testJenkinsConnection } from "../../api/client";
+import { testJenkinsConnection, testJenkinsRule } from "../../api/client";
 import type { JenkinsConfig, JenkinsRuleConfig } from "../../api/types";
 import { CiPollField } from "./CiPollField";
 import { NumberField } from "../inputs/NumberField";
@@ -32,6 +32,8 @@ export function JenkinsSettings() {
   const [draft, setDraft] = createSignal<JenkinsConfig>(emptyJenkinsConfig);
   const [hasRuleDraftChanges, setHasRuleDraftChanges] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [testingRuleKey, setTestingRuleKey] = createSignal<string | null>(null);
+  const [ruleTestResults, setRuleTestResults] = createSignal<Record<string, { ok: boolean; message: string }>>({});
   const [testResult, setTestResult] = createSignal<{ ok: boolean; message: string } | null>(null);
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let pendingSave: JenkinsConfig | null = null;
@@ -164,6 +166,23 @@ export function JenkinsSettings() {
     saveNow({ ...nextDraft, rules: nextSavedRules });
   };
 
+  const repoName = (path: string) => repos().find((repo) => repo.path === path)?.name ?? path.split(/[\\/]/).pop() ?? path;
+
+  const testRuleForRepo = async (rule: JenkinsRuleConfig, repoPath: string) => {
+    const key = `${rule.id}:${repoPath}`;
+    if (testingRuleKey()) return;
+    setTestingRuleKey(key);
+    setRuleTestResults((current) => ({ ...current, [key]: { ok: true, message: `${repoName(repoPath)}: checking Jenkins pipeline...` } }));
+    try {
+      const result = await testJenkinsRule({ config: normalize(draft()), rule, repo_path: repoPath });
+      setRuleTestResults((current) => ({ ...current, [key]: result }));
+    } catch (e) {
+      setRuleTestResults((current) => ({ ...current, [key]: { ok: false, message: (e as Error).message } }));
+    } finally {
+      setTestingRuleKey(null);
+    }
+  };
+
   const handleTest = async () => {
     if (testing()) return;
     setTesting(true);
@@ -249,6 +268,28 @@ export function JenkinsSettings() {
                 </div>
                 <MultiSelect options={repoOptionsForRule(ruleIndex)} selected={rule().repo_paths} onChange={(next) => updateRule(ruleIndex, "repo_paths", next)} placeholder="Select repos" />
                 <input type="text" value={rule().job_url} placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}" onInput={(e) => updateRule(ruleIndex, "job_url", e.currentTarget.value)} />
+                <Show when={rule().repo_paths.length > 0}>
+                  <div class="jenkins-rule-repo-tests">
+                    <Index each={rule().repo_paths}>
+                      {(repoPath) => {
+                        const key = () => `${rule().id}:${repoPath()}`;
+                        const result = () => ruleTestResults()[key()];
+                        const running = () => testingRuleKey() === key();
+                        return (
+                          <div class="jenkins-rule-repo-test">
+                            <button type="button" class="jenkins-rule-play" title={`Check ${repoName(repoPath())} on main/master`} disabled={running() || ruleDirty(rule()) || !ruleCanSave(rule())} onClick={() => void testRuleForRepo(rule(), repoPath())}>
+                              ▶
+                            </button>
+                            <span class="jenkins-rule-repo-name">{repoName(repoPath())}</span>
+                            <Show when={result()}>
+                              {(item) => <span class="jenkins-rule-test-log" classList={{ success: item().ok, error: !item().ok }}>{running() ? `${repoName(repoPath())}: checking Jenkins pipeline...` : item().message}</span>}
+                            </Show>
+                          </div>
+                        );
+                      }}
+                    </Index>
+                  </div>
+                </Show>
               </div>
             )}
           </Index>

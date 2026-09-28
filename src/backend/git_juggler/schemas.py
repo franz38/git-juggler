@@ -89,6 +89,12 @@ class JenkinsConfig(BaseModel):
     rules: list[JenkinsRuleConfig] = Field(default_factory=list)
 
 
+class JenkinsRuleTestRequest(BaseModel):
+    config: JenkinsConfig
+    rule: JenkinsRuleConfig
+    repo_path: str
+
+
 class CiConnectionTestResponse(BaseModel):
     ok: bool
     message: str

@@ -189,6 +189,30 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         self.assertEqual(len(builds), 1)
         self.assertEqual(builds[0].head_sha, sha)
 
+    def test_rule_connection_renders_default_branch_url(self) -> None:
+        repo_path = Path("/tmp/api")
+        config = {"username": "u", "api_token_env": "TOKEN", "rules": []}
+        rule = {"id": "r1", "name": "Rule", "repo_paths": [str(repo_path)], "job_url": "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}"}
+        fetched: list[str] = []
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            fetched.append(url)
+            return {"name": "main"}
+
+        with patch.object(jenkins, "_default_branch", lambda path: "main"), patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            ok, message = jenkins.test_rule_connection(config, rule, repo_path)
+
+        self.assertTrue(ok)
+        self.assertEqual(fetched, ["https://jenkins.example.com/job/api/job/main/api/json"])
+        self.assertIn("api (main): connected", message)
+
+    def test_rule_connection_reports_missing_default_branch(self) -> None:
+        with patch.object(jenkins, "_default_branch", lambda path: None):
+            ok, message = jenkins.test_rule_connection({"enabled": True}, {"job_url": "https://jenkins.example.com/job/p"}, Path("/tmp/api"))
+
+        self.assertFalse(ok)
+        self.assertIn("no local main or master branch", message)
+
     def test_maps_wfapi_stages(self) -> None:
         payload = {
             "stages": [
