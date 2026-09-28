@@ -6,14 +6,16 @@ import {
   agentSessionCountsByRepositoryId,
   agentsEnabled,
   closeTab,
+  moveTabToPane,
   moveTab,
   openRepoContextMenu,
+  type PaneId,
   pinTab,
   repoUnavailable,
   repoCurrentBranch,
   repos,
-  tabs,
   type AgentSessionCounts,
+  type TabInfo,
 } from "../../state/store";
 
 // Agent sessions working in this tab's repository (none when agent detection
@@ -24,7 +26,7 @@ function agentCounts(tabId: string): AgentSessionCounts {
   return (repositoryId && agentSessionCountsByRepositoryId().get(repositoryId)) || { total: 0, active: 0 };
 }
 
-export function TabsBar() {
+export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
   const [draggedTabId, setDraggedTabId] = createSignal<string | null>(null);
   const tabElements = new Map<string, HTMLDivElement>();
 
@@ -49,6 +51,7 @@ export function TabsBar() {
     if (event.button !== 0 || (event.target as HTMLElement).closest(".tab-close")) return;
     const startX = event.clientX;
     const startY = event.clientY;
+    let lastClientX = event.clientX;
     let dragging = false;
     let ghost: HTMLElement | null = null;
     let grabOffsetX = 0;
@@ -75,6 +78,7 @@ export function TabsBar() {
     };
 
     const onMove = (e: PointerEvent) => {
+      lastClientX = e.clientX;
       if (!dragging) {
         if (Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
         dragging = true;
@@ -93,6 +97,8 @@ export function TabsBar() {
       if (dragging) {
         suppressClick = true;
         setTimeout(() => (suppressClick = false), 0);
+        const dropPane = paneFromPoint(lastClientX);
+        if (dropPane && dropPane !== props.pane) moveTabToPane(tabId, dropPane);
       }
       clearDrag();
     };
@@ -118,7 +124,7 @@ export function TabsBar() {
   // target index and only reordering on drop -- the list reorders live as
   // you drag, no gap/ghost placeholder needed.
   const maybeSwap = (draggedId: string, clientX: number) => {
-    const currentTabs = tabs();
+    const currentTabs = props.tabs;
     const draggedIndex = currentTabs.findIndex((tab) => tab.id === draggedId);
     if (draggedIndex === -1) return;
     const draggedEl = tabElements.get(draggedId);
@@ -150,9 +156,15 @@ export function TabsBar() {
     }
   };
 
+  const paneFromPoint = (clientX: number): PaneId | null => {
+    const el = document.elementFromPoint(clientX, 40) as HTMLElement | null;
+    if (!el?.closest("[data-tab-pane]") && clientX > window.innerWidth * 0.72) return "right";
+    return el?.closest<HTMLElement>("[data-tab-pane]")?.dataset.tabPane === "right" ? "right" : el?.closest("[data-tab-pane]") ? "left" : null;
+  };
+
   return (
     <div class="tabs-bar">
-      <For each={tabs()}>
+      <For each={props.tabs}>
         {(tab) => (
           <div
             ref={(el) => tabElements.set(tab.id, el)}

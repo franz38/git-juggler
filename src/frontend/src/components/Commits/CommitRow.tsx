@@ -3,15 +3,15 @@ import type { CommitSummary } from "../../api/types";
 import { formatDate } from "../../lib/formatDate";
 import {
   COLLAPSED_ROW_HEIGHT,
-  ciRuns,
-  commitDetails,
-  expandedHashes,
-  matchingHashes,
+  ciRunsForRepo,
+  commitDetailsForRepo,
+  expandedHashesForRepo,
+  matchingHashesForRepo,
   openBranchContextMenu,
   openContextMenu,
   observeRowHeight,
   openTagContextMenu,
-  toggleExpand,
+  toggleExpandForRepo,
 } from "../../state/store";
 import { BranchBadge } from "../Badges/BranchBadge";
 import { CiRunBadge } from "../Badges/CiRunBadge";
@@ -19,11 +19,11 @@ import { StashBadge } from "../Badges/StashBadge";
 import { TagBadge } from "../Badges/TagBadge";
 import { CommitDetailView } from "./CommitDetail";
 
-export function CommitRow(props: { commit: CommitSummary }) {
+export function CommitRow(props: { repoId: string; commit: CommitSummary }) {
   let rowRef: HTMLDivElement | undefined;
-  const isExpanded = () => expandedHashes().has(props.commit.hash);
-  const isMatch = () => matchingHashes().has(props.commit.hash);
-  const runs = () => ciRuns()[props.commit.hash] ?? [];
+  const isExpanded = () => expandedHashesForRepo(props.repoId).has(props.commit.hash);
+  const isMatch = () => matchingHashesForRepo(props.repoId).has(props.commit.hash);
+  const runs = () => ciRunsForRepo(props.repoId)[props.commit.hash] ?? [];
   const openRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     openContextMenu(e.clientX, e.clientY, props.commit.hash);
@@ -42,7 +42,7 @@ export function CommitRow(props: { commit: CommitSummary }) {
   // The graph SVG stacks its dots using each row's real rendered height
   // (not an estimate) so it can never drift out of alignment with the list.
   onMount(() => {
-    onCleanup(observeRowHeight(rowRef!, props.commit.hash));
+    onCleanup(observeRowHeight(rowRef!, `${props.repoId}:${props.commit.hash}`));
   });
 
   return (
@@ -56,7 +56,7 @@ export function CommitRow(props: { commit: CommitSummary }) {
       <div
         class="commit-row-main"
         style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }}
-        onClick={() => toggleExpand(props.commit.hash)}
+        onClick={() => toggleExpandForRepo(props.repoId, props.commit.hash)}
       >
         <span class="commit-refs">
           <For each={props.commit.refs.branches}>{(b) => <BranchBadge name={b} onContextMenu={openBranchMenu(b, false)} />}</For>
@@ -73,7 +73,7 @@ export function CommitRow(props: { commit: CommitSummary }) {
         <span class="commit-hash mono">{props.commit.short_hash}</span>
       </div>
       <Show when={isExpanded()}>
-        <CommitDetailView detail={commitDetails()[props.commit.hash]} />
+        <CommitDetailView detail={commitDetailsForRepo(props.repoId)[props.commit.hash]} />
       </Show>
     </div>
   );

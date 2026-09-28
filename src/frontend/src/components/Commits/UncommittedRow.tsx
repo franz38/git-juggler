@@ -3,15 +3,14 @@ import type { FileChange } from "../../api/types";
 import {
   COLLAPSED_ROW_HEIGHT,
   UNCOMMITTED_ROW_KEY,
-  activeRepo,
   observeRowHeight,
   openFileDiff,
   runInTerminal,
   scheduleCommitRefresh,
   scheduleGraphRefresh,
   shellQuote,
-  toggleUncommittedExpanded,
-  uncommittedExpanded,
+  toggleUncommittedExpandedForRepo,
+  uncommittedExpandedForRepo,
 } from "../../state/store";
 import { LineCounts } from "./LineCounts";
 
@@ -49,7 +48,7 @@ function CheckBox(props: { state: "on" | "off" | "mixed" }) {
   );
 }
 
-export function UncommittedRow(props: { files: FileChange[] }) {
+export function UncommittedRow(props: { repoId: string; files: FileChange[] }) {
   let rowRef: HTMLDivElement | undefined;
   const [selectedPaths, setSelectedPaths] = createSignal<Set<string>>(new Set());
   const [message, setMessage] = createSignal("");
@@ -84,24 +83,22 @@ export function UncommittedRow(props: { files: FileChange[] }) {
   const selectedPathArgs = () => selected().map((file) => shellQuote(file.path)).join(" ");
 
   const runCommit = () => {
-    const repo = activeRepo();
-    if (!repo || !canCommit()) return;
-    runInTerminal(repo, `git add -- ${selectedPathArgs()} && git commit -m ${shellQuote(message().trim())}`);
+    if (!canCommit()) return;
+    runInTerminal(props.repoId, `git add -- ${selectedPathArgs()} && git commit -m ${shellQuote(message().trim())}`);
     // The terminal also detects commits typed directly by the user (see
     // TerminalPanel), but we already know for certain one just happened
     // here, so schedule the refresh directly rather than relying on that
     // heuristic.
-    scheduleCommitRefresh(repo);
+    scheduleCommitRefresh(props.repoId);
     setMessage("");
   };
 
   const runStash = () => {
-    const repo = activeRepo();
-    if (!repo || count() === 0) return;
+    if (count() === 0) return;
     const text = message().trim();
     const messageArg = text ? ` -m ${shellQuote(text)}` : "";
-    runInTerminal(repo, `git stash push -u${messageArg} -- ${selectedPathArgs()}`);
-    scheduleGraphRefresh(repo);
+    runInTerminal(props.repoId, `git stash push -u${messageArg} -- ${selectedPathArgs()}`);
+    scheduleGraphRefresh(props.repoId);
     setMessage("");
   };
 
@@ -113,18 +110,18 @@ export function UncommittedRow(props: { files: FileChange[] }) {
   };
 
   onMount(() => {
-    onCleanup(observeRowHeight(rowRef!, UNCOMMITTED_ROW_KEY));
+    onCleanup(observeRowHeight(rowRef!, `${props.repoId}:${UNCOMMITTED_ROW_KEY}`));
   });
 
   return (
-    <div ref={rowRef} class="commit-row uncommitted-row" classList={{ expanded: uncommittedExpanded() }} onContextMenu={(e) => e.preventDefault()}>
-      <div class="commit-row-main" style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }} onClick={toggleUncommittedExpanded}>
+    <div ref={rowRef} class="commit-row uncommitted-row" classList={{ expanded: uncommittedExpandedForRepo(props.repoId) }} onContextMenu={(e) => e.preventDefault()}>
+      <div class="commit-row-main" style={{ height: `${COLLAPSED_ROW_HEIGHT}px` }} onClick={() => toggleUncommittedExpandedForRepo(props.repoId)}>
         <span class="commit-refs">
           <span class="badge uncommitted-badge">working tree</span>
         </span>
         <span class="commit-subject">Uncommitted changes ({props.files.length})</span>
       </div>
-      <Show when={uncommittedExpanded()}>
+      <Show when={uncommittedExpandedForRepo(props.repoId)}>
         <div class="commit-detail commit-panel-container">
           <div class="commit-panel" onClick={(e) => e.stopPropagation()}>
             <div class="commit-panel-compose">
@@ -211,8 +208,7 @@ export function UncommittedRow(props: { files: FileChange[] }) {
                             title="View changes"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const repo = activeRepo();
-                              if (repo) openFileDiff(repo, null, f);
+                              openFileDiff(props.repoId, null, f);
                             }}
                           >
                             {name}

@@ -22,7 +22,9 @@ import { DeleteTagModal } from "./components/Tags/DeleteTagModal";
 import { WelcomeWizard } from "./components/Welcome/WelcomeWizard";
 import {
   activeRepo,
+  activeRepoForPane,
   activateAdjacentTab,
+  activateTab,
   agentPollSeconds,
   agentsEnabled,
   keyBindings,
@@ -35,10 +37,15 @@ import {
   refreshActiveRepoCiRuns,
   CI_COMPLETED_REFRESH_INTERVAL_MS,
   repoUnavailable,
+  leftTabs,
+  rightTabs,
   setSidebarWidth,
+  setSplitRatio,
   sidebarTab,
   setTerminalHeight,
   sidebarWidth,
+  splitActive,
+  splitRatio,
   tabs,
   terminalHeight,
   terminalOpen,
@@ -160,6 +167,61 @@ function App() {
     window.addEventListener("mouseup", onUp);
   };
 
+  const startSplitResize = (e: MouseEvent) => {
+    e.preventDefault();
+    const main = (e.currentTarget as HTMLElement).closest(".workspace-panes") as HTMLElement | null;
+    if (!main) return;
+    const rect = main.getBoundingClientRect();
+    const onMove = (ev: MouseEvent) => {
+      setSplitRatio((ev.clientX - rect.left) / rect.width);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const renderPane = (pane: "left" | "right") => {
+    const paneTabs = () => (pane === "right" ? rightTabs() : leftTabs());
+    const paneRepo = () => activeRepoForPane(pane);
+    return (
+      <section
+        class="workspace-pane"
+        data-tab-pane={pane}
+        style={splitActive() ? { flex: pane === "left" ? `${splitRatio()} 1 0` : `${1 - splitRatio()} 1 0` } : undefined}
+        onMouseDown={() => {
+          const repo = paneRepo();
+          if (repo && activeRepo() !== repo) activateTab(repo);
+        }}
+      >
+        <Show when={paneTabs().length > 0}>
+          <div class="main-header">
+            <TabsBar pane={pane} tabs={paneTabs()} />
+            <SearchBox />
+          </div>
+        </Show>
+        <div class="content">
+          <Show when={paneRepo()} fallback={<div class="empty-state">Drop a tab here to split the view</div>}>
+            {(repo) => (
+              <Show when={!repoUnavailable(repo())} fallback={<div class="empty-state unavailable-state">Repository is no longer in the configured scan paths.</div>}>
+                <div class="graph-and-list">
+                  <div class="graph-column">
+                    <GraphPanel repoId={repo()} />
+                  </div>
+                  <div class="list-column">
+                    <CommitList repoId={repo()} />
+                  </div>
+                </div>
+              </Show>
+            )}
+          </Show>
+        </div>
+      </section>
+    );
+  };
+
   return (
     <div class="app">
       <WelcomeWizard />
@@ -179,24 +241,11 @@ function App() {
       <Sidebar />
       <div class="sidebar-resize-handle" onMouseDown={startSidebarResize} />
       <main class="main">
-        <Show when={tabs().length > 0}>
-          <div class="main-header">
-            <TabsBar />
-            <SearchBox />
-          </div>
-        </Show>
-        <div class="content">
-          <Show when={activeRepo()} fallback={<div class="empty-state">Select a repository to see its graph</div>}>
-            <Show when={!repoUnavailable(activeRepo()!)} fallback={<div class="empty-state unavailable-state">Repository is no longer in the configured scan paths.</div>}>
-              <div class="graph-and-list">
-                <div class="graph-column">
-                  <GraphPanel />
-                </div>
-                <div class="list-column">
-                  <CommitList />
-                </div>
-              </div>
-            </Show>
+        <div class="workspace-panes" classList={{ split: splitActive() }}>
+          {renderPane("left")}
+          <Show when={splitActive()}>
+            <div class="split-resize-handle" onMouseDown={startSplitResize} />
+            {renderPane("right")}
           </Show>
         </div>
         <div

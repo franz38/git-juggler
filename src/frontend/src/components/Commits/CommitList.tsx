@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, on, onCleanup, onMount } from "solid-js";
-import { COLLAPSED_ROW_HEIGHT, activeRepo, errorMessage, fetchingRepos, graphHasMore, graphLoading, graphLoadingMore, loadMoreCommits, rowLayout, uncommittedFiles, workingTreeVisible } from "../../state/store";
+import { COLLAPSED_ROW_HEIGHT, errorMessageForRepo, fetchingRepos, graphHasMoreForRepo, graphLoadingForRepo, graphLoadingMoreForRepo, loadMoreCommits, rowLayoutForRepo, uncommittedFilesForRepo, workingTreeVisibleForRepo } from "../../state/store";
 import { CommitRow } from "./CommitRow";
 import { UncommittedRow } from "./UncommittedRow";
 
@@ -7,7 +7,7 @@ import { UncommittedRow } from "./UncommittedRow";
 // is requested, so it's usually there by the time the user scrolls to it.
 const LOAD_MORE_MARGIN_PX = 600;
 
-export function CommitList() {
+export function CommitList(props: { repoId: string }) {
   let sentinel: HTMLDivElement | undefined;
   let observer: IntersectionObserver | undefined;
 
@@ -16,8 +16,7 @@ export function CommitList() {
     observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
-        const repo = activeRepo();
-        if (repo) void loadMoreCommits(repo);
+        void loadMoreCommits(props.repoId);
       },
       { root: sentinel.closest(".graph-and-list"), rootMargin: `0px 0px ${LOAD_MORE_MARGIN_PX}px 0px` },
     );
@@ -30,7 +29,7 @@ export function CommitList() {
   // rows), nothing would fire again, so re-observe to get a fresh report.
   createEffect(
     on(
-      [() => rowLayout().order.length, graphHasMore, graphLoadingMore, activeRepo],
+      [() => rowLayoutForRepo(props.repoId).order.length, () => graphHasMoreForRepo(props.repoId), () => graphLoadingMoreForRepo(props.repoId), () => props.repoId],
       () => {
         if (!observer || !sentinel) return;
         observer.unobserve(sentinel);
@@ -41,21 +40,20 @@ export function CommitList() {
   );
 
   const isFetching = createMemo(() => {
-    const repo = activeRepo();
-    return repo !== null && fetchingRepos().has(repo);
+    return fetchingRepos().has(props.repoId);
   });
-  const hasCommits = createMemo(() => rowLayout().order.length > 0);
+  const hasCommits = createMemo(() => rowLayoutForRepo(props.repoId).order.length > 0);
 
   return (
     <div class="commit-list">
-      <Show when={errorMessage()}>
-        <div class="error-banner">{errorMessage()}</div>
+      <Show when={errorMessageForRepo(props.repoId)}>
+        <div class="error-banner">{errorMessageForRepo(props.repoId)}</div>
       </Show>
-      <Show when={graphLoading() && !hasCommits()}>
+      <Show when={graphLoadingForRepo(props.repoId) && !hasCommits()}>
         <div class="loading-banner">Loading commits…</div>
       </Show>
-      <Show when={workingTreeVisible()}>
-        <UncommittedRow files={uncommittedFiles()} />
+      <Show when={workingTreeVisibleForRepo(props.repoId)}>
+        <UncommittedRow repoId={props.repoId} files={uncommittedFilesForRepo(props.repoId)} />
       </Show>
       {/* Matches the graph's reserved ghost-commit band so rows stay aligned
           with their dots while a fetch is running. Stays mounted (collapsed
@@ -68,14 +66,14 @@ export function CommitList() {
       >
         Fetching…
       </div>
-      <For each={rowLayout().order}>{(commit) => <CommitRow commit={commit} />}</For>
+      <For each={rowLayoutForRepo(props.repoId).order}>{(commit) => <CommitRow repoId={props.repoId} commit={commit} />}</For>
       <div
         ref={sentinel}
         class="load-more-sentinel"
-        classList={{ "load-more-sentinel--visible": graphLoadingMore() }}
+        classList={{ "load-more-sentinel--visible": graphLoadingMoreForRepo(props.repoId) }}
         style={{ "--load-more-height": `${COLLAPSED_ROW_HEIGHT}px` }}
       >
-        <Show when={graphLoadingMore()}>Loading older commits…</Show>
+        <Show when={graphLoadingMoreForRepo(props.repoId)}>Loading older commits…</Show>
       </div>
     </div>
   );

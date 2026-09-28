@@ -1,23 +1,22 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   COLLAPSED_ROW_HEIGHT,
-  activeRepo,
   agentActivity,
-  ciRuns,
-  currentBranch,
+  ciRunsForRepo,
+  currentBranchForRepo,
   fetchingRepos,
-  filteredCommits,
-  headCommit,
+  filteredCommitsForRepo,
+  headCommitForRepo,
   openContextMenu,
   pushingTargetCommits,
-  resolveVisibleParent,
+  resolveVisibleParentForRepo,
   pushingRepos,
   repos,
-  rowLayout,
+  rowLayoutForRepo,
   toggleExpand,
-  uncommittedRowHeight,
-  upstreamCommit,
-  workingTreeVisible,
+  uncommittedRowHeightForRepo,
+  upstreamCommitForRepo,
+  workingTreeVisibleForRepo,
 } from "../../state/store";
 import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
 import { colorForBranch, tagColor } from "./branchColor";
@@ -62,20 +61,19 @@ function horizontalFirstPath(x1: number, y1: number, x2: number, y2: number): st
   return `M ${x1},${y1} L ${x2 - sign * radius},${y1} Q ${x2},${y1} ${x2},${y1 + radius} L ${x2},${y2}`;
 }
 
-export function GraphPanel() {
-  const chronological = createMemo(() => filteredCommits());
-  const lanes = createMemo(() => computeColumns(chronological(), currentBranch()));
+export function GraphPanel(props: { repoId: string }) {
+  const chronological = createMemo(() => filteredCommitsForRepo(props.repoId));
+  const lanes = createMemo(() => computeColumns(chronological(), currentBranchForRepo(props.repoId)));
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
   const runningActionsByHash = createMemo(() => {
     const hashes = new Set<string>();
-    for (const [hash, runs] of Object.entries(ciRuns())) {
+    for (const [hash, runs] of Object.entries(ciRunsForRepo(props.repoId))) {
       if (runs.some((run) => run.status === "running")) hashes.add(hash);
     }
     return hashes;
   });
   const agentEntriesByHash = createMemo(() => {
-    const repoId = activeRepo();
-    const repo = repoId ? repos().find((item) => item.id === repoId) : undefined;
+    const repo = repos().find((item) => item.id === props.repoId);
     const byHash = new Map<string, AgentHoverEntry[]>();
     if (!repo) return byHash;
     for (const scan of agentActivity()?.scans ?? []) {
@@ -101,22 +99,20 @@ export function GraphPanel() {
   });
 
   const isFetching = createMemo(() => {
-    const repo = activeRepo();
-    return repo !== null && fetchingRepos().has(repo);
+    return fetchingRepos().has(props.repoId);
   });
   const isPushing = createMemo(() => {
-    const repo = activeRepo();
-    return repo !== null && pushingRepos().has(repo);
+    return pushingRepos().has(props.repoId);
   });
-  const hasDirtyGhost = createMemo(() => workingTreeVisible());
-  const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeight() : 0));
+  const hasDirtyGhost = createMemo(() => workingTreeVisibleForRepo(props.repoId));
+  const dirtyOffset = createMemo(() => (hasDirtyGhost() ? uncommittedRowHeightForRepo(props.repoId) : 0));
   // The fetch band's height is applied to real commits via a CSS-transitioned
   // group transform (see the <g> below) rather than baked into yFor, so the
   // dots slide into place instead of snapping when a fetch starts/ends.
   const fetchBandHeight = createMemo(() => (isFetching() ? GHOST_ROW_HEIGHT : 0));
   const commitOffset = createMemo(() => dirtyOffset());
   const fetchGhostY = createMemo(() => dirtyOffset() + GHOST_ROW_HEIGHT / 2);
-  const dirtyGhostY = createMemo(() => uncommittedRowHeight() / 2);
+  const dirtyGhostY = createMemo(() => uncommittedRowHeightForRepo(props.repoId) / 2);
 
   const columnFor = (hash: string) => lanes().get(hash)?.column ?? 0;
   // Lanes tighten as more are needed (see laneWidthFor), so wide graphs stay compact.
@@ -129,7 +125,7 @@ export function GraphPanel() {
   const xForColumn = (column: number) => LANE_MARGIN + column * laneWidth();
   const xFor = (hash: string) => xForColumn(columnFor(hash));
   const yFor = (hash: string) => {
-    const offset = rowLayout().offsetByHash.get(hash) ?? 0;
+    const offset = rowLayoutForRepo(props.repoId).offsetByHash.get(hash) ?? 0;
     return commitOffset() + offset + COLLAPSED_ROW_HEIGHT / 2;
   };
 
@@ -142,10 +138,10 @@ export function GraphPanel() {
   // showing no spinner at all.
   const pushingChain = createMemo<{ commits: Set<string>; edges: Set<string> }>(() => {
     if (!isPushing()) return { commits: new Set(), edges: new Set() };
-    const head = headCommit();
+    const head = headCommitForRepo(props.repoId);
     if (!head) return { commits: new Set(), edges: new Set() };
-    const upstream = upstreamCommit();
-    const targetCommit = activeRepo() ? pushingTargetCommits()[activeRepo()!] : undefined;
+    const upstream = upstreamCommitForRepo(props.repoId);
+    const targetCommit = pushingTargetCommits()[props.repoId];
     if (targetCommit) {
       const byHash = commitByHash();
       const collectAncestors = (start: string): Set<string> => {
@@ -226,7 +222,7 @@ export function GraphPanel() {
     for (const c of chronological()) {
       c.parents.forEach((parentHash, idx) => {
         // Parent outside the loaded history (or with no visible ancestor): ignore.
-        const resolved = resolveVisibleParent(parentHash, byHash);
+        const resolved = resolveVisibleParentForRepo(props.repoId, parentHash, byHash);
         if (!resolved) return;
         const parent = byHash.get(resolved.hash)!;
         const x1 = xFor(c.hash);
@@ -254,11 +250,11 @@ export function GraphPanel() {
 
   return (
     <>
-    <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayout().total}px` }}>
-      {hasDirtyGhost() && headCommit() && (
+    <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayoutForRepo(props.repoId).total}px` }}>
+      {hasDirtyGhost() && headCommitForRepo(props.repoId) && (
         <g class="dirty-ghost">
-          <line x1={xFor(headCommit()!)} y1={dirtyGhostY()} x2={xFor(headCommit()!)} y2={yFor(headCommit()!) + fetchBandHeight()} stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="2 3" opacity="0.5" />
-          <circle cx={xFor(headCommit()!)} cy={dirtyGhostY()} r={GHOST_RADIUS} fill="var(--panel-bg)" stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="3 3" opacity="0.9" />
+          <line x1={xFor(headCommitForRepo(props.repoId)!)} y1={dirtyGhostY()} x2={xFor(headCommitForRepo(props.repoId)!)} y2={yFor(headCommitForRepo(props.repoId)!) + fetchBandHeight()} stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="2 3" opacity="0.5" />
+          <circle cx={xFor(headCommitForRepo(props.repoId)!)} cy={dirtyGhostY()} r={GHOST_RADIUS} fill="var(--panel-bg)" stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="3 3" opacity="0.9" />
         </g>
       )}
       <For each={ghostMarkers()}>
@@ -287,9 +283,9 @@ export function GraphPanel() {
             <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" stroke-dasharray={seg.dashed ? "2 4" : undefined} />
           )}
         </For>
-        <For each={rowLayout().order}>
+        <For each={rowLayoutForRepo(props.repoId).order}>
           {(c) => {
-            const isCheckedOut = () => headCommit() === c.hash;
+            const isCheckedOut = () => headCommitForRepo(props.repoId) === c.hash;
             const agentEntries = () => agentEntriesByHash().get(c.hash);
             const hasActiveAgent = () => agentEntries()?.some((entry) => entry.activity.state === "active") ?? false;
             return (

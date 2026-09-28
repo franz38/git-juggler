@@ -27,6 +27,37 @@
   border-bottom: 1px solid var(--border);
 }
 
+.workspace-panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.workspace-panes.split .workspace-pane[data-tab-pane="right"] {
+  border-left: 1px solid var(--border);
+}
+
+.split-resize-handle {
+  flex: 0 0 5px;
+  margin-left: -3px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 3;
+}
+
+.split-resize-handle:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .tabs-bar {
   display: flex;
   flex: 1 1 auto;
@@ -409,7 +440,6 @@ body.tab-dragging * {
   text-align: center;
   line-height: 1.4;
 }
-
 
 
 

@@ -20,11 +20,17 @@ export interface TabInfo {
   id: string;
   name: string;
   pinned: boolean;
+  pane: PaneId;
 }
+
+export type PaneId = "left" | "right";
 
 interface PersistedTabsState {
   tabs: TabInfo[];
   activeRepo: string | null;
+  activePane?: PaneId;
+  activeRepoByPane?: Partial<Record<PaneId, string | null>>;
+  splitRatio?: number;
 }
 
 interface RepoState {
@@ -62,9 +68,13 @@ function loadTabsState(): PersistedTabsState {
     const parsedTabs = Array.isArray(parsed.tabs) ? parsed.tabs : [];
     const restoredTabs = parsedTabs
       .filter((tab) => typeof tab.id === "string" && typeof tab.name === "string")
-      .map((tab) => ({ id: tab.id, name: tab.name, pinned: Boolean(tab.pinned) }));
+      .map((tab) => {
+        const pane: PaneId = tab.pane === "right" ? "right" : "left";
+        return { id: tab.id, name: tab.name, pinned: Boolean(tab.pinned), pane };
+      });
     const restoredActive = typeof parsed.activeRepo === "string" && restoredTabs.some((tab) => tab.id === parsed.activeRepo) ? parsed.activeRepo : restoredTabs[0]?.id ?? null;
-    return { tabs: restoredTabs, activeRepo: restoredActive };
+    const activeRepoByPane = typeof parsed.activeRepoByPane === "object" && parsed.activeRepoByPane ? parsed.activeRepoByPane : undefined;
+    return { tabs: restoredTabs, activeRepo: restoredActive, activePane: parsed.activePane === "right" ? "right" : "left", activeRepoByPane, splitRatio: typeof parsed.splitRatio === "number" ? parsed.splitRatio : undefined };
   } catch {
     return { tabs: [], activeRepo: null };
   }
@@ -77,13 +87,35 @@ const [reposLoaded, setReposLoaded] = createSignal(false);
 const [reposFound, setReposFound] = createSignal(0);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
 const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
+const [activePane, setActivePaneSignal] = createSignal<PaneId>(restoredTabsState.activePane ?? "left");
+const [activeRepoByPane, setActiveRepoByPane] = createSignal<Record<PaneId, string | null>>({
+  left: restoredTabsState.activeRepoByPane?.left ?? (restoredTabsState.activePane !== "right" ? restoredTabsState.activeRepo : null),
+  right: restoredTabsState.activeRepoByPane?.right ?? (restoredTabsState.activePane === "right" ? restoredTabsState.activeRepo : null),
+});
+const [splitRatio, setSplitRatioSignal] = createSignal(restoredTabsState.splitRatio ?? 0.5);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
 const inFlightDetailRequests = new Set<string>();
 const pendingGraphRefreshes = new Set<string>();
+export { activePane, splitRatio };
 
-function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo()): void {
+export const splitActive = createMemo(() => tabs().some((tab) => tab.pane === "right"));
+export const leftTabs = createMemo(() => tabs().filter((tab) => tab.pane !== "right"));
+export const rightTabs = createMemo(() => tabs().filter((tab) => tab.pane === "right"));
+
+export function tabsForPane(pane: PaneId): TabInfo[] {
+  return pane === "right" ? rightTabs() : leftTabs();
+}
+
+export function activeRepoForPane(pane: PaneId): string | null {
+  const paneTabs = tabsForPane(pane);
+  const active = activeRepoByPane()[pane];
+  if (active && paneTabs.some((tab) => tab.id === active)) return active;
+  return paneTabs[0]?.id ?? null;
+}
+
+function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo(), nextActivePane = activePane(), nextSplitRatio = splitRatio(), nextActiveRepoByPane = activeRepoByPane()): void {
   try {
-    localStorage.setItem(TABS_STATE_KEY, JSON.stringify({ tabs: nextTabs, activeRepo: nextActiveRepo }));
+    localStorage.setItem(TABS_STATE_KEY, JSON.stringify({ tabs: nextTabs, activeRepo: nextActiveRepo, activePane: nextActivePane, activeRepoByPane: nextActiveRepoByPane, splitRatio: nextSplitRatio }));
   } catch {
     // Not critical — tabs just won't survive a reload.
   }
@@ -96,7 +128,21 @@ function setTabs(nextTabs: TabInfo[]): void {
 
 function setActiveRepo(nextActiveRepo: string | null): void {
   setActiveRepoSignal(nextActiveRepo);
-  persistTabsState(tabs(), nextActiveRepo);
+  const pane = activePane();
+  const nextByPane = { ...activeRepoByPane(), [pane]: nextActiveRepo };
+  setActiveRepoByPane(nextByPane);
+  persistTabsState(tabs(), nextActiveRepo, pane, splitRatio(), nextByPane);
+}
+
+function setActivePane(nextActivePane: PaneId): void {
+  setActivePaneSignal(nextActivePane);
+  persistTabsState(tabs(), activeRepo(), nextActivePane);
+}
+
+export function setSplitRatio(nextRatio: number): void {
+  const clamped = Math.min(0.8, Math.max(0.2, nextRatio));
+  setSplitRatioSignal(clamped);
+  persistTabsState(tabs(), activeRepo(), activePane(), clamped);
 }
 
 // Actual rendered row heights (in px), reported by each CommitRow via
@@ -921,16 +967,21 @@ function scheduleTimedGraphRefreshes(repoId: string, delays: number[]): void {
   checkoutRefreshTimers.set(repoId, timers);
 }
 
-export function openRepoTab(id: string, name: string): void {
+export function openRepoTab(id: string, name: string, pane: PaneId = activePane()): void {
   const current = tabs();
   if (!current.some((t) => t.id === id)) {
-    setTabs([...current, { id, name, pinned: false }]);
+    setTabs([...current, { id, name, pinned: false, pane }]);
+  } else if (!current.some((t) => t.id === id && t.pane === pane)) {
+    setTabs(current.map((t) => (t.id === id ? { ...t, pane } : t)));
   }
+  setActivePane(pane);
   setActiveRepo(id);
   void loadRepoGraphIfNeeded(id);
 }
 
 export function activateTab(id: string): void {
+  const tab = tabs().find((t) => t.id === id);
+  if (tab) setActivePane(tab.pane);
   setActiveRepo(id);
   void loadRepoGraphIfNeeded(id);
 }
@@ -957,6 +1008,16 @@ export function moveTab(draggedId: string, targetId: string, placement: "before"
   setTabs(next);
 }
 
+export function moveTabToPane(tabId: string, pane: PaneId): void {
+  const current = tabs();
+  const tab = current.find((item) => item.id === tabId);
+  if (!tab) return;
+  const next = current.map((item) => (item.id === tabId ? { ...item, pane } : item));
+  setTabs(next);
+  setActivePane(pane);
+  setActiveRepo(tabId);
+}
+
 export function activateAdjacentTab(direction: 1 | -1): void {
   const current = tabs();
   if (current.length === 0) return;
@@ -970,10 +1031,19 @@ export function closeTab(id: string): void {
   const current = tabs();
   const idx = current.findIndex((t) => t.id === id);
   if (idx === -1) return;
+  const closed = current[idx];
   const next = current.filter((t) => t.id !== id);
   setTabs(next);
+  const paneTabs = next.filter((t) => t.pane === closed.pane);
+  if (activeRepoByPane()[closed.pane] === id) {
+    const paneFallback = paneTabs.find((t) => current.indexOf(t) > idx) ?? paneTabs[paneTabs.length - 1] ?? null;
+    const nextByPane = { ...activeRepoByPane(), [closed.pane]: paneFallback?.id ?? null };
+    setActiveRepoByPane(nextByPane);
+    persistTabsState(next, activeRepo(), activePane(), splitRatio(), nextByPane);
+  }
   if (activeRepo() === id) {
     const fallback = next[idx] ?? next[idx - 1];
+    if (fallback) setActivePane(fallback.pane);
     setActiveRepo(fallback ? fallback.id : null);
   }
 }
@@ -982,6 +1052,7 @@ export function closeOtherTabs(id: string): void {
   const tab = tabs().find((t) => t.id === id);
   if (!tab) return;
   setTabs([tab]);
+  setActivePane(tab.pane);
   setActiveRepo(id);
 }
 
@@ -991,6 +1062,10 @@ export const commits = createMemo<CommitSummary[]>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.commits ?? [] : [];
 });
+
+export function commitsForRepo(repoId: string): CommitSummary[] {
+  return repoStates[repoId]?.commits ?? [];
+}
 
 const [authorFilter, setAuthorFilterSignal] = createSignal<string[]>([]);
 const [commentFilter, setCommentFilterSignal] = createSignal("");
@@ -1039,6 +1114,10 @@ export function setBranchSince(date: string): void {
 
 export const commitBranches = createMemo<string[]>(() => branchNames(commits()));
 
+export function commitBranchesForRepo(repoId: string): string[] {
+  return branchNames(commitsForRepo(repoId));
+}
+
 // Checked branches of the active repo, ignoring ones that no longer exist.
 export const branchFilter = createMemo<string[]>(() => {
   const name = activeRepo();
@@ -1046,6 +1125,12 @@ export const branchFilter = createMemo<string[]>(() => {
   const existing = new Set(commitBranches());
   return selected.filter((branch) => existing.has(branch));
 });
+
+export function branchFilterForRepo(repoId: string): string[] {
+  const selected = branchSelections()[repoId] ?? [];
+  const existing = new Set(commitBranchesForRepo(repoId));
+  return selected.filter((branch) => existing.has(branch));
+}
 
 export function setBranchFilter(branches: string[]): void {
   const name = activeRepo();
@@ -1058,6 +1143,10 @@ export function clearBranchFilters(): void {
 }
 
 const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
+
+export function visibleBranchHashesForRepo(repoId: string): Set<string> | null {
+  return visibleCommitHashes(commitsForRepo(repoId), branchFilterForRepo(repoId), startOfDayMs(branchSince()));
+}
 
 // Commits that survive the branch filter but are hidden by the row filters
 // (author / comment / has-tag). The graph bridges these with dashed edges
@@ -1087,6 +1176,20 @@ export const filteredCommits = createMemo<CommitSummary[]>(() => {
   return commits().filter((commit) => (!visibleByBranch || visibleByBranch.has(commit.hash)) && !hidden.has(commit.hash));
 });
 
+export function filteredCommitsForRepo(repoId: string): CommitSummary[] {
+  const authors = authorFilter();
+  const comment = commentFilter().trim().toLowerCase();
+  const tagged = tagFilter();
+  const visibleByBranch = visibleBranchHashesForRepo(repoId);
+  return commitsForRepo(repoId).filter((commit) => {
+    if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
+    if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
+    if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
+    if (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
+    return true;
+  });
+}
+
 const commitsByHash = createMemo(() => new Map(commits().map((c) => [c.hash, c])));
 
 // Follows first parents from `parentHash` through commits hidden by the row
@@ -1106,10 +1209,40 @@ export function resolveVisibleParent(parentHash: string, visible: Map<string, Co
   return null;
 }
 
+export function resolveVisibleParentForRepo(repoId: string, parentHash: string, visible: Map<string, CommitSummary>): { hash: string; skipped: boolean } | null {
+  if (visible.has(parentHash)) return { hash: parentHash, skipped: false };
+  const visibleByBranch = visibleBranchHashesForRepo(repoId);
+  const authors = authorFilter();
+  const comment = commentFilter().trim().toLowerCase();
+  const tagged = tagFilter();
+  const all = new Map(commitsForRepo(repoId).map((c) => [c.hash, c]));
+  const seen = new Set<string>();
+  let cursor: string | undefined = parentHash;
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const commit = all.get(cursor);
+    if (!commit) return null;
+    const branchHidden = visibleByBranch && !visibleByBranch.has(commit.hash);
+    const rowHidden =
+      !branchHidden &&
+      ((authors.length > 0 && !authors.includes(commit.author.name)) ||
+        (comment && !commit.subject.toLowerCase().includes(comment)) ||
+        (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")));
+    if (visible.has(cursor)) return { hash: cursor, skipped: rowHidden };
+    if (branchHidden || !rowHidden) return null;
+    cursor = commit.parents[0];
+  }
+  return null;
+}
+
 export const currentBranch = createMemo<string | null>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.currentBranch ?? null : null;
 });
+
+export function currentBranchForRepo(repoId: string): string | null {
+  return repoStates[repoId]?.currentBranch ?? null;
+}
 
 // Branches checked out in any worktree of the repo (including the one this
 // repo path points at) — see computeColumns, which gives each of these its
@@ -1124,10 +1257,18 @@ export const headCommit = createMemo<string | null>(() => {
   return name ? repoStates[name]?.headCommit ?? null : null;
 });
 
+export function headCommitForRepo(repoId: string): string | null {
+  return repoStates[repoId]?.headCommit ?? null;
+}
+
 export const upstreamCommit = createMemo<string | null>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.upstreamCommit ?? null : null;
 });
+
+export function upstreamCommitForRepo(repoId: string): string | null {
+  return repoStates[repoId]?.upstreamCommit ?? null;
+}
 
 export const upstreamRemote = createMemo<string | null>(() => {
   const name = activeRepo();
@@ -1144,6 +1285,10 @@ export const isDirty = createMemo<boolean>(() => {
   return name ? repoStates[name]?.isDirty ?? false : false;
 });
 
+export function isDirtyForRepo(repoId: string): boolean {
+  return repoStates[repoId]?.isDirty ?? false;
+}
+
 // The working-tree row belongs to HEAD, so it goes away with HEAD's branch
 // when the branch filter hides it.
 export const workingTreeVisible = createMemo<boolean>(() => {
@@ -1153,21 +1298,41 @@ export const workingTreeVisible = createMemo<boolean>(() => {
   return visible === null || visible.has(head);
 });
 
+export function workingTreeVisibleForRepo(repoId: string): boolean {
+  const head = headCommitForRepo(repoId);
+  if (head === null || !isDirtyForRepo(repoId)) return false;
+  const visible = visibleBranchHashesForRepo(repoId);
+  return visible === null || visible.has(head);
+}
+
 export const uncommittedFiles = createMemo<FileChange[]>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.uncommittedFiles ?? [] : [];
 });
+
+export function uncommittedFilesForRepo(repoId: string): FileChange[] {
+  return repoStates[repoId]?.uncommittedFiles ?? [];
+}
 
 export const uncommittedExpanded = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.uncommittedExpanded ?? false : false;
 });
 
+export function uncommittedExpandedForRepo(repoId: string): boolean {
+  return repoStates[repoId]?.uncommittedExpanded ?? false;
+}
+
 export function toggleUncommittedExpanded(): void {
   const name = activeRepo();
   if (!name) return;
   ensureRepoState(name);
   setRepoStates(name, "uncommittedExpanded", !repoStates[name].uncommittedExpanded);
+}
+
+export function toggleUncommittedExpandedForRepo(repoId: string): void {
+  ensureRepoState(repoId);
+  setRepoStates(repoId, "uncommittedExpanded", !repoStates[repoId].uncommittedExpanded);
 }
 
 // For displaying a tab's branch without it being the active repo.
@@ -1180,20 +1345,36 @@ export const expandedHashes = createMemo<Set<string>>(() => {
   return name ? repoStates[name]?.expanded ?? new Set<string>() : new Set<string>();
 });
 
+export function expandedHashesForRepo(repoId: string): Set<string> {
+  return repoStates[repoId]?.expanded ?? new Set<string>();
+}
+
 export const commitDetails = createMemo<Record<string, CommitDetail>>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.details ?? {} : {};
 });
+
+export function commitDetailsForRepo(repoId: string): Record<string, CommitDetail> {
+  return repoStates[repoId]?.details ?? {};
+}
 
 export const ciRuns = createMemo<Record<string, CiRunInfo[]>>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.ciRuns ?? {} : {};
 });
 
+export function ciRunsForRepo(repoId: string): Record<string, CiRunInfo[]> {
+  return repoStates[repoId]?.ciRuns ?? {};
+}
+
 export const graphLoading = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.loading ?? false : false;
 });
+
+export function graphLoadingForRepo(repoId: string): boolean {
+  return repoStates[repoId]?.loading ?? false;
+}
 
 // Older commits exist beyond the loaded ones (the list loads them on scroll).
 export const graphHasMore = createMemo<boolean>(() => {
@@ -1201,15 +1382,27 @@ export const graphHasMore = createMemo<boolean>(() => {
   return name ? repoStates[name]?.hasMore ?? false : false;
 });
 
+export function graphHasMoreForRepo(repoId: string): boolean {
+  return repoStates[repoId]?.hasMore ?? false;
+}
+
 export const graphLoadingMore = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.loadingMore ?? false : false;
 });
 
+export function graphLoadingMoreForRepo(repoId: string): boolean {
+  return repoStates[repoId]?.loadingMore ?? false;
+}
+
 export const errorMessage = createMemo<string | null>(() => {
   const name = activeRepo();
   return name ? repoStates[name]?.error ?? null : null;
 });
+
+export function errorMessageForRepo(repoId: string): string | null {
+  return repoStates[repoId]?.error ?? null;
+}
 
 export function toggleExpand(hash: string): void {
   const name = activeRepo();
@@ -1223,6 +1416,18 @@ export function toggleExpand(hash: string): void {
     void ensureDetail(name, hash);
   }
   setRepoStates(name, "expanded", next);
+}
+
+export function toggleExpandForRepo(repoId: string, hash: string): void {
+  ensureRepoState(repoId);
+  const next = new Set(repoStates[repoId].expanded);
+  if (next.has(hash)) {
+    next.delete(hash);
+  } else {
+    next.add(hash);
+    void ensureDetail(repoId, hash);
+  }
+  setRepoStates(repoId, "expanded", next);
 }
 
 async function ensureDetail(repo: string, hash: string): Promise<void> {
@@ -1240,7 +1445,7 @@ async function ensureDetail(repo: string, hash: string): Promise<void> {
 }
 
 function rowHeight(name: string, hash: string): number {
-  const measured = measuredHeights[hash];
+  const measured = measuredHeights[`${name}:${hash}`] ?? measuredHeights[hash];
   if (measured !== undefined) return measured;
 
   // Estimate for the single frame before ResizeObserver reports the real
@@ -1262,6 +1467,14 @@ export const uncommittedRowHeight = createMemo<number>(() => {
   return COLLAPSED_ROW_HEIGHT + 16 + uncommittedFiles().length * FILE_ROW_HEIGHT;
 });
 
+export function uncommittedRowHeightForRepo(repoId: string): number {
+  if (!isDirtyForRepo(repoId) || headCommitForRepo(repoId) === null) return 0;
+  const measured = measuredHeights[`${repoId}:${UNCOMMITTED_ROW_KEY}`] ?? measuredHeights[UNCOMMITTED_ROW_KEY];
+  if (measured !== undefined) return measured;
+  if (!repoStates[repoId]?.uncommittedExpanded) return COLLAPSED_ROW_HEIGHT;
+  return COLLAPSED_ROW_HEIGHT + 16 + uncommittedFilesForRepo(repoId).length * FILE_ROW_HEIGHT;
+}
+
 // Single source of truth for vertical layout, shared by the graph SVG and
 // the commit list so expanding a row shifts both in lockstep. Newest first,
 // which is the reverse of the backend's replay order.
@@ -1276,6 +1489,17 @@ export const rowLayout = createMemo(() => {
   }
   return { order, offsetByHash, total: y };
 });
+
+export function rowLayoutForRepo(repoId: string): { order: CommitSummary[]; offsetByHash: Map<string, number>; total: number } {
+  const order = [...filteredCommitsForRepo(repoId)].reverse();
+  const offsetByHash = new Map<string, number>();
+  let y = 0;
+  for (const c of order) {
+    offsetByHash.set(c.hash, y);
+    y += rowHeight(repoId, c.hash);
+  }
+  return { order, offsetByHash, total: y };
+}
 
 // --- Commit search -----------------------------------------------------
 // Searches the active repo's commit subject and hash. Matching rows are
@@ -1295,6 +1519,16 @@ export const matchingHashes = createMemo<Set<string>>(() => {
   }
   return matches;
 });
+
+export function matchingHashesForRepo(repoId: string): Set<string> {
+  const query = searchQuery().trim().toLowerCase();
+  if (!query) return new Set();
+  const matches = new Set<string>();
+  for (const c of filteredCommitsForRepo(repoId)) {
+    if (c.hash.toLowerCase().includes(query) || c.subject.toLowerCase().includes(query)) matches.add(c.hash);
+  }
+  return matches;
+}
 
 // --- Settings (Cmd/Ctrl+Shift+P main menu) ---------------------------------------
 
