@@ -338,9 +338,86 @@ _STAGE_STATUSES = {
 }
 
 
+# Pipeline Graph View node states (lowercased PipelineState).
+_GRAPH_STATES = {
+    "success": "success",
+    "failure": "failure",
+    "running": "running",
+    "queued": "pending",
+    "not_built": "pending",
+    "paused": "action_required",
+    "skipped": "skipped",
+    "unstable": "unstable",
+    "aborted": "aborted",
+}
+
+
+def _graph_node_label(node: dict) -> str:
+    """A step's label, else its name; an unlabelled `sh` step is named by its
+    script, so use the script's first real line."""
+    title = node.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    name = str(node.get("name") or "step")
+    lines = [line.strip() for line in name.splitlines() if line.strip() and not line.strip().startswith("#!")]
+    label = lines[0] if lines else name.strip()
+    return label if len(label) <= 80 else f"{label[:77]}..."
+
+
+def _graph_node_stage(node: dict, steps: list[CiStage] | None = None) -> CiStage:
+    duration = node.get("totalDurationMillis")
+    return CiStage(
+        name=_graph_node_label(node),
+        status=_GRAPH_STATES.get(str(node.get("state")), "unknown"),
+        started_at=_timestamp_ms_to_iso(node.get("startTimeMillis")),
+        duration_ms=duration if isinstance(duration, int) else None,
+        steps=steps,
+    )
+
+
+def _fetch_graph_view_stages(build_url: str, headers: dict[str, str]) -> list[CiStage] | None:
+    """Stages from the Pipeline Graph View plugin (`stages/tree` +
+    `stages/allSteps`). Unlike `wfapi`, it reports running parallel branches
+    and not-yet-started stages. Parallel/nested stages are flattened to their
+    leaves, which is where the steps live. None when the plugin isn't there."""
+    base = build_url.rstrip("/")
+    tree = _fetch_json(f"{base}/stages/tree", headers)
+    tree_data = tree.get("data") if isinstance(tree, dict) else None
+    raw_stages = tree_data.get("stages") if isinstance(tree_data, dict) else None
+    if not isinstance(raw_stages, list):
+        return None
+
+    all_steps = _fetch_json(f"{base}/stages/allSteps", headers)
+    steps_data = all_steps.get("data") if isinstance(all_steps, dict) else None
+    raw_steps = steps_data.get("steps") if isinstance(steps_data, dict) else None
+    steps_by_stage: dict[str, list[CiStage]] = {}
+    for step in raw_steps if isinstance(raw_steps, list) else []:
+        if isinstance(step, dict):
+            steps_by_stage.setdefault(str(step.get("stageId")), []).append(_graph_node_stage(step))
+
+    stages: list[CiStage] = []
+
+    def add_leaves(node: dict) -> None:
+        children = [child for child in node.get("children") or [] if isinstance(child, dict)]
+        if children:
+            for child in children:
+                add_leaves(child)
+            return
+        stages.append(_graph_node_stage(node, steps_by_stage.get(str(node.get("id"))) or None))
+
+    for raw in raw_stages:
+        if isinstance(raw, dict):
+            add_leaves(raw)
+    return stages
+
+
 def _fetch_build_stages(build_url: str, headers: dict[str, str]) -> list[CiStage] | None:
-    """Stages from the Pipeline Stage View plugin (`wfapi`). None when the
-    plugin isn't installed / the job isn't a pipeline (404)."""
+    """A build's stages: Pipeline Graph View when installed, else the Pipeline
+    Stage View plugin (`wfapi`). None when neither answers (not a pipeline /
+    no plugin)."""
+    stages = _fetch_graph_view_stages(build_url, headers)
+    if stages is not None:
+        return stages
     data = _fetch_json(f"{build_url.rstrip('/')}/wfapi/describe", headers)
     raw_stages = data.get("stages") if isinstance(data, dict) else None
     if not isinstance(raw_stages, list):

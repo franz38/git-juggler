@@ -299,6 +299,54 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         with patch.object(jenkins, "_fetch_json", lambda url, headers: None):
             self.assertIsNone(jenkins._fetch_build_stages("https://jenkins.example.com/job/p/7/", {}))
 
+    def test_prefers_graph_view_stages_with_parallel_branches_and_steps(self) -> None:
+        tree = {
+            "status": "ok",
+            "data": {
+                "stages": [
+                    {"id": "6", "name": "Checkout SCM", "state": "success", "children": [], "totalDurationMillis": 2000},
+                    {
+                        "id": "15",
+                        "name": "Mock CI",
+                        "state": "running",
+                        "children": [
+                            {"id": "23", "name": "Lint", "state": "success", "children": [], "startTimeMillis": 1_700_000_000_000},
+                            {"id": "24", "name": "E2E", "state": "running", "children": []},
+                        ],
+                    },
+                    {"id": "30", "name": "Deploy", "state": "not_built", "children": [], "placeholder": True},
+                ]
+            },
+        }
+        all_steps = {
+            "status": "ok",
+            "data": {
+                "steps": [
+                    {"id": "44", "name": "#!/bin/bash\n  echo lint\n  sleep 1", "title": "", "state": "success", "stageId": "23"},
+                    {"id": "45", "name": "sh", "title": "Run e2e", "state": "running", "stageId": "24"},
+                ]
+            },
+        }
+        fetched: list[str] = []
+
+        def fake_fetch_json(url: str, headers: dict[str, str]) -> dict | None:
+            fetched.append(url)
+            if url.endswith("/stages/tree"):
+                return tree
+            if url.endswith("/stages/allSteps"):
+                return all_steps
+            return None
+
+        with patch.object(jenkins, "_fetch_json", fake_fetch_json):
+            stages = jenkins._fetch_build_stages("https://jenkins.example.com/job/p/7/", {})
+
+        assert stages is not None
+        self.assertEqual([(s.name, s.status) for s in stages], [("Checkout SCM", "success"), ("Lint", "success"), ("E2E", "running"), ("Deploy", "pending")])
+        self.assertEqual([(s.name, s.status) for s in stages[1].steps or []], [("echo lint", "success")])
+        self.assertEqual([(s.name, s.status) for s in stages[2].steps or []], [("Run e2e", "running")])
+        self.assertIsNone(stages[3].steps)
+        self.assertFalse(any("wfapi" in url for url in fetched))
+
     def test_stages_only_followed_under_configured_job(self) -> None:
         repo_path = Path("/tmp/repo")
         config = {"rules": [{"id": "r1", "name": "Rule", "repo_paths": [str(repo_path)], "job_url": "https://jenkins.example.com/job/p"}]}
@@ -312,7 +360,8 @@ class JenkinsBuildParsingTest(unittest.TestCase):
             self.assertIsNone(jenkins.get_build_stages(repo_path, config, "https://evil.example.com/job/p/7/"))
             self.assertIsNone(jenkins.get_build_stages(repo_path, config, "https://jenkins.example.com/job/p-other/7/"))
             self.assertEqual(jenkins.get_build_stages(repo_path, config, "https://jenkins.example.com/job/p/7/"), [])
-        self.assertEqual(len(fetched), 1)
+        self.assertTrue(fetched)
+        self.assertTrue(all(url.startswith("https://jenkins.example.com/job/p/7/") for url in fetched))
 
     def test_active_builds_only_include_building_ones(self) -> None:
         repo_path = Path("/tmp/repo")
