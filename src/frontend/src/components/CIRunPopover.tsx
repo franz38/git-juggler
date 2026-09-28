@@ -29,6 +29,8 @@ export interface CIJob {
 export interface CIRun {
   title: string;
   url?: string;
+  /** Kept by git-juggler after the CI server deleted it: shown without a link. */
+  archived?: boolean;
   provider: "github" | "jenkins";
   status: RunStatus;
   branch: string;
@@ -156,17 +158,27 @@ export function CIRunPopover(props: CIRunPopoverProps) {
             </div>
           </Show>
           <div style={{ flex: 1, "min-width": 0, display: "flex", "flex-direction": "column", gap: "2px" }}>
-            <a
-              href={run().url ?? "#"}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => { if (props.onOpen) { e.preventDefault(); props.onOpen(); } }}
-              style={{ "font-size": "14px", "font-weight": 600, "line-height": "18px", color: "var(--accent)", "text-decoration": "none", "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}
+            <Show
+              when={!run().archived}
+              fallback={
+                <span style={{ "font-size": "14px", "font-weight": 600, "line-height": "18px", color: "var(--text-h)", "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}>
+                  {run().title}
+                </span>
+              }
             >
-              {run().title} ↗
-            </a>
+              <a
+                href={run().url ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => { if (props.onOpen) { e.preventDefault(); props.onOpen(); } }}
+                style={{ "font-size": "14px", "font-weight": 600, "line-height": "18px", color: "var(--accent)", "text-decoration": "none", "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}
+              >
+                {run().title} ↗
+              </a>
+            </Show>
             <div style={{ "font-size": "12px", "line-height": "16px", color: "var(--text-dim)" }}>
               {PROVIDER_LABEL[run().provider]} · <span style={{ color: runColor() }}>{RUN_LABEL[run().status]}</span>
+              <Show when={run().archived}> · no longer on {PROVIDER_LABEL[run().provider]}</Show>
             </div>
           </div>
           <div style={{ flex: "none", display: "flex", "flex-direction": "column", "align-items": "flex-end", gap: "2px" }}>

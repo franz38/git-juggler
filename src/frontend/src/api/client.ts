@@ -103,6 +103,12 @@ export function fetchRecentPipelines(): Promise<ActivePipeline[]> {
   return getJson(`${API_BASE}/ci/recent`);
 }
 
+/** Forget every finished CI run git-juggler has stored. */
+export async function clearCiCache(): Promise<void> {
+  const res = await fetch(`${API_BASE}/ci/cache/clear`, { method: "POST" });
+  if (!res.ok) throw new Error(`request failed (${res.status})`);
+}
+
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",

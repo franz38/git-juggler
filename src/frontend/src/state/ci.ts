@@ -4,6 +4,7 @@ export {
   MAX_CI_POLL_SECONDS,
   PIPELINE_POLL_MS,
   ciEnabled,
+  clearStoredCiRuns,
   ciPollSeconds,
   githubConfig,
   githubConfigError,

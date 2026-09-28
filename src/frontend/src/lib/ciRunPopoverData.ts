@@ -73,6 +73,7 @@ export function toCIRun(info: CiRunInfo, stages: CiStage[] | null | undefined, n
   const run: CIRun = {
     title: `${info.name} #${info.number}`,
     url: info.url || undefined,
+    archived: info.archived || undefined,
     provider: info.provider === "jenkins" ? "jenkins" : "github",
     status,
     branch: info.branch ?? "n/a",

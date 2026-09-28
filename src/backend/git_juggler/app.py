@@ -14,12 +14,14 @@ from .api.config import create_config_router
 from .api.git import router as git_router
 from .api.repos import router as repos_router
 from .api.terminal import create_terminal_router
+from .ci import run_cache
 
 
 def create_app(root_path: Path, frontend_dist: Path | None = None) -> FastAPI:
     app = FastAPI(title="git-juggler")
     app.state.root_path = root_path
     config.ensure_seeded(root_path)
+    run_cache.configure(config.CONFIG_DIR / "ci-cache.sqlite")
 
     # Only needed for local dev, when the Vite dev server (a different origin)
     # talks to this API directly instead of through its proxy.

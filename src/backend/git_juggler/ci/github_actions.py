@@ -10,10 +10,12 @@ from urllib.request import Request, urlopen
 
 from git import Repo
 
+from . import run_cache
 from .http import fetch_json
 from ..schemas import CiRunInfo, CiStage
 
 
+PROVIDER = "github_actions"
 GITHUB_RUNS_PER_PAGE = 100
 GITHUB_RUNS_MAX_PAGES = 10
 ACTIVE_RUN_STATUSES = {"queued", "in_progress", "waiting", "pending", "requested"}
@@ -257,11 +259,47 @@ def _fetch_run_stages(github_config: dict, repo_config: dict, run_id: str) -> li
 
 
 def get_run_stages(repo_path: Path, github_config: dict | None, run_id: str) -> list[CiStage] | None:
+    """A run's jobs/steps; a finished run's come from the run cache once stored."""
     github_config = github_config or {}
     repo_config = _resolve_repo_config(github_config, repo_path)
     if repo_config is None:
         return None
-    return _fetch_run_stages(github_config, repo_config, run_id)
+    cached = run_cache.get(PROVIDER, run_id)
+    if cached is not None and cached.run.stages is not None:
+        return cached.run.stages
+    stages = _fetch_run_stages(github_config, repo_config, run_id)
+    if stages is not None and cached is not None:
+        run_cache.put_stages(PROVIDER, run_id, stages)
+    return stages
+
+
+def _remember_runs(scope: str, runs: list[tuple[CiRunInfo, set[str]]]) -> None:
+    """Store the finished runs among `runs` (with the commits they match). A
+    stored run that changed since (re-run: same id, new attempt) is replaced,
+    dropping its old stages."""
+    stored = run_cache.get_many(PROVIDER, [info.run_id for info, _ in runs if info.run_id])
+    for info, shas in runs:
+        cached = stored.get(info.run_id or "")
+        if cached is not None:
+            if cached.run.updated_at == info.updated_at and cached.run.status == info.status:
+                continue
+            run_cache.delete(PROVIDER, cached.run.run_id or "")
+        run_cache.put(PROVIDER, scope, info, shas)
+
+
+def _unlisted_cached_runs(scope: str, listed: list[CiRunInfo], limit: int | None = None) -> list[run_cache.CachedRun]:
+    """Stored runs of the repo that the live listing didn't return, marked
+    `archived` when they fall inside the listed time range (so GitHub no longer
+    has them); older ones may just be past the capped listing."""
+    listed_ids = {info.run_id for info in listed}
+    oldest = min((info.created_at for info in listed if info.created_at), default=None)
+    result: list[run_cache.CachedRun] = []
+    for cached in run_cache.for_scope_prefixes(PROVIDER, [scope], limit):
+        if cached.run.run_id in listed_ids:
+            continue
+        cached.run.archived = oldest is not None and (cached.run.created_at or "") >= oldest
+        result.append(cached)
+    return result
 
 
 def get_active_runs(repo_path: Path, github_config: dict | None, head_sha: str | None = None) -> list[CiRunInfo]:
@@ -311,7 +349,10 @@ def get_recent_runs(repo_path: Path, github_config: dict | None, limit: int) -> 
         return []
     data = _get_json_cached(f"{repo_url}/actions/runs?{urlencode({'per_page': '30'})}", _headers(github_config))
     items = data.get("workflow_runs") if isinstance(data, dict) else None
-    return [_run_info(run) for run in (items if isinstance(items, list) else []) if isinstance(run, dict)][:limit]
+    listed = [_run_info(run) for run in (items if isinstance(items, list) else []) if isinstance(run, dict)]
+    _remember_runs(repo_url, [(info, {info.head_sha} if info.head_sha else set()) for info in listed])
+    archived = [cached.run for cached in _unlisted_cached_runs(repo_url, listed, limit) if cached.run.archived]
+    return sorted(listed[:limit] + archived, key=lambda info: info.created_at or "", reverse=True)[:limit]
 
 
 def get_runs_by_id(repo_path: Path, github_config: dict | None, run_ids: list[str]) -> list[CiRunInfo]:
@@ -406,12 +447,20 @@ def get_github_actions_runs(repo_path: Path, commit_hashes: set[str], github_con
 
     by_sha: dict[str, list[CiRunInfo]] = {}
     tags_by_name = _tag_targets(repo_path)
+    listed: list[tuple[CiRunInfo, set[str]]] = []
     for run in _fetch_workflow_runs(github_config, repo_config):
-        sha = _matching_run_sha(run, commit_hashes, tags_by_name)
-        if sha is None:
-            continue
-
         info = _run_info(run)
-        by_sha.setdefault(sha, []).append(info)
+        sha = _matching_run_sha(run, commit_hashes, tags_by_name)
+        listed.append((info, {s for s in (info.head_sha, sha) if s}))
+        if sha is not None:
+            by_sha.setdefault(sha, []).append(info)
+
+    # Runs GitHub no longer lists (pruned past its retention) come from the cache.
+    repo_url = _repo_api_url(github_config, repo_config)
+    if repo_url is not None:
+        _remember_runs(repo_url, listed)
+        for cached in _unlisted_cached_runs(repo_url, [info for info, _ in listed]):
+            for sha in cached.shas & commit_hashes:
+                by_sha.setdefault(sha, []).append(cached.run.model_copy(update={"stages": None}))
 
     return by_sha

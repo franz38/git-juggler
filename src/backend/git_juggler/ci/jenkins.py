@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode, urlparse
@@ -10,6 +11,7 @@ from urllib.request import urlopen
 
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 
+from . import run_cache
 from .http import fetch_json
 from ..schemas import CiRunInfo, CiStage
 
@@ -292,13 +294,64 @@ def _job_name(job_url: str) -> str:
     return "/".join(names) if names else "Jenkins"
 
 
-def _fetch_job_build_refs(job_url: str, build_limit: int, headers: dict[str, str]) -> list[dict]:
-    limit = max(1, min(build_limit, 500))
-    tree = f"builds[number,url]{{0,{limit}}}"
-    query = urlencode({"tree": tree})
-    data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{query}", headers)
-    builds = data.get("builds") if isinstance(data, dict) else None
-    return [build for build in builds if isinstance(build, dict)] if isinstance(builds, list) else []
+@dataclass
+class _JobListing:
+    """What a job's build listing proves about which builds Jenkins still has."""
+
+    builds: dict[str, dict]  # listed builds by URL
+    first_number: int | None  # oldest build Jenkins still keeps
+    oldest_listed: int | None  # listing is newest-first and capped
+
+    def is_gone(self, number: int) -> bool:
+        """A build not in the listing is gone if it predates the oldest kept
+        one, or falls inside the listed range; older than the listed range it
+        may still exist (the listing is capped), so that's not proof."""
+        if self.first_number is not None and number < self.first_number:
+            return True
+        return self.oldest_listed is not None and number >= self.oldest_listed
+
+
+def _fetch_job_listing(job_url: str, fields: str, limit: int, headers: dict[str, str]) -> _JobListing | None:
+    """A job's newest `limit` builds (with `fields`). None when it can't be read."""
+    tree = f"builds[{fields}]{{0,{max(1, min(limit, 500))}}},firstBuild[number]"
+    data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
+    if not isinstance(data, dict):
+        return None
+    raw = data.get("builds")
+    builds = {str(b["url"]): b for b in raw if isinstance(b, dict) and b.get("url")} if isinstance(raw, list) else {}
+    numbers = [b["number"] for b in builds.values() if isinstance(b.get("number"), int)]
+    first = data.get("firstBuild")
+    first_number = first.get("number") if isinstance(first, dict) and isinstance(first.get("number"), int) else None
+    return _JobListing(builds=builds, first_number=first_number, oldest_listed=min(numbers) if numbers else None)
+
+
+def _cached_build(build_url: str, build: dict) -> run_cache.CachedRun | None:
+    """The stored copy of a listed build, if it is that same build: a job
+    recreated under the same name reuses build numbers, so a stored build with
+    a different start time is stale and dropped."""
+    cached = run_cache.get("jenkins", build_url)
+    if cached is None:
+        return None
+    if cached.run.created_at == _timestamp_ms_to_iso(build.get("timestamp")):
+        return cached
+    run_cache.delete("jenkins", build_url)
+    return None
+
+
+def _unlisted_cached_builds(
+    jenkins_config: dict, repo_path: Path, listings: dict[str, _JobListing | None], limit: int | None = None
+) -> list[run_cache.CachedRun]:
+    """Stored builds of the repo's jobs that the live listings didn't return,
+    marked `archived` when a listing proves Jenkins no longer has them (a job
+    that wasn't listed or couldn't be read proves nothing)."""
+    result: list[run_cache.CachedRun] = []
+    for cached in run_cache.for_scope_prefixes("jenkins", _job_url_prefixes(jenkins_config, repo_path), limit):
+        listing = listings.get(cached.scope)
+        if listing is not None and cached.run.run_id in listing.builds:
+            continue
+        cached.run.archived = listing is not None and listing.is_gone(cached.run.number)
+        result.append(cached)
+    return result
 
 
 def _fetch_build(build_url: str, headers: dict[str, str]) -> dict | None:
@@ -440,13 +493,20 @@ def _fetch_build_stages(build_url: str, headers: dict[str, str]) -> list[CiStage
 
 def get_build_stages(repo_path: Path, jenkins_config: dict | None, build_url: str) -> list[CiStage] | None:
     """Stages for one build. The build URL comes from the client, so it is only
-    followed when it lives under a job configured for this repo."""
+    followed when it lives under a job configured for this repo. A finished
+    build's stages come from the run cache once stored."""
     if not jenkins_config:
         return None
     wanted = build_url.rstrip("/")
-    if any(wanted.startswith(prefix + "/") for prefix in _job_url_prefixes(jenkins_config, repo_path)):
-        return _fetch_build_stages(build_url, _headers(jenkins_config))
-    return None
+    if not any(wanted.startswith(prefix + "/") for prefix in _job_url_prefixes(jenkins_config, repo_path)):
+        return None
+    cached = run_cache.get("jenkins", build_url)
+    if cached is not None and cached.run.stages is not None:
+        return cached.run.stages
+    stages = _fetch_build_stages(build_url, _headers(jenkins_config))
+    if stages is not None and cached is not None:
+        run_cache.put_stages("jenkins", build_url, stages)
+    return stages
 
 
 def get_active_builds(repo_path: Path, jenkins_config: dict | None, branch_name: str | None = None) -> list[CiRunInfo]:
@@ -478,18 +538,25 @@ def get_recent_builds(repo_path: Path, jenkins_config: dict | None, limit: int) 
     if not jenkins_config:
         return []
     headers = _headers(jenkins_config)
-    tree = (
-        "builds[number,url,result,building,timestamp,duration,"
-        f"actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]]]{{0,{max(1, limit)}}}"
+    # Same fields as `_fetch_build`, so a build stored from here matches the
+    # same commits (changeSet included) when the commit graph reads it back.
+    fields = (
+        "number,url,result,building,timestamp,duration,"
+        "actions[lastBuiltRevision[SHA1,branch[name]],parameters[name,value]],changeSet[items[commitId]]"
     )
     result: list[CiRunInfo] = []
+    listings: dict[str, _JobListing | None] = {}
     for job in _repo_job_configs(jenkins_config, repo_path):
         job_url = str(job["job_url"])
-        data = _fetch_json(f"{job_url.rstrip('/')}/api/json?{urlencode({'tree': tree})}", headers)
-        builds = data.get("builds") if isinstance(data, dict) else None
-        for build in builds if isinstance(builds, list) else []:
-            if isinstance(build, dict):
-                result.append(_build_info(build, _job_name(job_url), job_url))
+        scope = job_url.rstrip("/")
+        listing = _fetch_job_listing(job_url, fields, limit, headers)
+        listings[scope] = listing
+        for build_url, build in (listing.builds if listing else {}).items():
+            info = _build_info(build, _job_name(job_url), job_url)
+            if _cached_build(build_url, build) is None:
+                run_cache.put("jenkins", scope, info, _extract_commit_shas(build))
+            result.append(info)
+    result.extend(cached.run.model_copy(update={"stages": None}) for cached in _unlisted_cached_builds(jenkins_config, repo_path, listings, limit))
     return result
 
 
@@ -595,23 +662,36 @@ def get_jenkins_builds(repo_path: Path, commit_hashes: set[str], jenkins_config:
         build_limit = 50
 
     by_sha: dict[str, list[CiRunInfo]] = {}
+
+    def add(info: CiRunInfo, shas: set[str]) -> None:
+        for sha in shas & commit_hashes:
+            by_sha.setdefault(sha, []).append(info)
+
+    # Finished builds come from the run cache (only the cheap listing is
+    # fetched for them); new ones are fetched once and stored.
+    listings: dict[str, _JobListing | None] = {}
     for job in jobs:
         job_url = job.get("job_url")
         if not isinstance(job_url, str) or not job_url:
             continue
+        scope = job_url.rstrip("/")
         name = _job_name(job_url)
-        for build_ref in _fetch_job_build_refs(job_url, build_limit, headers):
-            build_url = build_ref.get("url")
-            if not isinstance(build_url, str) or not build_url:
+        listing = _fetch_job_listing(job_url, "number,url,timestamp", build_limit, headers)
+        listings[scope] = listing
+        for build_url, listed in (listing.builds if listing else {}).items():
+            cached = _cached_build(build_url, listed)
+            if cached is not None:
+                add(cached.run.model_copy(update={"stages": None}), cached.shas)
                 continue
             build = _fetch_build(build_url, headers)
             if build is None:
                 continue
-            matching_shas = _extract_commit_shas(build) & commit_hashes
-            if not matching_shas:
-                continue
             info = _build_info(build, name, build_url)
-            for sha in matching_shas:
-                by_sha.setdefault(sha, []).append(info)
+            shas = _extract_commit_shas(build)
+            run_cache.put("jenkins", scope, info, shas)
+            add(info, shas)
+
+    for cached in _unlisted_cached_builds(jenkins_config, repo_path, listings):
+        add(cached.run.model_copy(update={"stages": None}), cached.shas)
 
     return by_sha

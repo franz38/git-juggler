@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from git_juggler.ci import jenkins
+from git_juggler.ci import jenkins, run_cache
 
 
 class JenkinsBuildParsingTest(unittest.TestCase):
@@ -406,6 +407,147 @@ class JenkinsBuildParsingTest(unittest.TestCase):
         self.assertEqual(builds[0].status, "running")
         self.assertEqual(builds[0].run_id, "https://jenkins.example.com/job/p/8/")
         self.assertEqual(builds[0].stages[0].status, "running")
+
+
+class FakeJenkins:
+    """A single job `https://j/job/p` whose builds can be edited between calls."""
+
+    job = "https://j/job/p"
+
+    def __init__(self) -> None:
+        self.builds: dict[int, dict] = {}  # number -> {"sha", "timestamp"}
+        self.first_number: int | None = None
+        self.listing_cap = 50
+        self.fetched: list[str] = []
+
+    def add(self, number: int, sha: str, timestamp: int = 1_700_000_000_000) -> None:
+        self.builds[number] = {"sha": sha, "timestamp": timestamp}
+
+    def url(self, number: int) -> str:
+        return f"{self.job}/{number}/"
+
+    def fetch_json(self, url: str, headers: dict[str, str]) -> dict | None:
+        self.fetched.append(url)
+        if url.startswith(f"{self.job}/api/json"):
+            numbers = sorted(self.builds, reverse=True)[: self.listing_cap]
+            first = self.first_number if self.first_number is not None else (min(self.builds) if self.builds else None)
+            return {
+                "builds": [
+                    {
+                        "number": n,
+                        "url": self.url(n),
+                        "timestamp": self.builds[n]["timestamp"],
+                        "result": "SUCCESS",
+                        "building": False,
+                        "actions": [{"lastBuiltRevision": {"SHA1": self.builds[n]["sha"]}}],
+                    }
+                    for n in numbers
+                ],
+                "firstBuild": {"number": first} if first is not None else None,
+            }
+        for n, build in self.builds.items():
+            if url.startswith(f"{self.url(n)}api/json"):
+                return {
+                    "number": n,
+                    "url": self.url(n),
+                    "result": "SUCCESS",
+                    "building": False,
+                    "timestamp": build["timestamp"],
+                    "actions": [{"lastBuiltRevision": {"SHA1": build["sha"]}}],
+                    "changeSet": {"items": []},
+                }
+            if url.startswith(f"{self.url(n)}stages/tree"):
+                return {"data": {"stages": [{"id": "1", "name": "Build", "state": "success", "children": []}]}}
+            if url.startswith(f"{self.url(n)}stages/allSteps"):
+                return {"data": {"steps": []}}
+        return None
+
+    def build_detail_fetches(self) -> list[str]:
+        return [url for url in self.fetched if "/api/json" in url and not url.startswith(f"{self.job}/api/json")]
+
+
+class JenkinsRunCacheTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        run_cache.configure(Path(self._tmp.name) / "ci.sqlite")
+        self.jenkins = FakeJenkins()
+        self.repo_path = Path("/tmp/repo")
+        self.config = {"build_limit": 50, "rules": [{"id": "r1", "name": "Rule", "repo_paths": [str(self.repo_path)], "job_url": FakeJenkins.job}]}
+        self.patch = patch.object(jenkins, "_fetch_json", self.jenkins.fetch_json)
+        self.patch.start()
+
+    def tearDown(self) -> None:
+        self.patch.stop()
+        run_cache.configure(None)
+        self._tmp.cleanup()
+
+    def builds(self, *shas: str) -> dict[str, list]:
+        return jenkins.get_jenkins_builds(self.repo_path, set(shas), self.config)
+
+    def test_finished_build_is_fetched_once(self) -> None:
+        self.jenkins.add(7, "a" * 40)
+        self.assertEqual(len(self.builds("a" * 40)["a" * 40]), 1)
+        self.assertEqual(len(self.jenkins.build_detail_fetches()), 1)
+
+        self.jenkins.fetched.clear()
+        second = self.builds("a" * 40)
+        self.assertEqual([(b.number, b.archived) for b in second["a" * 40]], [(7, False)])
+        self.assertEqual(self.jenkins.build_detail_fetches(), [])
+
+    def test_deleted_build_is_kept_and_marked_archived(self) -> None:
+        self.jenkins.add(5, "a" * 40)
+        self.jenkins.add(7, "b" * 40)
+        self.builds("a" * 40, "b" * 40)
+
+        del self.jenkins.builds[5]  # Jenkins discarded it
+        result = self.builds("a" * 40, "b" * 40)
+
+        self.assertEqual([(b.number, b.archived) for b in result["a" * 40]], [(5, True)])
+        self.assertEqual([(b.number, b.archived) for b in result["b" * 40]], [(7, False)])
+
+    def test_build_older_than_capped_listing_is_not_archived(self) -> None:
+        self.jenkins.add(5, "a" * 40)
+        self.jenkins.add(7, "b" * 40)
+        self.builds("a" * 40, "b" * 40)
+
+        self.jenkins.listing_cap = 1  # 5 still exists, just past the listing
+        result = self.builds("a" * 40)
+
+        self.assertEqual([(b.number, b.archived) for b in result["a" * 40]], [(5, False)])
+
+    def test_recreated_job_with_reused_number_is_refetched(self) -> None:
+        self.jenkins.add(7, "a" * 40, timestamp=1_700_000_000_000)
+        self.builds("a" * 40)
+
+        self.jenkins.add(7, "c" * 40, timestamp=1_800_000_000_000)
+        self.jenkins.fetched.clear()
+        result = self.builds("a" * 40, "c" * 40)
+
+        self.assertEqual(len(self.jenkins.build_detail_fetches()), 1)
+        self.assertNotIn("a" * 40, result)
+        self.assertEqual([b.number for b in result["c" * 40]], [7])
+
+    def test_stages_of_finished_build_come_from_cache(self) -> None:
+        self.jenkins.add(7, "a" * 40)
+        self.builds("a" * 40)
+
+        first = jenkins.get_build_stages(self.repo_path, self.config, self.jenkins.url(7))
+        self.jenkins.fetched.clear()
+        second = jenkins.get_build_stages(self.repo_path, self.config, self.jenkins.url(7))
+
+        self.assertEqual([s.name for s in first or []], ["Build"])
+        self.assertEqual(second, first)
+        self.assertEqual(self.jenkins.fetched, [])
+
+    def test_recent_builds_include_archived_ones(self) -> None:
+        self.jenkins.add(5, "a" * 40)
+        self.jenkins.add(7, "b" * 40)
+        jenkins.get_recent_builds(self.repo_path, self.config, 10)
+
+        del self.jenkins.builds[5]
+        recent = jenkins.get_recent_builds(self.repo_path, self.config, 10)
+
+        self.assertEqual(sorted((b.number, b.archived) for b in recent), [(5, True), (7, False)])
 
 
 if __name__ == "__main__":

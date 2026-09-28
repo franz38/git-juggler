@@ -15,7 +15,8 @@ function PipelineCard(props: { pipeline: ActivePipeline }) {
   const stages = () => run().stages;
   return (
     <div class="pipeline-card">
-      <a class="pipeline-title" href={run().url} target="_blank" rel="noopener noreferrer" title={providerName(run().provider)}>
+      {/* No href for a run the CI server deleted: its URL is dead. */}
+      <a class="pipeline-title" href={run().archived ? undefined : run().url} target="_blank" rel="noopener noreferrer" title={providerName(run().provider)}>
         <span class="pipeline-icon">
           <ProviderIcon run={run()} />
         </span>
@@ -29,6 +30,7 @@ function PipelineCard(props: { pipeline: ActivePipeline }) {
       <div class="pipeline-meta">
         {run().branch ?? "n/a"}
         <Show when={run().event}> · {run().event}</Show>
+        <Show when={run().archived}> · no longer on {providerName(run().provider)}</Show>
         <Show
           when={isStageFinished(run().status)}
           fallback={<Show when={elapsedMs(props.pipeline) !== null}> · running {formatDuration(elapsedMs(props.pipeline))}</Show>}

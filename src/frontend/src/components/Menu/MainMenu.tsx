@@ -3,6 +3,7 @@ import {
   KEY_BINDING_ACTIONS,
   MENU_SECTION_ORDER,
   branchColorMode,
+  clearStoredCiRuns,
   closeMenu,
   diffFullFile,
   formatKeyBinding,
@@ -31,6 +32,7 @@ export function MainMenu() {
   const [recordingAction, setRecordingAction] = createSignal<KeyBindingAction | null>(null);
   const [confirmingFactoryReset, setConfirmingFactoryReset] = createSignal(false);
   const [factoryResetError, setFactoryResetError] = createSignal<string | null>(null);
+  const [ciCacheMessage, setCiCacheMessage] = createSignal<string | null>(null);
 
   // Captures the next real keypress (ignoring bare modifier taps) and binds
   // it to `action`; Escape cancels without changing anything. Runs in the
@@ -213,6 +215,29 @@ export function MainMenu() {
               </div>
             </Show>
             <Show when={activeSection() === "configuration"}>
+              <div class="menu-setting">
+                <div class="menu-setting-main">
+                  <div class="menu-setting-label">Clear CI cache</div>
+                  <p class="menu-hint">
+                    Finished CI runs (and their stages) are stored locally and kept even after GitHub or Jenkins deletes them. This
+                    forgets all of them; runs still on the servers are fetched again.
+                  </p>
+                  <Show when={ciCacheMessage()}>
+                    <p class="menu-hint">{ciCacheMessage()}</p>
+                  </Show>
+                </div>
+                <button
+                  type="button"
+                  class="menu-secondary-button"
+                  onClick={() => {
+                    clearStoredCiRuns()
+                      .then(() => setCiCacheMessage("CI cache cleared."))
+                      .catch((e: Error) => setCiCacheMessage(`Could not clear the CI cache: ${e.message}`));
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
               <div class="menu-setting">
                 <div class="menu-setting-main">
                   <div class="menu-setting-label">Reset onboarding</div>

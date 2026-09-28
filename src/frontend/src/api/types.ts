@@ -225,6 +225,8 @@ export interface CiRunInfo {
   head_sha: string | null;
   /** Only filled in for active pipelines; otherwise fetched on demand. */
   stages: CiStage[] | null;
+  /** Served from git-juggler's run cache: the CI server no longer has it, so `url` is dead. */
+  archived?: boolean;
 }
 
 export type CiStageStatus = CiRunStatus | "pending";
