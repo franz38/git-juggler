@@ -2,7 +2,7 @@ import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
-import { ApiError, browseDirectory, pickFolderNative, pollCiRuns, fetchActivePipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
+import { ApiError, browseDirectory, pickFolderNative, pollCiRuns, fetchRecentPipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -1686,8 +1686,8 @@ export const sidebarTab = createMemo<SidebarTab>(() => {
   return "repos";
 });
 
-// Queued/running pipelines across all repos (Pipelines tab). Polled from App
-// only while that tab is open.
+// The most recent pipelines (running or finished) across all repos (Pipelines
+// tab). Polled from App only while that tab is open.
 export const PIPELINE_POLL_MS = 10000;
 const [pipelines, setPipelines] = createSignal<ActivePipeline[]>([]);
 const [pipelinesLoaded, setPipelinesLoaded] = createSignal(false);
@@ -1699,7 +1699,7 @@ export async function refreshPipelines(): Promise<void> {
   if (!ciEnabled() || pipelinesLoading()) return;
   setPipelinesLoading(true);
   try {
-    setPipelines(await fetchActivePipelines());
+    setPipelines(await fetchRecentPipelines());
     setPipelinesError(null);
     setPipelinesLoaded(true);
   } catch (e) {

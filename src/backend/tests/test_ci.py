@@ -16,44 +16,75 @@ def _run(number: int, created_at: str, provider: str = "github_actions") -> CiRu
     return CiRunInfo(provider=provider, status="running", name="CI", number=number, url=f"u{number}", created_at=created_at)
 
 
-class ActivePipelinesTest(unittest.TestCase):
-    def test_collects_across_repos_newest_first(self) -> None:
+class RecentPipelinesTest(unittest.TestCase):
+    def test_collects_across_repos_newest_first_up_to_limit(self) -> None:
+        finished = _run(3, "2026-01-01T12:00:00Z")
+        finished.status = "success"
         runs = {
             "a": [_run(1, "2026-01-01T10:00:00Z")],
-            "b": [_run(2, "2026-01-01T11:00:00Z")],
+            "b": [finished, _run(2, "2026-01-01T11:00:00Z")],
             "c": [],
         }
         with (
-            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: runs[path.name]),
-            patch.object(jenkins, "get_active_builds", lambda path, cfg: []),
+            patch.object(github_actions, "get_recent_runs", lambda path, cfg, limit: runs[path.name]),
+            patch.object(jenkins, "get_recent_builds", lambda path, cfg, limit: []),
         ):
-            result = ci.get_active_pipelines([_repo("a"), _repo("b"), _repo("c")], None, None)
+            result = ci.get_recent_pipelines([_repo("a"), _repo("b"), _repo("c")], None, None, limit=2)
 
-        self.assertEqual([(p.repo_name, p.run.number) for p in result], [("b", 2), ("a", 1)])
+        self.assertEqual([(p.repo_name, p.run.number, p.run.status) for p in result], [("b", 3, "success"), ("b", 2, "running")])
+
+    def test_orders_mixed_timestamp_formats(self) -> None:
+        with (
+            patch.object(github_actions, "get_recent_runs", lambda path, cfg, limit: [_run(1, "2026-01-01T10:00:00Z")]),
+            patch.object(jenkins, "get_recent_builds", lambda path, cfg, limit: [_run(2, "2026-01-01T10:30:00+00:00", "jenkins")]),
+        ):
+            result = ci.get_recent_pipelines([_repo("a")], None, {"enabled": True})
+
+        self.assertEqual([p.run.number for p in result], [2, 1])
 
     def test_respects_disabled_providers(self) -> None:
         with (
-            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: [_run(1, "2026-01-01T10:00:00Z")]) as gh,
-            patch.object(jenkins, "get_active_builds", lambda path, cfg: [_run(2, "2026-01-01T10:00:00Z", "jenkins")]),
+            patch.object(github_actions, "get_recent_runs", lambda path, cfg, limit: [_run(1, "2026-01-01T10:00:00Z")]),
+            patch.object(jenkins, "get_recent_builds", lambda path, cfg, limit: [_run(2, "2026-01-01T10:00:00Z", "jenkins")]),
         ):
-            self.assertEqual(ci.get_active_pipelines([_repo("a")], {"enabled": False}, None), [])
-            only_jenkins = ci.get_active_pipelines([_repo("a")], {"enabled": False}, {"enabled": True})
+            self.assertEqual(ci.get_recent_pipelines([_repo("a")], {"enabled": False}, None), [])
+            only_jenkins = ci.get_recent_pipelines([_repo("a")], {"enabled": False}, {"enabled": True})
             self.assertEqual([p.run.provider for p in only_jenkins], ["jenkins"])
-        self.assertIsNotNone(gh)
 
     def test_no_repos(self) -> None:
-        self.assertEqual(ci.get_active_pipelines([], None, None), [])
+        self.assertEqual(ci.get_recent_pipelines([], None, None), [])
 
-    def test_deduplicates_same_active_run_across_repo_entries(self) -> None:
+    def test_deduplicates_same_run_across_repo_entries(self) -> None:
         run = _run(1, "2026-01-01T10:00:00Z")
         run.run_id = "123"
         with (
-            patch.object(github_actions, "get_active_runs", lambda path, cfg, head_sha=None: [run]),
-            patch.object(jenkins, "get_active_builds", lambda path, cfg: []),
+            patch.object(github_actions, "get_recent_runs", lambda path, cfg, limit: [run]),
+            patch.object(jenkins, "get_recent_builds", lambda path, cfg, limit: []),
+            patch.object(ci, "get_ci_run_stages", lambda path, provider, run_id, gh, jk: None),
         ):
-            result = ci.get_active_pipelines([_repo("a"), _repo("a-worktree")], None, None)
+            result = ci.get_recent_pipelines([_repo("a"), _repo("a-worktree")], None, None)
 
         self.assertEqual([(p.repo_name, p.run.run_id) for p in result], [("a", "123")])
+
+    def test_stages_only_fetched_for_kept_runs(self) -> None:
+        old, new = _run(1, "2026-01-01T10:00:00Z"), _run(2, "2026-01-01T11:00:00Z")
+        old.run_id, new.run_id = "1", "2"
+        stages = [CiStage(name="build", status="success")]
+        asked: list[str] = []
+
+        def fake_stages(path, provider, run_id, gh, jk):
+            asked.append(run_id)
+            return stages
+
+        with (
+            patch.object(github_actions, "get_recent_runs", lambda path, cfg, limit: [old, new]),
+            patch.object(jenkins, "get_recent_builds", lambda path, cfg, limit: []),
+            patch.object(ci, "get_ci_run_stages", fake_stages),
+        ):
+            result = ci.get_recent_pipelines([_repo("a")], None, None, limit=1)
+
+        self.assertEqual(asked, ["2"])
+        self.assertEqual(result[0].run.stages, stages)
 
     def test_stage_dispatch_by_provider(self) -> None:
         stages = [CiStage(name="build", status="success")]

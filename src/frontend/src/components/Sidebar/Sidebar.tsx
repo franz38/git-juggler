@@ -1,6 +1,7 @@
 import { Show, createMemo } from "solid-js";
 import { agentActivity, agentsEnabled, ciEnabled, pipelines, setSidebarTab, sidebarTab, sidebarWidth } from "../../state/store";
 import { AgentActivityPanel } from "../Agents/AgentActivityPanel";
+import { isStageFinished } from "../Badges/ciStatus";
 import { PipelinesPanel } from "../Pipelines/PipelinesPanel";
 import { RepoList } from "./RepoList";
 
@@ -11,7 +12,7 @@ import { RepoList } from "./RepoList";
 export function Sidebar() {
   const agentSessions = createMemo(() => (agentActivity()?.scans ?? []).filter((scan) => scan.worktrees.length > 0));
   const activeAgentCount = createMemo(() => agentSessions().filter((scan) => scan.state === "active").length);
-  const runningPipelineCount = createMemo(() => pipelines().length);
+  const runningPipelineCount = createMemo(() => pipelines().filter((item) => !isStageFinished(item.run.status)).length);
 
   return (
     <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>

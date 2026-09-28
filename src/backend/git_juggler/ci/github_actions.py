@@ -301,6 +301,19 @@ def get_active_runs(repo_path: Path, github_config: dict | None, head_sha: str |
     return result
 
 
+def get_recent_runs(repo_path: Path, github_config: dict | None, limit: int) -> list[CiRunInfo]:
+    """The repo's latest runs, running or finished, newest first, without
+    stages. Same single cached call as `get_active_runs`."""
+    github_config = github_config or {}
+    repo_config = _resolve_repo_config(github_config, repo_path)
+    repo_url = _repo_api_url(github_config, repo_config) if repo_config else None
+    if repo_url is None:
+        return []
+    data = _get_json_cached(f"{repo_url}/actions/runs?{urlencode({'per_page': '30'})}", _headers(github_config))
+    items = data.get("workflow_runs") if isinstance(data, dict) else None
+    return [_run_info(run) for run in (items if isinstance(items, list) else []) if isinstance(run, dict)][:limit]
+
+
 def get_runs_by_id(repo_path: Path, github_config: dict | None, run_ids: list[str]) -> list[CiRunInfo]:
     """Current state of specific runs (one conditional call per run, plus one
     for the stages of a run that is still going). A run that has finished comes

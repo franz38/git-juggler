@@ -1,7 +1,7 @@
 import { For, Show, createMemo } from "solid-js";
 import type { ActivePipeline } from "../../api/types";
 import { PIPELINE_POLL_MS, pipelines, pipelinesError, pipelinesLoaded } from "../../state/store";
-import { ProviderIcon, formatDuration, providerName, statusColor, statusMark } from "../Badges/ciStatus";
+import { ProviderIcon, formatDuration, isStageFinished, providerName, statusColor, statusMark } from "../Badges/ciStatus";
 import { StageStrip, finishedStageCount } from "./StageStrip";
 
 function elapsedMs(pipeline: ActivePipeline): number | null {
@@ -29,7 +29,12 @@ function PipelineCard(props: { pipeline: ActivePipeline }) {
       <div class="pipeline-meta">
         {run().branch ?? "n/a"}
         <Show when={run().event}> · {run().event}</Show>
-        <Show when={elapsedMs(props.pipeline) !== null}> · running {formatDuration(elapsedMs(props.pipeline))}</Show>
+        <Show
+          when={isStageFinished(run().status)}
+          fallback={<Show when={elapsedMs(props.pipeline) !== null}> · running {formatDuration(elapsedMs(props.pipeline))}</Show>}
+        >
+          <Show when={run().duration_ms != null}> · took {formatDuration(run().duration_ms ?? null)}</Show>
+        </Show>
         <Show when={stages()?.length}> · {finishedStageCount(stages() ?? [])}/{stages()?.length} stages done</Show>
       </div>
       <Show when={stages()?.length} fallback={<div class="pipeline-meta">Stage detail unavailable</div>}>
@@ -39,9 +44,11 @@ function PipelineCard(props: { pipeline: ActivePipeline }) {
   );
 }
 
-// Lists every queued/running pipeline across all repos. Data comes from
-// `pipelines`, which App polls only while this tab is open.
+// Lists the most recent pipelines (running or finished) across all repos,
+// newest first. Data comes from `pipelines`, which App polls only while this
+// tab is open.
 export function PipelinesPanel() {
+  const runningCount = createMemo(() => pipelines().filter((item) => !isStageFinished(item.run.status)).length);
   const groups = createMemo(() => {
     const byRepo = new Map<string, { name: string; items: ActivePipeline[] }>();
     for (const item of pipelines()) {
@@ -55,7 +62,7 @@ export function PipelinesPanel() {
   return (
     <section class="pipelines-panel">
       <div class="agent-activity-heading">
-        <span>Active pipelines</span>
+        <span>Recent pipelines</span>
         <span class="agent-scan-time">live · every {PIPELINE_POLL_MS / 1000}s</span>
       </div>
       <Show when={pipelinesError()}>
@@ -64,9 +71,9 @@ export function PipelinesPanel() {
       <Show when={pipelinesLoaded()} fallback={<Show when={!pipelinesError()}><div class="agent-empty">Loading…</div></Show>}>
         <div class="agent-results">
           <div class="agent-summary">
-            {pipelines().length} running pipeline{pipelines().length === 1 ? "" : "s"}
+            Last {pipelines().length} pipeline{pipelines().length === 1 ? "" : "s"} · {runningCount()} running
           </div>
-          <For each={groups()} fallback={<div class="agent-empty">No active pipelines</div>}>
+          <For each={groups()} fallback={<div class="agent-empty">No pipelines yet</div>}>
             {(group) => (
               <div class="agent-scan-card">
                 <div class="agent-scan-title">{group.name}</div>
