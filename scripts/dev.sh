@@ -5,14 +5,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_PORT=8000
+OPEN_BROWSER=1
 
 usage() {
-  echo "Usage: $0 [path-to-scan] [--port PORT]" >&2
+  echo "Usage: $0 [path-to-scan] [--port PORT] [--no-open]" >&2
   echo "  path-to-scan    optional: directory whose first-level children get scanned for git repos." >&2
   echo "                  Only used to seed the config on first run; scan paths are otherwise" >&2
   echo "                  managed in the app (welcome wizard / Settings)." >&2
   echo "  --port PORT     backend port (default: 8000). If you change this, also update" >&2
   echo "                  src/frontend/vite.config.ts's proxy target -- don't commit that change." >&2
+  echo "  --no-open       don't open the app in a browser automatically." >&2
 }
 
 SCAN_PATH=""
@@ -25,6 +27,10 @@ while [ $# -gt 0 ]; do
     --port)
       BACKEND_PORT="${2:?--port requires a value}"
       shift 2
+      ;;
+    --no-open)
+      OPEN_BROWSER=0
+      shift
       ;;
     -*)
       echo "Unknown argument: $1" >&2
@@ -101,16 +107,20 @@ trap cleanup EXIT INT TERM
 
 if [ -n "$SCAN_PATH" ]; then
   echo "Starting backend (--reload) on port $BACKEND_PORT, scanning $SCAN_PATH ..."
-  "$GIT_JUGGLER" "$SCAN_PATH" --reload --port "$BACKEND_PORT" &
+  "$GIT_JUGGLER" "$SCAN_PATH" --reload --port "$BACKEND_PORT" --no-open &
 else
   echo "Starting backend (--reload) on port $BACKEND_PORT (scan paths from config) ..."
-  "$GIT_JUGGLER" --reload --port "$BACKEND_PORT" &
+  "$GIT_JUGGLER" --reload --port "$BACKEND_PORT" --no-open &
 fi
 BACKEND_PID=$!
 
 echo "Starting frontend dev server..."
 (cd "$ROOT_DIR/src/frontend" && npm run dev) &
 FRONTEND_PID=$!
+
+if [ "$OPEN_BROWSER" = "1" ]; then
+  (sleep 1 && "$VENV_BIN/python" -m webbrowser http://localhost:5173) >/dev/null 2>&1 &
+fi
 
 echo ""
 echo "Backend:  http://127.0.0.1:$BACKEND_PORT"
