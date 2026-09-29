@@ -66,6 +66,9 @@ export function GraphPanel(props: { repoId: string }) {
   const chronological = createMemo(() => filteredCommitsForRepo(props.repoId));
   const lanes = createMemo(() => computeColumns(chronological(), currentBranchForRepo(props.repoId)));
   const commitByHash = createMemo(() => new Map(chronological().map((c) => [c.hash, c])));
+  // rowLayoutForRepo is O(rows) and yFor reads it for every dot, marker and
+  // edge end: computed on each read, rendering the graph was quadratic.
+  const rowLayout = createMemo(() => rowLayoutForRepo(props.repoId));
   const runningActionsByHash = createMemo(() => {
     const hashes = new Set<string>();
     for (const [hash, runs] of Object.entries(ciRunsForRepo(props.repoId))) {
@@ -123,7 +126,7 @@ export function GraphPanel(props: { repoId: string }) {
   const xForColumn = (column: number) => LANE_MARGIN + column * laneWidth();
   const xFor = (hash: string) => xForColumn(columnFor(hash));
   const yFor = (hash: string) => {
-    const offset = rowLayoutForRepo(props.repoId).offsetByHash.get(hash) ?? 0;
+    const offset = rowLayout().offsetByHash.get(hash) ?? 0;
     return commitOffset() + offset + COLLAPSED_ROW_HEIGHT / 2;
   };
 
@@ -248,7 +251,7 @@ export function GraphPanel(props: { repoId: string }) {
 
   return (
     <>
-    <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayoutForRepo(props.repoId).total}px` }}>
+    <svg class="graph-panel" width={width()} style={{ height: `${commitOffset() + fetchBandHeight() + rowLayout().total}px` }}>
       {hasDirtyGhost() && headCommitForRepo(props.repoId) && (
         <g class="dirty-ghost">
           <line x1={xFor(headCommitForRepo(props.repoId)!)} y1={dirtyGhostY()} x2={xFor(headCommitForRepo(props.repoId)!)} y2={yFor(headCommitForRepo(props.repoId)!) + fetchBandHeight()} stroke={DIRTY_COLOR} stroke-width="2" stroke-dasharray="2 3" opacity="0.5" />
@@ -281,7 +284,7 @@ export function GraphPanel(props: { repoId: string }) {
             <path class={seg.isPushing ? "push-edge" : undefined} d={seg.d} fill="none" stroke={seg.color} stroke-width="2" stroke-linecap="round" stroke-dasharray={seg.dashed ? "2 4" : undefined} />
           )}
         </For>
-        <For each={rowLayoutForRepo(props.repoId).order}>
+        <For each={rowLayout().order}>
           {(c) => {
             const isCheckedOut = () => headCommitForRepo(props.repoId) === c.hash;
             const agentEntries = () => agentEntriesByHash().get(c.hash);
