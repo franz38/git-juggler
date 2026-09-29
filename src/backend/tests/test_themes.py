@@ -13,6 +13,21 @@ def test_strip_jsonc_keeps_string_contents():
     assert json.loads(strip_jsonc(text)) == {"a": "x//y,}", "l": [1, 2]}
 
 
+def test_strict_json_skips_jsonc_stripping(tmp_path, monkeypatch):
+    import git_juggler.themes as themes
+
+    ext = tmp_path / "pub.plain"
+    _write(ext / "package.json", {"contributes": {"themes": [{"label": "Plain", "path": "./t.json"}]}})
+    _write(ext / "t.json", {"colors": {"foreground": "#fff"}})
+
+    def fail(text):
+        raise AssertionError("strict JSON should not go through strip_jsonc")
+
+    monkeypatch.setattr(themes, "strip_jsonc", fail)
+
+    assert [t.colors for t in discover_themes([tmp_path])] == [{"foreground": "#fff"}]
+
+
 def test_discover_merges_include_chain_and_localizes_labels(tmp_path):
     ext = tmp_path / "pub.mytheme-1.0.0"
     _write(

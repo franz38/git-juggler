@@ -9,10 +9,30 @@ from pathlib import Path
 
 
 DATA_DIR = Path.home() / ".local" / "share" / "git-juggler"
+# One JSONL file per agent session, written by the hooks below and read by
+# hook_events.py. Each holds the session's first event (where it started), its
+# latest prompt and the events since: a new prompt rewrites the file down to
+# those two lines, so it never grows past the current turn.
+SESSIONS_DIR = DATA_DIR / "agent-sessions"
+# The single, ever-growing log older hooks appended to. Still read while
+# older writers are around (see LegacyEventLog), then removed.
 EVENT_PATH = DATA_DIR / "agent-events.jsonl"
 RECORDER_PATH = DATA_DIR / "agent-hook-recorder.py"
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 OPENCODE_PLUGIN_PATH = Path.home() / ".config" / "opencode" / "plugins" / "git-juggler.js"
+
+# Shared by the reader and both hooks (injected into their source below).
+PROMPT_PHASES = ("userpromptsubmit",)
+END_PHASES = ("sessionend", "session.deleted")
+# Events per session the reader uses, counted back from the latest.
+SESSION_EVENT_LIMIT = 300
+# A session file past this size (a very long turn) is cut back to what the
+# reader uses: the first event plus the last SESSION_EVENT_LIMIT since the prompt.
+COMPACT_BYTES = 1024 * 1024
+# The payload fields the reader uses. Everything else (tool output, file
+# contents, the prompt text, ...) is never written.
+RAW_KEYS = ("session_id", "sessionId", "sessionID", "cwd", "worktree", "directory", "tool_name", "tool", "command")
+INPUT_KEYS = ("command", "file_path", "filePath", "path")
 
 
 @dataclass(frozen=True)
@@ -26,47 +46,156 @@ class HookProviderStatus:
     error: str | None = None
 
 
-RECORDER_SCRIPT = r'''#!/usr/bin/env python3
+def slim_raw(raw: dict) -> dict:
+    """A hook payload cut down to the fields the reader uses (what the hooks now
+    write); applied to events from the old log, which stored whole payloads."""
+    kept = {key: raw[key] for key in RAW_KEYS if key in raw}
+    for container in ("tool_input", "args"):
+        value = raw.get(container)
+        if isinstance(value, dict):
+            inputs = {key: value[key] for key in INPUT_KEYS if key in value}
+            if inputs:
+                kept[container] = inputs
+    event = raw.get("event")
+    if isinstance(event, dict):
+        slim_event = {key: event[key] for key in ("type", "sessionID", "session_id", "sessionId") if key in event}
+        properties = event.get("properties")
+        if isinstance(properties, dict):
+            slim_properties: dict = {}
+            if "sessionID" in properties:
+                slim_properties["sessionID"] = properties["sessionID"]
+            info = properties.get("info")
+            if isinstance(info, dict) and "id" in info:
+                slim_properties["info"] = {"id": info["id"]}
+            slim_event["properties"] = slim_properties
+        kept["event"] = slim_event
+    return kept
+
+
+def _inject(template: str) -> str:
+    """Fill the shared constants into a hook's source (JSON literals are valid in both Python and JS)."""
+    values = {
+        "__PROMPT_PHASES__": json.dumps(list(PROMPT_PHASES)),
+        "__SESSION_EVENT_LIMIT__": str(SESSION_EVENT_LIMIT),
+        "__COMPACT_BYTES__": str(COMPACT_BYTES),
+        "__RAW_KEYS__": json.dumps(list(RAW_KEYS)),
+        "__INPUT_KEYS__": json.dumps(list(INPUT_KEYS)),
+        "__MARKER__": OPENCODE_PLUGIN_MARKER,
+    }
+    for placeholder, value in values.items():
+        template = template.replace(placeholder, value)
+    return template
+
+
+# Run by Claude Code for every hook (a fresh interpreter each time), so it only
+# does cheap work: one small append, or a small rewrite on a new prompt.
+_RECORDER_TEMPLATE = r'''#!/usr/bin/env python3
+"""git-juggler agent hook recorder. Managed by git-juggler (rewritten on upgrade)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
 
+SESSIONS_DIR = Path.home() / ".local" / "share" / "git-juggler" / "agent-sessions"
+PROMPT_PHASES = __PROMPT_PHASES__
+SESSION_EVENT_LIMIT = __SESSION_EVENT_LIMIT__
+COMPACT_BYTES = __COMPACT_BYTES__
+RAW_KEYS = __RAW_KEYS__
+INPUT_KEYS = __INPUT_KEYS__
 
-def main() -> int:
+
+def slim(raw):
+    """Only what git-juggler reads: ids, directories, tool, command and file paths.
+    Tool output, file contents and what the user typed are never stored."""
+    kept = {key: raw[key] for key in RAW_KEYS if key in raw}
+    for container in ("tool_input", "args"):
+        value = raw.get(container)
+        if isinstance(value, dict):
+            inputs = {key: value[key] for key in INPUT_KEYS if key in value}
+            if inputs:
+                kept[container] = inputs
+    return kept
+
+
+def session_path(provider, raw, cwd):
+    session = next((raw[key] for key in ("session_id", "sessionId", "sessionID") if isinstance(raw.get(key), str) and raw[key]), None)
+    key = session or "cwd-" + hashlib.sha1(cwd.encode("utf-8")).hexdigest()[:16]
+    return SESSIONS_DIR / (provider + "-" + re.sub(r"[^A-Za-z0-9._-]", "_", key) + ".jsonl")
+
+
+def phase_of(line):
+    try:
+        return str(json.loads(line).get("phase", "")).lower()
+    except (ValueError, AttributeError):
+        return ""
+
+
+def start_turn(path, line):
+    """A new prompt makes everything since the previous one irrelevant: keep only
+    the session's first event (where it started) and the prompt itself."""
+    header = ""
+    try:
+        with path.open(encoding="utf-8", newline="") as file:
+            header = file.readline()
+    except OSError:
+        pass
+    if not header.endswith("\n"):
+        header = ""
+    with path.open("w", encoding="utf-8", newline="") as file:
+        file.write(header + line)
+
+
+def compact(path):
+    """Bound a very long turn to what the reader uses: the first event, then the
+    last SESSION_EVENT_LIMIT events from the latest prompt on."""
+    with path.open(encoding="utf-8", newline="") as file:
+        lines = file.read().splitlines(keepends=True)
+    if len(lines) <= SESSION_EVENT_LIMIT + 1:
+        return
+    start = 1
+    for index in range(len(lines) - 1, 0, -1):
+        if phase_of(lines[index]) in PROMPT_PHASES:
+            start = index
+            break
+    with path.open("w", encoding="utf-8", newline="") as file:
+        file.writelines([lines[0]] + lines[start:][-SESSION_EVENT_LIMIT:])
+
+
+def main():
     provider = sys.argv[1] if len(sys.argv) > 1 else "unknown"
     phase = sys.argv[2] if len(sys.argv) > 2 else "unknown"
-    event_path = Path.home() / ".local" / "share" / "git-juggler" / "agent-events.jsonl"
     try:
-        raw_text = sys.stdin.read()
-        raw = json.loads(raw_text) if raw_text.strip() else {}
-    except Exception as exc:
-        raw = {"parse_error": str(exc)}
-
-    # Only the fact that a prompt was submitted matters (it starts a new unit
-    # of work); never persist what the user typed.
-    if phase == "UserPromptSubmit" and isinstance(raw, dict):
-        raw.pop("prompt", None)
-
-    event = {
-        "provider": provider,
-        "phase": phase,
-        "cwd": os.getcwd(),
-        "pid": os.getpid(),
-        "timestamp": int(time.time() * 1000),
-        "raw": raw,
-    }
-    event_path.parent.mkdir(parents=True, exist_ok=True)
-    with event_path.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(event, separators=(",", ":")) + "\n")
-    return 0
+        text = sys.stdin.read()
+        raw = json.loads(text) if text.strip() else {}
+    except ValueError:
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    cwd = os.getcwd()
+    event = {"provider": provider, "phase": phase, "cwd": cwd, "timestamp": int(time.time() * 1000), "raw": slim(raw)}
+    line = json.dumps(event, separators=(",", ":")) + "\n"
+    path = session_path(provider, raw, cwd)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if phase.lower() in PROMPT_PHASES:
+        start_turn(path, line)
+        return
+    with path.open("a", encoding="utf-8", newline="") as file:
+        file.write(line)
+    if path.stat().st_size > COMPACT_BYTES:
+        compact(path)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        main()
+    except Exception:
+        pass  # A hook must never get in the agent's way.
+    raise SystemExit(0)
 '''
 
 
@@ -113,19 +242,63 @@ def claude_snippet() -> str:
     return json.dumps(_claude_snippet_dict(), indent=2)
 
 
-OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v3"
+OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v4"
 
-OPENCODE_PLUGIN = f'''// git-juggler global activity hook. Managed by git-juggler. {OPENCODE_PLUGIN_MARKER}
+# Loaded once per OpenCode process (no spawn per event); it writes the same
+# per-session files with the same trimming as the recorder.
+_OPENCODE_PLUGIN_TEMPLATE = r'''// git-juggler global activity hook. Managed by git-juggler. __MARKER__
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-const eventPath = path.join(os.homedir(), ".local", "share", "git-juggler", "agent-events.jsonl")
+const sessionsDir = path.join(os.homedir(), ".local", "share", "git-juggler", "agent-sessions")
+const PROMPT_PHASES = __PROMPT_PHASES__
+const SESSION_EVENT_LIMIT = __SESSION_EVENT_LIMIT__
+const COMPACT_BYTES = __COMPACT_BYTES__
+const INPUT_KEYS = __INPUT_KEYS__
 
-function append(phase, payload = {{}}) {{
-  try {{
-    fs.mkdirSync(path.dirname(eventPath), {{ recursive: true }})
-    fs.appendFileSync(eventPath, JSON.stringify({{
+function sessionFile(sessionID) {
+  return path.join(sessionsDir, "opencode-" + sessionID.replace(/[^A-Za-z0-9._-]/g, "_") + ".jsonl")
+}
+
+// Only the tool inputs git-juggler reads (command and file paths), never file contents.
+function pickInputs(args) {
+  if (!args || typeof args !== "object") return undefined
+  const kept = {}
+  for (const key of INPUT_KEYS) if (key in args) kept[key] = args[key]
+  return Object.keys(kept).length ? kept : undefined
+}
+
+function phaseOf(line) {
+  try {
+    return String(JSON.parse(line).phase ?? "").toLowerCase()
+  } catch {
+    return ""
+  }
+}
+
+// Bounds a very long turn to what git-juggler reads: the first event, then the
+// last SESSION_EVENT_LIMIT events from the latest prompt on.
+function compact(file) {
+  const lines = fs.readFileSync(file, "utf8").split("\n").filter((line) => line)
+  if (lines.length <= SESSION_EVENT_LIMIT + 1) return
+  let start = 1
+  for (let index = lines.length - 1; index > 0; index--) {
+    if (PROMPT_PHASES.includes(phaseOf(lines[index]))) {
+      start = index
+      break
+    }
+  }
+  fs.writeFileSync(file, [lines[0], ...lines.slice(start).slice(-SESSION_EVENT_LIMIT)].join("\n") + "\n")
+}
+
+function record(phase, sessionID, payload) {
+  // The plugin's own start has no session yet: there is nothing to attribute it to.
+  if (typeof sessionID !== "string" || !sessionID) return
+  try {
+    fs.mkdirSync(sessionsDir, { recursive: true })
+    const file = sessionFile(sessionID)
+    const line = JSON.stringify({
       provider: "opencode",
       phase,
       cwd: payload.cwd,
@@ -133,33 +306,62 @@ function append(phase, payload = {{}}) {{
       agent_pid: process.pid,
       timestamp: Date.now(),
       raw: payload,
-    }}) + "\\n")
-  }} catch {{
+    }) + "\n"
+    if (PROMPT_PHASES.includes(phase.toLowerCase())) {
+      // A new prompt makes everything since the previous one irrelevant: keep only
+      // the session's first event (where it started) and the prompt itself.
+      let header = ""
+      try {
+        const text = fs.readFileSync(file, "utf8")
+        const end = text.indexOf("\n")
+        if (end >= 0) header = text.slice(0, end + 1)
+      } catch {
+        // No file yet: the prompt is the session's first event.
+      }
+      fs.writeFileSync(file, header + line)
+      return
+    }
+    fs.appendFileSync(file, line)
+    if (fs.statSync(file).size > COMPACT_BYTES) compact(file)
+  } catch {
     // Hooks must never interrupt an agent action.
-  }}
-}}
+  }
+}
 
-export const GitJugglerPlugin = async (ctx) => {{
-  append("SessionStart", {{ cwd: ctx.directory, worktree: ctx.worktree }})
-  return {{
+// session.* events carry the session as properties.sessionID, or as properties.info itself.
+function eventSessionID(event) {
+  const properties = event.properties ?? {}
+  if (typeof properties.sessionID === "string") return properties.sessionID
+  return typeof properties.info?.id === "string" ? properties.info.id : undefined
+}
+
+export const GitJugglerPlugin = async (ctx) => {
+  const base = { cwd: ctx.directory, worktree: ctx.worktree }
+  return {
     // A new user message starts a new unit of work (the prompt text is never recorded).
-    "chat.message": async (input) => {{
-      append("UserPromptSubmit", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID }})
-    }},
-    "tool.execute.before": async (input, output) => {{
-      append("PreToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID, tool: input.tool, args: output.args }})
-    }},
-    "tool.execute.after": async (input, output) => {{
-      append("PostToolUse", {{ cwd: ctx.directory, worktree: ctx.worktree, sessionID: input.sessionID, tool: input.tool, args: output.args, result: output.result }})
-    }},
-    event: async (input) => {{
-      if (input.event?.type?.startsWith("session.")) {{
-        append(input.event.type, {{ cwd: ctx.directory, worktree: ctx.worktree, event: input.event }})
-      }}
-    }},
-  }}
-}}
+    "chat.message": async (input) => {
+      record("UserPromptSubmit", input.sessionID, { ...base, sessionID: input.sessionID })
+    },
+    "tool.execute.before": async (input, output) => {
+      record("PreToolUse", input.sessionID, { ...base, sessionID: input.sessionID, tool: input.tool, args: pickInputs(output.args) })
+    },
+    "tool.execute.after": async (input, output) => {
+      record("PostToolUse", input.sessionID, { ...base, sessionID: input.sessionID, tool: input.tool, args: pickInputs(output.args) })
+    },
+    event: async (input) => {
+      const event = input.event
+      if (!event?.type?.startsWith("session.")) return
+      const properties = {}
+      if (typeof event.properties?.sessionID === "string") properties.sessionID = event.properties.sessionID
+      if (typeof event.properties?.info?.id === "string") properties.info = { id: event.properties.info.id }
+      record(event.type, eventSessionID(event), { ...base, event: { type: event.type, properties } })
+    },
+  }
+}
 '''
+
+RECORDER_SCRIPT = _inject(_RECORDER_TEMPLATE)
+OPENCODE_PLUGIN = _inject(_OPENCODE_PLUGIN_TEMPLATE)
 
 
 def opencode_snippet() -> str:
@@ -216,7 +418,7 @@ def claude_status() -> HookProviderStatus:
         provider="claude",
         installed=installed,
         config_path=str(CLAUDE_SETTINGS_PATH),
-        event_path=str(EVENT_PATH),
+        event_path=str(SESSIONS_DIR),
         snippet=claude_snippet(),
         description="Records Claude session and tool-use events so git-juggler can attribute activity to the worktree actually being used.",
         error=error,
@@ -236,7 +438,7 @@ def opencode_status() -> HookProviderStatus:
         provider="opencode",
         installed=installed,
         config_path=str(OPENCODE_PLUGIN_PATH),
-        event_path=str(EVENT_PATH),
+        event_path=str(SESSIONS_DIR),
         snippet=opencode_snippet(),
         description="Installs a global OpenCode plugin that records session and tool events for worktree attribution.",
         error=error,
@@ -255,7 +457,7 @@ def install_claude_hooks() -> HookProviderStatus:
             provider="claude",
             installed=False,
             config_path=str(CLAUDE_SETTINGS_PATH),
-            event_path=str(EVENT_PATH),
+            event_path=str(SESSIONS_DIR),
             snippet=claude_snippet(),
             description=claude_status().description,
             error=f"Cannot auto-install into invalid Claude settings: {error}",
@@ -267,7 +469,7 @@ def install_claude_hooks() -> HookProviderStatus:
             provider="claude",
             installed=False,
             config_path=str(CLAUDE_SETTINGS_PATH),
-            event_path=str(EVENT_PATH),
+            event_path=str(SESSIONS_DIR),
             snippet=claude_snippet(),
             description=claude_status().description,
             error="Cannot auto-install because Claude settings 'hooks' is not an object.",
@@ -280,7 +482,7 @@ def install_claude_hooks() -> HookProviderStatus:
                 provider="claude",
                 installed=False,
                 config_path=str(CLAUDE_SETTINGS_PATH),
-                event_path=str(EVENT_PATH),
+                event_path=str(SESSIONS_DIR),
                 snippet=claude_snippet(),
                 description=claude_status().description,
                 error=f"Cannot auto-install because Claude hooks.{phase} is not a list.",
@@ -303,3 +505,25 @@ def install_opencode_hooks() -> HookProviderStatus:
     OPENCODE_PLUGIN_PATH.parent.mkdir(parents=True, exist_ok=True)
     OPENCODE_PLUGIN_PATH.write_text(OPENCODE_PLUGIN, encoding="utf-8")
     return opencode_status()
+
+
+def upgrade_installed_hooks() -> None:
+    """Bring hooks an older git-juggler installed up to this version's.
+
+    Only rewrites the files git-juggler itself manages, and only where they are
+    already installed: Claude's settings keep calling the same recorder path, so
+    replacing the script upgrades every hook, and OpenCode picks up the plugin
+    on its next start. Never installs anything the user hasn't.
+    """
+    try:
+        if RECORDER_PATH.exists() and RECORDER_PATH.read_text(encoding="utf-8") != RECORDER_SCRIPT:
+            ensure_recorder_script()
+    except OSError:
+        pass
+    try:
+        if OPENCODE_PLUGIN_PATH.exists():
+            text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
+            if "GitJugglerPlugin" in text and "Managed by git-juggler" in text and text != OPENCODE_PLUGIN:
+                OPENCODE_PLUGIN_PATH.write_text(OPENCODE_PLUGIN, encoding="utf-8")
+    except OSError:
+        pass

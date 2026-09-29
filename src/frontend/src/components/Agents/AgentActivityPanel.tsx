@@ -9,7 +9,7 @@ import { type AgentSessionGroup, formatAge, formatTime, groupSubagentScans, path
 
 type Filter = "all" | "active" | "idle";
 
-const EVENTS_FILE = "~/.local/share/git-juggler/agent-events.jsonl";
+const EVENTS_DIR = "~/.local/share/git-juggler/agent-sessions/";
 const AGENT_LOGO: Record<string, string> = { claude: "/agent-logos/claude.png", opencode: "/agent-logos/opencode.webp" };
 const AGENT_NAME: Record<string, string> = { claude: "Claude Code", opencode: "opencode" };
 const agentName = (provider: string) => AGENT_NAME[provider] ?? (provider || "agent");
@@ -138,7 +138,7 @@ function SessionRow(props: { scan: AgentRepositoryScan; open: boolean; onToggle:
                 <DetailRow
                   label={item.is_home ? "home" : "worktree"}
                   value={`${pathBasename(item.worktree_path)} · ${item.branch ?? "detached"} · ${shortCommit(item.commit)} · ${item.state} ${formatTime(item.last_activity)}`}
-                  title={`${item.worktree_path}\nprocesses ${item.process_ids.join(", ")}\n${[...new Set(item.evidence.map((e) => e.type))].join(", ")}`}
+                  title={[item.worktree_path, item.process_ids.length ? `processes ${item.process_ids.join(", ")}` : null, [...new Set(item.evidence.map((e) => e.type))].join(", ")].filter(Boolean).join("\n")}
                 />
               )}
             </For>
@@ -197,7 +197,7 @@ export function AgentActivityPanel() {
 
   const liveTitle = () =>
     [
-      `Reading hook events from ${EVENTS_FILE}`,
+      `Reading hook events from ${EVENTS_DIR}`,
       `${worktreeCount()} worktree${worktreeCount() === 1 ? "" : "s"} watched`,
       agentActivity()?.scanned_at ? `last scan ${formatTime(agentActivity()!.scanned_at)}` : null,
     ]
