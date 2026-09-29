@@ -1,9 +1,10 @@
 import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
+import { agentCommitsMissingFromGraph } from "../lib/agentRings";
 import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
 import { ApiError, browseDirectory, clearCiCache, pickFolderNative, pollCiRuns, fetchRecentPipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentRepositoryScan, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
@@ -575,12 +576,36 @@ export const agentSessionCountsByRepositoryId = createMemo<Map<string, AgentSess
   return counts;
 });
 
+// Per repo, the agent HEADs a graph reload was already asked for and are still
+// missing: one that a reload can't bring in (older than the loaded pages, a
+// detached commit) must not reload the graph on every poll.
+const agentCommitReloads = new Map<string, Set<string>>();
+
+// An agent that just committed reports its new HEAD a poll or two before the
+// graph's own status poll notices the commit, and its ring can only be drawn
+// on a loaded commit: reload the graphs on screen as soon as that happens.
+function reloadGraphsMissingAgentCommits(scans: AgentRepositoryScan[]): void {
+  for (const repoId of new Set([activeRepoForPane("left"), activeRepoForPane("right")])) {
+    if (!repoId) continue;
+    const state = repoStates[repoId];
+    const repositoryId = repos().find((repo) => repo.id === repoId)?.repository_id;
+    if (!state || !repositoryId || state.loading || state.commits.length === 0) continue;
+    const loaded = new Set(state.commits.map((commit) => commit.hash));
+    const missing = agentCommitsMissingFromGraph(scans, repositoryId, (hash) => loaded.has(hash));
+    const asked = agentCommitReloads.get(repoId);
+    agentCommitReloads.set(repoId, missing);
+    if ([...missing].some((hash) => !asked?.has(hash))) void refreshRepoGraph(repoId);
+  }
+}
+
 export async function refreshAgentActivity(): Promise<void> {
   if (!agentsEnabled() || agentActivityLoading()) return;
   setAgentActivityLoading(true);
   setAgentActivityError(null);
   try {
-    setAgentActivity(await fetchAgentActivity());
+    const activity = await fetchAgentActivity();
+    setAgentActivity(activity);
+    reloadGraphsMissingAgentCommits(activity.scans);
   } catch (e) {
     setAgentActivityError((e as Error).message);
   } finally {

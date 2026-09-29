@@ -19,6 +19,7 @@ import {
   workingTreeVisibleForRepo,
 } from "../../state/store";
 import { AgentHoverCard, type AgentHoverEntry } from "../Agents/AgentHoverCard";
+import { placeAgentRings, type RingPlacement } from "../../lib/agentRings";
 import { colorForBranch, tagColor } from "./branchColor";
 import { computeColumns } from "./computeColumns";
 import { laneWidthFor } from "./laneWidth";
@@ -72,19 +73,16 @@ export function GraphPanel(props: { repoId: string }) {
     }
     return hashes;
   });
+  // Where each agent ring was last drawn, so it can wait there while the graph
+  // loads an agent's new commit (see placeAgentRings).
+  let ringPlacements = new Map<string, RingPlacement>();
   const agentEntriesByHash = createMemo(() => {
     const repo = repos().find((item) => item.id === props.repoId);
-    const byHash = new Map<string, AgentHoverEntry[]>();
-    if (!repo) return byHash;
-    for (const scan of agentActivity()?.scans ?? []) {
-      for (const activity of scan.worktrees) {
-        if (activity.repository_id !== repo.repository_id || !commitByHash().has(activity.commit)) continue;
-        const items = byHash.get(activity.commit) ?? [];
-        items.push({ scan, activity });
-        byHash.set(activity.commit, items);
-      }
-    }
-    return byHash;
+    if (!repo) return new Map<string, AgentHoverEntry[]>();
+    const commits = commitByHash();
+    const placed = placeAgentRings(agentActivity()?.scans ?? [], repo.repository_id, (hash) => commits.has(hash), ringPlacements, Date.now());
+    ringPlacements = placed.placements;
+    return placed.byHash;
   });
   const [hoveredAgentCommit, setHoveredAgentCommit] = createSignal<{ hash: string; anchor: DOMRect } | null>(null);
   const hoveredEntries = () => {
