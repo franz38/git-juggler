@@ -24,12 +24,15 @@ export function CommitList(props: { repoId: string }) {
   });
   onCleanup(() => observer?.disconnect());
 
+  // O(rows), so computed once per change and shared by the reads below.
+  const rowLayout = createMemo(() => rowLayoutForRepo(props.repoId));
+
   // An observer only reports when visibility *changes*. If the end of the list
   // is still in view after a page lands (a tall window, or filters hiding most
   // rows), nothing would fire again, so re-observe to get a fresh report.
   createEffect(
     on(
-      [() => rowLayoutForRepo(props.repoId).order.length, () => graphHasMoreForRepo(props.repoId), () => graphLoadingMoreForRepo(props.repoId), () => props.repoId],
+      [() => rowLayout().order.length, () => graphHasMoreForRepo(props.repoId), () => graphLoadingMoreForRepo(props.repoId), () => props.repoId],
       () => {
         if (!observer || !sentinel) return;
         observer.unobserve(sentinel);
@@ -42,7 +45,7 @@ export function CommitList(props: { repoId: string }) {
   const isFetching = createMemo(() => {
     return fetchingRepos().has(props.repoId);
   });
-  const hasCommits = createMemo(() => rowLayoutForRepo(props.repoId).order.length > 0);
+  const hasCommits = createMemo(() => rowLayout().order.length > 0);
 
   return (
     <div class="commit-list">
@@ -66,7 +69,7 @@ export function CommitList(props: { repoId: string }) {
       >
         Fetching…
       </div>
-      <For each={rowLayoutForRepo(props.repoId).order}>{(commit) => <CommitRow repoId={props.repoId} commit={commit} />}</For>
+      <For each={rowLayout().order}>{(commit) => <CommitRow repoId={props.repoId} commit={commit} />}</For>
       <div
         ref={sentinel}
         class="load-more-sentinel"
