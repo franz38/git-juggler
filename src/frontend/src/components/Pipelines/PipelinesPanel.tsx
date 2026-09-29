@@ -1,15 +1,14 @@
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import type { ActivePipeline, CiRunInfo, CiStage, CiStageStatus } from "../../api/types";
 import { PIPELINE_POLL_MS, pipelines, pipelinesError, pipelinesLoaded } from "../../state/store";
 import { formatAge } from "../Agents/agentFormat";
 import { ProviderIcon, isStageFinished, providerName, statusColor } from "../Badges/ciStatus";
+import { Disclosure, EmptyNote, GroupHeading, Hoverable, LiveDot, MONO, PanelButton, PanelHeader, Segmented } from "../Sidebar/panelKit";
 
 /* Recent pipelines sidebar panel: compact rows with a stage strip, expandable
    to per-stage timing bars. Colors come from the theme variables. */
 
 type Filter = "all" | "running" | "failed";
-
-const MONO = "ui-monospace, Menlo, Consolas, monospace";
 
 const GLYPH: Partial<Record<CiStageStatus, string>> = {
   success: "✓",
@@ -28,17 +27,6 @@ const barColor = (status: CiStageStatus) => (stageRan(status) ? `color-mix(in sr
 /** Whether a stage has run (or is running): anything with time to show. */
 const stageRan = (status: CiStageStatus) => status !== "pending" && status !== "skipped" && status !== "unknown";
 const isRunning = (run: CiRunInfo) => !isStageFinished(run.status);
-
-const sectionLabel: JSX.CSSProperties = {
-  "font-family": MONO,
-  "font-size": "10px",
-  "letter-spacing": "0.08em",
-  color: "var(--text-dim)",
-  "text-transform": "uppercase",
-  overflow: "hidden",
-  "text-overflow": "ellipsis",
-  "white-space": "nowrap",
-};
 
 function fmtDuration(ms: number): string {
   const s = Math.max(0, ms / 1000);
@@ -76,22 +64,6 @@ function pipelineId(item: ActivePipeline): string {
   return `${item.run.provider}:${item.run.run_id ?? item.run.url}`;
 }
 
-function Hoverable(props: { style: JSX.CSSProperties; hover: JSX.CSSProperties; onClick?: () => void; children: JSX.Element; title?: string }) {
-  const [hovered, setHovered] = createSignal(false);
-  return (
-    <div
-      role="button"
-      title={props.title}
-      onClick={() => props.onClick?.()}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ ...props.style, ...(hovered() ? props.hover : {}) }}
-    >
-      {props.children}
-    </div>
-  );
-}
-
 function PipelineRow(props: { item: ActivePipeline; open: boolean; onToggle: () => void }) {
   const run = () => props.item.run;
   const stages = () => run().stages ?? [];
@@ -125,18 +97,7 @@ function PipelineRow(props: { item: ActivePipeline; open: boolean; onToggle: () 
         hover={{ background: "var(--hover-bg)" }}
       >
         <div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-          <span
-            style={{
-              flex: "none",
-              width: "10px",
-              color: "var(--text-dim)",
-              "font-size": "8px",
-              transform: props.open ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 160ms ease",
-            }}
-          >
-            ▶
-          </span>
+          <Disclosure open={props.open} />
           <span style={{ flex: "none", width: "16px", height: "16px", display: "flex", "align-items": "center", "justify-content": "center" }}>
             <ProviderIcon run={run()} size={14} />
           </span>
@@ -221,7 +182,7 @@ function PipelineRow(props: { item: ActivePipeline; open: boolean; onToggle: () 
                   >
                     {stage.name}
                   </span>
-                  <div style={{ flex: "none", position: "relative", width: "90px", height: "4px", "border-radius": "2px", background: "var(--border)" }}>
+                  <div style={{ flex: "none", position: "relative", width: "clamp(36px, 30%, 90px)", height: "4px", "border-radius": "2px", background: "var(--border)" }}>
                     <div
                       style={{
                         position: "absolute",
@@ -247,21 +208,9 @@ function PipelineRow(props: { item: ActivePipeline; open: boolean; onToggle: () 
               when={!run().archived}
               fallback={<span style={{ padding: "6px 0", "font-size": "12px", color: "var(--text-dim)" }}>No longer on {providerName(run().provider)}</span>}
             >
-              <Hoverable
-                onClick={() => window.open(run().url, "_blank", "noopener,noreferrer")}
-                style={{
-                  padding: "6px 10px",
-                  "border-radius": "6px",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-dim)",
-                  "font-size": "12px",
-                  "font-weight": 500,
-                  cursor: "pointer",
-                }}
-                hover={{ background: "var(--hover-bg)", color: "var(--text)" }}
-              >
+              <PanelButton muted onClick={() => window.open(run().url, "_blank", "noopener,noreferrer")}>
                 Open in {providerName(run().provider)} ↗
-              </Hoverable>
+              </PanelButton>
             </Show>
           </div>
         </div>
@@ -311,94 +260,38 @@ export function PipelinesPanel() {
     return [...byRepo.entries()].map(([id, group]) => ({ id, ...group }));
   });
 
-  const filters: { id: Filter; label: string; tone: string }[] = [
-    { id: "all", label: "All", tone: "var(--text-dim)" },
-    { id: "running", label: "Running", tone: statusColor.running },
-    { id: "failed", label: "Failed", tone: statusColor.failure },
-  ];
-
   return (
     <section style={{ display: "flex", "flex-direction": "column", "min-height": "100%", background: "var(--panel-bg)" }}>
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          "z-index": 1,
-          display: "flex",
-          "flex-direction": "column",
-          gap: "12px",
-          padding: "16px 16px 12px 16px",
-          background: "var(--panel-bg)",
-          "border-bottom": "1px solid var(--border)",
-        }}
-      >
-        <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "12px" }}>
-          <div style={{ "font-size": "14px", "font-weight": 600, color: "var(--text-h)" }}>Pipelines</div>
-          <div
-            title={`Refreshes every ${PIPELINE_POLL_MS / 1000}s`}
-            style={{ display: "flex", "align-items": "center", gap: "6px", "font-family": MONO, "font-size": "11px", color: "var(--text-dim)" }}
-          >
-            <span style={{ width: "6px", height: "6px", "border-radius": "3px", background: pipelinesError() ? "var(--danger)" : "var(--success)" }} />
+      <PanelHeader
+        title="Pipelines"
+        liveTitle={`Refreshes every ${PIPELINE_POLL_MS / 1000}s`}
+        live={
+          <>
+            <LiveDot color={pipelinesError() ? "var(--danger)" : "var(--success)"} />
             live · {PIPELINE_POLL_MS / 1000}s
-          </div>
-        </div>
-        <div
-          role="tablist"
-          style={{ display: "flex", padding: "2px", gap: "2px", "border-radius": "7px", background: "var(--input-bg)", border: "1px solid var(--border)" }}
-        >
-          <For each={filters}>
-            {(item) => {
-              const selected = () => filter() === item.id;
-              const count = () => counts()[item.id];
-              return (
-                <div
-                  role="tab"
-                  aria-selected={selected()}
-                  onClick={() => setFilter(item.id)}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    "align-items": "center",
-                    "justify-content": "center",
-                    gap: "6px",
-                    padding: "5px 0",
-                    "border-radius": "5px",
-                    background: selected() ? "var(--active-bg)" : "transparent",
-                    color: selected() ? "var(--text-h)" : "var(--text-dim)",
-                    "font-size": "12px",
-                    "font-weight": 500,
-                    cursor: "pointer",
-                    transition: "background-color 150ms ease, color 150ms ease",
-                  }}
-                >
-                  {item.label}
-                  <span style={{ "font-family": MONO, "font-size": "10px", color: item.id !== "all" && count() ? item.tone : "var(--text-dim)" }}>{count()}</span>
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <Segmented<Filter>
+          value={filter()}
+          onChange={setFilter}
+          options={[
+            { id: "all", label: "All", count: counts().all },
+            { id: "running", label: "Running", count: counts().running, tone: statusColor.running },
+            { id: "failed", label: "Failed", count: counts().failed, tone: statusColor.failure },
+          ]}
+        />
+      </PanelHeader>
 
       <div style={{ display: "flex", "flex-direction": "column", gap: "16px", padding: "12px 8px 16px 8px" }}>
         <Show when={pipelinesError()}>
           <div style={{ padding: "0 8px", "font-size": "12px", color: "var(--danger)" }}>{pipelinesError()}</div>
         </Show>
-        <Show
-          when={pipelinesLoaded()}
-          fallback={
-            <Show when={!pipelinesError()}>
-              <div style={{ padding: "32px 16px", "text-align": "center", "font-size": "13px", color: "var(--text-dim)" }}>Loading…</div>
-            </Show>
-          }
-        >
+        <Show when={pipelinesLoaded()} fallback={<Show when={!pipelinesError()}><EmptyNote>Loading…</EmptyNote></Show>}>
           <For each={groups()}>
             {(group) => (
               <div style={{ display: "flex", "flex-direction": "column", gap: "2px" }}>
-                <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between", gap: "8px", padding: "0 8px 6px 8px" }}>
-                  <div style={sectionLabel}>{group.name}</div>
-                  <div style={{ "font-family": MONO, "font-size": "10px", color: "var(--text-dim)", opacity: 0.7 }}>{group.items.length}</div>
-                </div>
+                <GroupHeading label={group.name} count={group.items.length} />
                 <For each={group.items}>
                   {(item) => <PipelineRow item={item} open={open().has(pipelineId(item))} onToggle={() => toggle(pipelineId(item))} />}
                 </For>
@@ -406,9 +299,7 @@ export function PipelinesPanel() {
             )}
           </For>
           <Show when={shown().length === 0}>
-            <div style={{ padding: "32px 16px", "text-align": "center", "font-size": "13px", color: "var(--text-dim)" }}>
-              {filter() === "failed" ? "No failed pipelines." : filter() === "running" ? "Nothing running right now." : "No pipelines yet."}
-            </div>
+            <EmptyNote>{filter() === "failed" ? "No failed pipelines." : filter() === "running" ? "Nothing running right now." : "No pipelines yet."}</EmptyNote>
           </Show>
         </Show>
       </div>

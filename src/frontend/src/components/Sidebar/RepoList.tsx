@@ -4,10 +4,13 @@ import { flipTranslate } from "../../lib/flip";
 import { useOverlay } from "../../state/overlayStack";
 import {
   activeRepo,
+  agentActivity as agentActivityState,
   agentActivityByRepositoryId,
   agentActivityByWorktreePath,
   deleteRepoGroup,
   fetchRepo,
+  headCommitForRepo,
+  uncommittedFilesForRepo,
   loadConfig,
   loadRepos,
   moveRepoGroup,
@@ -56,6 +59,14 @@ function RepoRow(props: {
   onRepoDragEnd?: () => void;
 }) {
   const agentActivity = () => agentActivityByWorktreePath().get(props.repo.path) ?? agentActivityByRepositoryId().get(props.repo.repository_id)?.[0];
+  const agentScan = () => {
+    const activity = agentActivity();
+    return activity ? agentActivityState()?.scans.find((scan) => scan.worktrees.includes(activity)) : undefined;
+  };
+  // Working-tree changes are only known once the repo's graph/status is loaded
+  // (it has been opened); until then no dot or count is shown.
+  const statusKnown = () => headCommitForRepo(props.repo.id) !== null;
+  const changes = () => uncommittedFilesForRepo(props.repo.id).length;
 
   return (
     <div
@@ -94,17 +105,35 @@ function RepoRow(props: {
         openRepoContextMenu(e.clientX, e.clientY, props.repo.id, props.repo.name, props.repo.path);
       }}
     >
+      <span
+        class="repo-status-dot"
+        classList={{ known: statusKnown(), dirty: statusKnown() && changes() > 0 }}
+        title={statusKnown() ? (changes() > 0 ? "Uncommitted changes" : "Clean") : ""}
+      />
       <span class="repo-names">
         <span class="repo-name-line">
           <span class="repo-name">{props.repo.name}</span>
           <Show when={agentActivity()}>
-            {(activity) => <span class="repo-agent-dot" classList={{ idle: activity().state === "idle" }} title={`Agent ${activity().state}`} />}
+            {(activity) => (
+              <span
+                class="repo-agent-tag"
+                classList={{ active: activity().state === "active" }}
+                title={`${agentScan()?.provider === "claude" ? "Claude Code" : agentScan()?.provider ?? "Agent"} · ${activity().state}`}
+              >
+                {agentScan()?.provider || "agent"}
+              </span>
+            )}
           </Show>
         </span>
         <Show when={props.repo.current_branch}>
           <span class="repo-branch">{props.repo.current_branch}</span>
         </Show>
       </span>
+      <Show when={statusKnown() && changes() > 0}>
+        <span class="repo-changes" title="Uncommitted files">
+          {changes()}Δ
+        </span>
+      </Show>
       <input
         type="checkbox"
         class="repo-select"
@@ -406,7 +435,10 @@ export function RepoList() {
         <div class="repo-empty">Looking for repos: {reposFound()} found…</div>
       </Show>
       <Show when={pinned().length > 0}>
-        <h2>Pinned</h2>
+        <h2>
+          <span>Pinned</span>
+          <span class="repo-heading-count">{pinned().length}</span>
+        </h2>
         <For each={pinned()}>{(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} />}</For>
       </Show>
       <div
@@ -468,7 +500,7 @@ export function RepoList() {
                       }}
                       onDragEnd={clearGroupDrag}
                     >
-                      {group.name} ({group.repos.length})
+                      {group.name}
                     </span>
                   }
                 >
@@ -492,6 +524,7 @@ export function RepoList() {
                     onBlur={() => setEditingGroupId(null)}
                   />
                 </Show>
+                <span class="repo-heading-count">{group.repos.length}</span>
                 <button
                   type="button"
                   class="repo-group-collapse"
@@ -547,7 +580,10 @@ export function RepoList() {
           }}
         </For>
       </div>
-      <h2>Repositories</h2>
+      <h2>
+        <span>Repositories</span>
+        <span class="repo-heading-count">{unpinned().length}</span>
+      </h2>
       <For each={unpinned()} fallback={<Show when={!reposLoading()}><div class="repo-empty">No git repos found</div></Show>}>
         {(repo) => <RepoRow repo={repo} selected={selectedRepoPaths().has(repo.path)} onSelectedChange={setRepoSelected} />}
       </For>

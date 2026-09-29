@@ -16,41 +16,59 @@
   overflow-y: auto;
 }
 
+/* Repos / Agents / Pipelines: the same segmented control as the panels' filters. */
 .sidebar-tabs {
   flex: 0 0 auto;
   display: flex;
-  border-top: 1px solid var(--border);
-  background: var(--panel-bg);
+  gap: 2px;
+  margin: 8px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--input-bg);
 }
 
 .sidebar-tab {
   flex: 1;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 5px 0;
   border: 0;
-  border-top: 2px solid transparent;
-  margin-top: -1px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .sidebar-tab:hover {
   color: var(--text-h);
-  background: var(--hover-bg);
 }
 
 .sidebar-tab.active {
+  background: var(--active-bg);
   color: var(--text-h);
-  border-top-color: var(--accent);
 }
 
-.sidebar-tab-badge,
+/* A tab's count: tinted while something is going on, dim otherwise. */
+.sidebar-tab-badge {
+  flex: 0 0 auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.sidebar-tab-badge.idle {
+  color: var(--text-dim);
+}
+
 .tab-agent-badge {
   flex: 0 0 auto;
   min-width: 15px;
@@ -64,7 +82,6 @@
 }
 
 /* All the sessions counted here are idle: no accent, just the secondary tone. */
-.sidebar-tab-badge.idle,
 .tab-agent-badge.idle {
   background: var(--border);
   color: var(--text-dim);
@@ -85,140 +102,9 @@
 
 .repo-search {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  /* Left padding is 3px wider than the right to match .repo-item, whose
-     3px transparent border-left (reserved for the active-row accent)
-     pushes its content in by that much. */
-  padding: 10px 16px 4px 19px;
-}
-
-.agent-activity-panel {
-  margin: 10px 10px 6px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
-
-.agent-activity-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
   gap: 8px;
-  margin-bottom: 8px;
-  color: var(--text-h);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.agent-scan-time {
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.agent-discovery-row {
-  display: flex;
-  align-items: center;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
-.agent-error {
-  margin-top: 8px;
-  color: var(--danger-fg);
-  font-size: 11px;
-}
-
-.agent-results {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.agent-summary,
-.agent-empty {
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
-.agent-worktree-card {
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel-bg);
-}
-
-.agent-worktree-card.active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel-bg));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
-}
-
-.agent-scan-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 6px;
-  padding-left: 8px;
-  border-top: 1px solid var(--border);
-  border-left: 2px solid transparent;
-}
-
-/* An active session stands out from the idle ones around it. */
-.agent-scan-card.active {
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-  border-radius: 0 6px 6px 0;
-}
-
-.agent-scan-card.nested {
-  margin-left: 12px;
-  padding-left: 10px;
-  border-left-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-.agent-scan-title {
-  color: var(--text-h);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.agent-command {
-  overflow: hidden;
-  color: var(--text-dim);
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-session-directory {
-  overflow: hidden;
-  color: var(--text-dim);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-worktree-title {
-  overflow: hidden;
-  color: var(--text-h);
-  font-size: 12px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-worktree-meta {
-  overflow: hidden;
-  color: var(--text-dim);
-  font-size: 10px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 12px 12px 10px;
 }
 
 .agent-hover-target {
@@ -234,49 +120,16 @@
   pointer-events: none;
 }
 
-.agent-state-pill {
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.agent-state-pill.idle {
-  background: var(--border);
-  color: var(--text-dim);
-}
-
-.agent-state-pill.subagent {
-  background: color-mix(in srgb, var(--warning) 18%, transparent);
-  color: var(--text);
-}
-
-.agent-evidence-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 5px;
-}
-
-.agent-evidence-pill {
-  padding: 1px 5px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-radius: 999px;
-  color: var(--text-dim);
-  font-size: 9px;
-}
-
 .repo-search input {
   flex: 1;
   min-width: 0;
-  background: var(--input-bg);
+  padding: 7px 10px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
+  background: var(--input-bg);
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  padding: 4px 8px;
 }
 
 .repo-search input:focus {
@@ -285,41 +138,59 @@
 }
 
 .repo-bulk-button {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-dim);
+  font-size: 13px;
   cursor: pointer;
   line-height: 1;
 }
 
 .repo-bulk-button:hover {
-  border-color: var(--accent);
+  background: var(--hover-bg);
   color: var(--text-h);
 }
 
+/* Section labels (Pinned, groups, Repositories): small mono caps + a count. */
 .repo-list h2 {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-  padding: 16px 16px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0;
+  padding: 18px 16px 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.repo-heading-count {
+  flex: 0 0 auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  opacity: 0.7;
 }
 
 .repo-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  margin: 1px 0;
-  padding: 0 16px;
+  gap: 10px;
+  margin: 1px 8px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--text);
-  border-left: 3px solid transparent;
 }
 
 .repo-item:hover {
@@ -328,8 +199,12 @@
 
 .repo-item.active {
   background: var(--active-bg);
-  border-left-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
   color: var(--text-h);
+}
+
+.repo-item.active .repo-name {
+  font-weight: 600;
 }
 
 .repo-item[draggable="true"] {
@@ -344,16 +219,34 @@
   opacity: 0.45;
 }
 
+/* Working-tree state: only drawn once it's known (the repo was loaded). */
+.repo-status-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: transparent;
+}
+
+.repo-status-dot.known {
+  background: var(--border);
+}
+
+.repo-status-dot.dirty {
+  background: var(--warning);
+}
+
 .repo-names {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 1px;
   flex: 1;
   min-width: 0;
-  line-height: 1.15;
 }
 
 .repo-name {
+  min-width: 0;
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -363,26 +256,28 @@
 .repo-name-line {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
-.repo-agent-dot {
+.repo-agent-tag {
   flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-dim);
 }
 
-.repo-agent-dot.idle {
-  background: var(--text-dim);
-  box-shadow: none;
-  opacity: 0.6;
+.repo-agent-tag.active {
+  border-color: color-mix(in srgb, var(--success) 50%, var(--border));
+  color: var(--success);
 }
 
 .repo-branch {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 10px;
   color: var(--text-dim);
   overflow: hidden;
@@ -390,35 +285,31 @@
   white-space: nowrap;
 }
 
+.repo-changes {
+  flex: 0 0 auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--warning);
+}
+
 .repo-list .repo-group-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  padding: 18px 16px 6px;
   overflow: hidden;
   box-sizing: border-box;
-  transition: height 120ms ease, padding 120ms ease, opacity 120ms ease, background-color 120ms ease;
+  transition: background-color 120ms ease;
 }
 
 .repo-group-heading:hover {
-  background: var(--hover-bg);
+  background: color-mix(in srgb, var(--hover-bg) 60%, transparent);
 }
 
 .repo-group-name {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 500;
-  margin: -8px 0;
-  padding: 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: grab;
-  text-transform: uppercase;
-  letter-spacing: normal;
 }
 
 .repo-group-display-name {
@@ -436,8 +327,9 @@
   padding: 2px 4px;
   font: inherit;
   letter-spacing: normal;
+  text-transform: none;
   color: var(--text-h);
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--accent);
   border-radius: 4px;
   outline: none;
@@ -467,14 +359,43 @@
   transform: rotate(-90deg);
 }
 
+/* The design's 14px checkboxes, filled with the accent when checked. */
 .repo-select,
 .repo-group-select {
-  flex: 0 0 auto;
-  accent-color: var(--accent);
-  cursor: pointer;
-  /* Zero the browser's default checkbox margin so repo and group checkboxes
-     share the same right edge. */
+  flex: 0 0 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
   margin: 0;
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  background: transparent;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.repo-select:checked,
+.repo-group-select:checked,
+.repo-group-select:indeterminate {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.repo-select:checked::after,
+.repo-group-select:checked::after {
+  content: "✓";
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.repo-group-select:indeterminate::after {
+  content: "–";
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 1;
 }
 
 .repo-select {
@@ -486,8 +407,6 @@
 }
 
 .repo-group-section {
-  padding-top: 4px;
-  padding-bottom: 8px;
   transition: background-color 150ms ease;
 }
 
