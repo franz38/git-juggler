@@ -16,6 +16,7 @@ import {
   repos,
   type AgentSessionCounts,
   type TabInfo,
+  uncommittedFilesForRepo,
 } from "../../state/store";
 
 const SPLIT_DROP_START_RATIO = 0.72;
@@ -191,12 +192,19 @@ export function TabsBar(props: { pane: PaneId; tabs: TabInfo[] }) {
           >
             <span class="tab-names">
               <span class="tab-label">{tab.name}</span>
-              <Show when={!repoUnavailable(tab.id) && repoCurrentBranch(tab.id)}>
-                <span class="tab-branch">{repoCurrentBranch(tab.id)}</span>
-              </Show>
-              <Show when={repoUnavailable(tab.id)}>
-                <span class="tab-branch">Unavailable</span>
-              </Show>
+              <span class="tab-meta">
+                <Show when={!repoUnavailable(tab.id) && repoCurrentBranch(tab.id)}>
+                  <span class="tab-branch">{repoCurrentBranch(tab.id)}</span>
+                </Show>
+                <Show when={repoUnavailable(tab.id)}>
+                  <span class="tab-branch">Unavailable</span>
+                </Show>
+                <Show when={!repoUnavailable(tab.id) && uncommittedFilesForRepo(tab.id).length > 0}>
+                  <span class="tab-changes" title="Uncommitted files">
+                    {uncommittedFilesForRepo(tab.id).length}Δ
+                  </span>
+                </Show>
+              </span>
             </span>
             <Show when={agentCounts(tab.id).total > 0}>
               <span

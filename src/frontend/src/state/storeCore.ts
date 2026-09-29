@@ -1108,13 +1108,30 @@ export function commitsForRepo(repoId: string): CommitSummary[] {
 
 const [authorFilter, setAuthorFilterSignal] = createSignal<string[]>([]);
 const [commentFilter, setCommentFilterSignal] = createSignal("");
-// "unset" = don't filter on tags; "yes" = only tagged commits; "no" = only untagged ones.
-export type TagFilter = "unset" | "yes" | "no";
-const [tagFilter, setTagFilterSignal] = createSignal<TagFilter>("unset");
+// "any" = don't filter on tags; "yes" = only tagged commits; "no" = only untagged ones.
+export type TagFilter = "yes" | "any" | "no";
+const [tagFilter, setTagFilterSignal] = createSignal<TagFilter>("any");
 export { authorFilter, commentFilter, tagFilter };
 
 export function setTagFilter(value: TagFilter): void {
   setTagFilterSignal(value);
+}
+
+// The commit-filter popover's whole state as one value (see GraphToolbar).
+export interface CommitFilters {
+  text: string;
+  authors: string[];
+  hasTag: TagFilter;
+}
+export const emptyCommitFilters: CommitFilters = { text: "", authors: [], hasTag: "any" };
+export const countCommitFilters = (f: CommitFilters): number => (f.text.trim() ? 1 : 0) + (f.authors.length ? 1 : 0) + (f.hasTag !== "any" ? 1 : 0);
+
+export const commitFilters = (): CommitFilters => ({ text: commentFilter(), authors: authorFilter(), hasTag: tagFilter() });
+
+export function setCommitFilters(next: CommitFilters): void {
+  setCommentFilterSignal(next.text);
+  setAuthorFilterSignal(next.authors);
+  setTagFilterSignal(next.hasTag);
 }
 
 export function setAuthorFilter(authors: string[]): void {
@@ -1144,12 +1161,35 @@ export const commitAuthors = createMemo<string[]>(() => {
 // repos); the "commits since" date applies to whichever repo is active.
 
 const [branchSelections, setBranchSelections] = createSignal<Record<string, string[]>>({});
-const [branchSince, setBranchSinceSignal] = createSignal("");
-export { branchSince };
+// "Active since" is either a rolling preset (7d/30d/90d) or a fixed date; the
+// date wins when both are set. `branchSince` is the effective yyyy-mm-dd date.
+export type SincePreset = "any" | "7d" | "30d" | "90d";
+const [branchSincePreset, setBranchSincePresetSignal] = createSignal<SincePreset>("any");
+const [branchSinceDate, setBranchSinceDateSignal] = createSignal("");
+
+const localIsoDate = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export const branchSince = createMemo<string>(() => {
+  if (branchSinceDate()) return branchSinceDate();
+  const preset = branchSincePreset();
+  if (preset === "any") return "";
+  const since = new Date();
+  since.setDate(since.getDate() - Number.parseInt(preset, 10));
+  return localIsoDate(since);
+});
 
 export function setBranchSince(date: string): void {
-  setBranchSinceSignal(date);
+  setBranchSinceDateSignal(date);
+  setBranchSincePresetSignal("any");
 }
+
+export interface BranchFilters {
+  branches: string[];
+  since: SincePreset;
+  sinceDate: string;
+}
+export const emptyBranchFilters: BranchFilters = { branches: [], since: "any", sinceDate: "" };
+export const countBranchFilters = (f: BranchFilters): number => (f.branches.length ? 1 : 0) + (f.since !== "any" || f.sinceDate ? 1 : 0);
 
 export const commitBranches = createMemo<string[]>(() => branchNames(commits()));
 
@@ -1176,9 +1216,16 @@ export function setBranchFilter(branches: string[]): void {
   if (name) setBranchSelections((current) => ({ ...current, [name]: branches }));
 }
 
+export const branchFilters = (): BranchFilters => ({ branches: branchFilter(), since: branchSincePreset(), sinceDate: branchSinceDate() });
+
+export function setBranchFilters(next: BranchFilters): void {
+  setBranchFilter(next.branches);
+  setBranchSincePresetSignal(next.since);
+  setBranchSinceDateSignal(next.sinceDate);
+}
+
 export function clearBranchFilters(): void {
-  setBranchFilter([]);
-  setBranchSince("");
+  setBranchFilters(emptyBranchFilters);
 }
 
 const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
@@ -1201,7 +1248,7 @@ const rowFilterHiddenHashes = createMemo<Set<string>>(() => {
     if (
       (authors.length > 0 && !authors.includes(commit.author.name)) ||
       (comment && !commit.subject.toLowerCase().includes(comment)) ||
-      (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes"))
+      (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes"))
     ) {
       hidden.add(commit.hash);
     }
@@ -1224,7 +1271,7 @@ export function filteredCommitsForRepo(repoId: string): CommitSummary[] {
     if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
     if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
     if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
-    if (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
+    if (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
     return true;
   });
 }
@@ -1266,7 +1313,7 @@ export function resolveVisibleParentForRepo(repoId: string, parentHash: string, 
       !branchHidden &&
       ((authors.length > 0 && !authors.includes(commit.author.name)) ||
         (comment && !commit.subject.toLowerCase().includes(comment)) ||
-        (tagged !== "unset" && (commit.refs.tags.length > 0) !== (tagged === "yes")));
+        (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes")));
     if (visible.has(cursor)) return { hash: cursor, skipped: rowHidden };
     if (branchHidden || !rowHidden) return null;
     cursor = commit.parents[0];

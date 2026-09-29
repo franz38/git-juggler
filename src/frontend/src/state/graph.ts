@@ -10,12 +10,18 @@ export {
   branchColorMode,
   branchFilter,
   branchFilterForRepo,
+  branchFilters,
   branchSince,
   checkedOutBranches,
   ciRuns,
   ciRunsForRepo,
   clearBranchFilters,
   commentFilter,
+  commitFilters,
+  countBranchFilters,
+  countCommitFilters,
+  emptyBranchFilters,
+  emptyCommitFilters,
   commitAuthors,
   commitBranches,
   commitBranchesForRepo,
@@ -57,8 +63,10 @@ export {
   setAuthorFilter,
   setBranchColorMode,
   setBranchFilter,
+  setBranchFilters,
   setBranchSince,
   setCommentFilter,
+  setCommitFilters,
   setSearchQuery,
   setTagFilter,
   tagFilter,
@@ -80,4 +88,4 @@ export {
   workingTreeVisibleForRepo,
 } from "./storeCore";
 
-export type { BranchColorMode, TagFilter } from "./storeCore";
+export type { BranchColorMode, BranchFilters, CommitFilters, SincePreset, TagFilter } from "./storeCore";
