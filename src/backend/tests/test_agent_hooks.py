@@ -100,8 +100,8 @@ class AgentHooksTest(unittest.TestCase):
             event_path.write_text(event("s1"), encoding="utf-8")
             reader = AgentHookEventReader(event_path=event_path, claude_sessions_dir=None, opencode_db_path=None)
             calls: list[str] = []
-            original = reader.git_resolver._resolve_uncached
-            reader.git_resolver._resolve_uncached = lambda d: (calls.append(str(d)), original(d))[1]  # type: ignore[method-assign]
+            original = reader.git_resolver.resolve_directory
+            reader.git_resolver.resolve_directory = lambda d: (calls.append(str(d)), original(d))[1]  # type: ignore[method-assign]
 
             first = reader.recent_scans()
             second = reader.recent_scans()

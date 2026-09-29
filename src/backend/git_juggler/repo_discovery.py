@@ -7,6 +7,7 @@ from pathlib import Path
 
 from git import Repo
 
+from .git.gitfiles import resolve_common_dir, resolve_git_dir
 from .git.utils import get_current_branch
 from .schemas import RepoSummary
 
@@ -44,23 +45,6 @@ def resolve_repo_path(roots: list[Path], repo_id: str) -> Path | None:
     return None
 
 
-def _resolve_git_dir(dot_git: Path) -> Path:
-    """Resolve a repo's own git-dir from its `.git` entry: a plain directory
-    for a normal checkout, or (for a worktree checkout) a file containing
-    `gitdir: <path>` pointing at the real one under the main repo's
-    `.git/worktrees/<name>`."""
-    if dot_git.is_dir():
-        return dot_git
-    content = dot_git.read_text(encoding="utf-8", errors="replace").strip()
-    prefix = "gitdir:"
-    if not content.lower().startswith(prefix):
-        return dot_git
-    target = Path(content[len(prefix) :].strip())
-    if not target.is_absolute():
-        target = (dot_git.parent / target).resolve()
-    return target
-
-
 def _read_current_branch(git_dir: Path) -> str | None:
     """Best-effort branch name straight from HEAD, no GitPython/subprocess.
     Returns None for detached HEAD or an unreadable/unexpected HEAD file --
@@ -75,29 +59,13 @@ def _read_current_branch(git_dir: Path) -> str | None:
     return None
 
 
-def _resolve_common_dir(git_dir: Path) -> Path:
-    """No-subprocess equivalent of `git rev-parse --git-common-dir`: reads
-    the same `commondir` file GitPython's own `common_dir` property reads
-    internally. Absent for a non-worktree repo, whose own git-dir already
-    *is* the common dir."""
-    commondir_file = git_dir / "commondir"
-    try:
-        content = commondir_file.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError:
-        return git_dir
-    common = Path(content)
-    if not common.is_absolute():
-        common = (git_dir / common).resolve()
-    return common
-
-
 def _scan_repo_fast(path: Path) -> tuple[str | None, str]:
     """Direct-file-read fast path: a normal repo or worktree checkout costs
     2-3 small reads here, versus constructing a full GitPython Repo (which
     also parses config, resolves alternates, etc.) or shelling out to git."""
-    git_dir = _resolve_git_dir(path / ".git")
+    git_dir = resolve_git_dir(path / ".git")
     current_branch = _read_current_branch(git_dir)
-    repository_id = str(_resolve_common_dir(git_dir).resolve())
+    repository_id = str(resolve_common_dir(git_dir).resolve())
     return current_branch, repository_id
 
 
