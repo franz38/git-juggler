@@ -11,6 +11,7 @@ from unittest.mock import patch
 from git_juggler.agents.hook_events import AgentHookEventReader
 from git_juggler.agents.tracking import claude_transcripts
 from git_juggler.agents.tracking.claude_transcripts import find_transcript, read_transcript_info
+from hook_event_files import write_session_files
 
 
 def _lines(*records: dict) -> str:
@@ -107,15 +108,15 @@ class SessionDetailsTest(unittest.TestCase):
                 encoding="utf-8",
             )
             now = int(time.time() * 1000)
-            events = root / "events.jsonl"
-            events.write_text(
-                _lines(
-                    {"provider": "claude", "phase": "SessionStart", "cwd": str(repo), "pid": 1, "timestamp": now, "raw": {"session_id": "sid"}},
-                    {"provider": "claude", "phase": "SessionStart", "cwd": str(worktree), "pid": 1, "timestamp": now, "raw": {"session_id": "sid"}},
-                ),
-                encoding="utf-8",
+            events_dir = root / "agent-sessions"
+            write_session_files(
+                events_dir,
+                [
+                    {"provider": "claude", "phase": "SessionStart", "cwd": str(repo), "timestamp": now, "raw": {"session_id": "sid"}},
+                    {"provider": "claude", "phase": "SessionStart", "cwd": str(worktree), "timestamp": now, "raw": {"session_id": "sid"}},
+                ],
             )
-            reader = AgentHookEventReader(event_path=events, claude_sessions_dir=sessions, claude_projects_dir=projects, opencode_db_path=None)
+            reader = AgentHookEventReader(sessions_dir=events_dir, claude_sessions_dir=sessions, claude_projects_dir=projects, opencode_db_path=None)
 
             with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 scan = reader.recent_scans()[0]

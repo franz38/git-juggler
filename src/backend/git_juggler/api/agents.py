@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..agents.hook_events import AgentHookEventReader
-from ..agents.hooks import hooks_status, install_claude_hooks, install_opencode_hooks
+from ..agents.hooks import EVENT_PATH, SESSIONS_DIR, hooks_status, install_claude_hooks, install_opencode_hooks
 from ..agents.tracking.activity_models import AgentRepositoryScan
 from ..schemas import (
     AgentActivityResponse,
@@ -14,7 +14,7 @@ from ..schemas import (
 
 
 router = APIRouter()
-hook_event_reader = AgentHookEventReader()
+hook_event_reader = AgentHookEventReader(sessions_dir=SESSIONS_DIR, legacy_event_path=EVENT_PATH)
 
 
 def _agent_scan_response(scan: AgentRepositoryScan) -> AgentRepositoryScanResponse:

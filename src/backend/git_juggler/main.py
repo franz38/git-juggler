@@ -9,6 +9,7 @@ from pathlib import Path
 
 import uvicorn
 
+from .agents.hooks import upgrade_installed_hooks
 from .app import create_app
 
 
@@ -50,6 +51,9 @@ def cli() -> None:
     root_path = Path(args.path).expanduser().resolve()
     if not root_path.is_dir():
         raise SystemExit(f"Not a directory: {root_path}")
+
+    # Here rather than in create_app, which tests build: this rewrites files under the real home.
+    upgrade_installed_hooks()
 
     if not args.no_open:
         threading.Timer(0.75, webbrowser.open, args=(browser_url(args.host, args.port),)).start()

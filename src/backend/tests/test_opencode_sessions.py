@@ -14,6 +14,7 @@ from git_juggler.agents import hooks as agent_hooks
 from git_juggler.agents.hook_events import AgentHookEventReader
 from git_juggler.agents.tracking import text
 from git_juggler.agents.tracking.opencode_sessions import BUSY_STALE_MS, db_signature, read_session
+from hook_event_files import write_session_files
 
 NOW = 1_800_000_000_000
 
@@ -134,15 +135,15 @@ class OpenCodeReaderTest(unittest.TestCase):
         self._git(repo, "worktree", "add", "-b", "feature", str(worktree))
         return repo, worktree
 
-    def _events(self, path: Path, cwd: Path, session_id: str | None, phases: tuple[str, ...] = ("PostToolUse",), pid: int = 4242) -> None:
+    def _events(self, directory: Path, cwd: Path, session_id: str | None, phases: tuple[str, ...] = ("PostToolUse",), pid: int = 4242) -> None:
         now = int(time.time() * 1000)
         raw = {"cwd": str(cwd)}
         if session_id:
             raw["sessionID"] = session_id
-        path.write_text("".join(json.dumps({"provider": "opencode", "phase": phase, "cwd": str(cwd), "pid": pid, "agent_pid": pid, "timestamp": now, "raw": raw}) + "\n" for phase in phases), encoding="utf-8")
+        write_session_files(directory, [{"provider": "opencode", "phase": phase, "cwd": str(cwd), "pid": pid, "agent_pid": pid, "timestamp": now, "raw": raw} for phase in phases])
 
     def _reader(self, root: Path, db: Path | None) -> AgentHookEventReader:
-        return AgentHookEventReader(event_path=root / "events.jsonl", claude_sessions_dir=None, claude_projects_dir=None, opencode_db_path=db)
+        return AgentHookEventReader(sessions_dir=root / "agent-sessions", claude_sessions_dir=None, claude_projects_dir=None, opencode_db_path=db)
 
     def test_details_state_home_and_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
@@ -153,7 +154,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             add_session(connection, directory=str(worktree), time_updated=int(time.time() * 1000))
             add_message(connection, "m1", "user", int(time.time() * 1000) - 5000, prompt="do it")
             add_message(connection, "m2", "assistant", int(time.time() * 1000) - 4000)  # running
-            self._events(root / "events.jsonl", repo, "ses_1")
+            self._events(root / "agent-sessions", repo, "ses_1")
             reader = self._reader(root, db)
 
             scan = reader.recent_scans()[0]
@@ -182,14 +183,13 @@ class OpenCodeReaderTest(unittest.TestCase):
             db = root / "opencode.db"
             connection = make_db(self, db)
             add_session(connection, directory=str(worktree))
-            events = root / "events.jsonl"
             now = int(time.time() * 1000)
-            events.write_text(
-                "".join(
-                    json.dumps({"provider": "opencode", "phase": "PostToolUse", "cwd": str(cwd), "pid": 4242, "agent_pid": 4242, "timestamp": now, "raw": {"cwd": str(cwd), "sessionID": "ses_1"}}) + "\n"
+            write_session_files(
+                root / "agent-sessions",
+                [
+                    {"provider": "opencode", "phase": "PostToolUse", "cwd": str(cwd), "pid": 4242, "agent_pid": 4242, "timestamp": now, "raw": {"cwd": str(cwd), "sessionID": "ses_1"}}
                     for cwd in (repo, worktree)
-                ),
-                encoding="utf-8",
+                ],
             )
 
             scan = self._reader(root, db).recent_scans()[0]
@@ -207,7 +207,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             reader = self._reader(root, db)
 
             for session_id in ("child", "archived", None):
-                self._events(root / "events.jsonl", repo, session_id, phases=("SessionStart",))
+                self._events(root / "agent-sessions", repo, session_id, phases=("SessionStart",))
                 self.assertEqual(reader.recent_scans(), [], session_id)
 
     def test_dead_process_is_dropped_and_missing_db_falls_back_to_hooks_only(self) -> None:
@@ -216,7 +216,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             repo, _ = self._repo(root)
             db = root / "opencode.db"
             add_session(make_db(self, db), directory=str(repo))
-            self._events(root / "events.jsonl", repo, "ses_1")
+            self._events(root / "agent-sessions", repo, "ses_1")
 
             with patch("git_juggler.agents.hook_events._pid_alive", return_value=False):
                 self.assertEqual(self._reader(root, db).recent_scans(), [])
@@ -226,7 +226,7 @@ class OpenCodeReaderTest(unittest.TestCase):
             self.assertIsNone(fallback[0].details)
 
     def test_session_id_is_read_from_plugin_payloads(self) -> None:
-        reader = AgentHookEventReader(event_path=Path("/nonexistent"), claude_sessions_dir=None, claude_projects_dir=None, opencode_db_path=None)
+        reader = AgentHookEventReader(claude_sessions_dir=None, claude_projects_dir=None, opencode_db_path=None)
         self.assertEqual(reader._session_id({"sessionID": "a"}), "a")
         self.assertEqual(reader._session_id({"event": {"type": "session.idle", "properties": {"sessionID": "b"}}}), "b")
         self.assertEqual(reader._session_id({"event": {"type": "session.created", "properties": {"info": {"id": "c"}}}}), "c")

@@ -10,9 +10,9 @@ import threading
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from .hooks import EVENT_PATH
+from . import hooks
 from .tracking.activity_models import ActivityEvidence, AgentRepositoryScan, AgentWorktreeActivity, SessionDetails
 from .tracking.claude_sessions import CLAUDE_SESSIONS_DIR, ClaudeSession, read_registry, registry_signature
 from .tracking.claude_transcripts import CLAUDE_PROJECTS_DIR, TranscriptInfo, find_transcript, read_transcript_info, transcript_signature
@@ -21,14 +21,18 @@ from .tracking.opencode_sessions import OPENCODE_DB_PATH, OpenCodeSession, db_si
 
 
 HOOK_ACTIVITY_TTL_MS = 120_000
-HOOK_EVENT_LIMIT = 5000
-SESSION_EVENT_LIMIT = 300
+SESSION_EVENT_LIMIT = hooks.SESSION_EVENT_LIMIT
 IDLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000
-END_PHASES = {"sessionend", "session.deleted"}
+END_PHASES = set(hooks.END_PHASES)
 # A new user prompt starts a new unit of work: commands run for earlier prompts
 # stop counting as proof of activity (see _since_last_prompt).
-PROMPT_PHASES = {"userpromptsubmit"}
+PROMPT_PHASES = set(hooks.PROMPT_PHASES)
 HOOK_SCORE = 30
+# Session files are removed once the reader would ignore them anyway: a day
+# after their last write, or shortly after the session ended.
+SESSION_FILE_MAX_AGE_S = IDLE_SESSION_MAX_MS / 1000
+ENDED_SESSION_FILE_GRACE_S = 60
+SESSION_FILE_CLEANUP_INTERVAL_S = 600
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,157 @@ class HookEvent:
     agent_pid: int | None
     timestamp: int
     raw: dict[str, Any]
+
+
+class SessionFiles:
+    """The per-session event files the hooks write (see hooks.SESSIONS_DIR).
+
+    Each is small (one turn) and parsed again only when it changes, so a poll
+    costs one directory listing plus whatever was written since the last one.
+    """
+
+    def __init__(self, directory: Path | None, parse: Callable[[str], "HookEvent | None"]) -> None:
+        self.directory = directory
+        self._parse = parse
+        self._parsed: dict[str, tuple[tuple[int, int], list[HookEvent]]] = {}
+        self._last_cleanup = 0.0
+
+    def _listing(self) -> list[tuple[str, str, os.stat_result]]:
+        if self.directory is None:
+            return []
+        listing = []
+        try:
+            with os.scandir(self.directory) as entries:
+                for entry in entries:
+                    if not entry.name.endswith(".jsonl"):
+                        continue
+                    try:
+                        if entry.is_file():
+                            listing.append((entry.name, entry.path, entry.stat()))
+                    except OSError:
+                        continue
+        except OSError:
+            return []
+        return listing
+
+    def signature(self) -> tuple:
+        return tuple(sorted((name, stat.st_mtime_ns, stat.st_size) for name, _, stat in self._listing()))
+
+    def events(self) -> list[list[HookEvent]]:
+        """Each file's events, in the order they were written."""
+        by_file: list[list[HookEvent]] = []
+        present: set[str] = set()
+        for name, path, stat in self._listing():
+            key = (stat.st_mtime_ns, stat.st_size)
+            cached = self._parsed.get(name)
+            if cached is None or cached[0] != key:
+                try:
+                    text = Path(path).read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                cached = (key, [event for event in map(self._parse, text.splitlines()) if event is not None])
+                self._parsed[name] = cached
+            present.add(name)
+            by_file.append(cached[1])
+        for name in set(self._parsed) - present:
+            del self._parsed[name]
+        return by_file
+
+    def cleanup(self, now_s: float) -> None:
+        """Deletes files of sessions that ended, and of ones untouched for a day.
+
+        A failed delete (on Windows, a file a hook has open) is retried on the
+        next pass."""
+        if self.directory is None or now_s - self._last_cleanup < SESSION_FILE_CLEANUP_INTERVAL_S:
+            return
+        self._last_cleanup = now_s
+        for name, path, stat in self._listing():
+            age = now_s - stat.st_mtime
+            cached = self._parsed.get(name)
+            ended = cached is not None and cached[0] == (stat.st_mtime_ns, stat.st_size) and bool(cached[1]) and cached[1][-1].phase.lower() in END_PHASES
+            if age > SESSION_FILE_MAX_AGE_S or (ended and age > ENDED_SESSION_FILE_GRACE_S):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    continue
+
+
+class LegacyEventLog:
+    """The single log hooks appended to before per-session files (hooks.EVENT_PATH).
+
+    Still read while something writes to it, e.g. an OpenCode started before
+    its plugin was upgraded: the whole file once, then only what was appended
+    since. Once nothing has written to it for a day it holds nothing the
+    reader would use, so it is removed.
+    """
+
+    def __init__(self, path: Path | None, parse: Callable[[str], "HookEvent | None"]) -> None:
+        self.path = path
+        self._parse = parse
+        self._reset(None)
+
+    def _reset(self, identity: tuple[int, int] | None) -> None:
+        self._identity = identity
+        self._offset = 0
+        self._events: list[HookEvent] = []
+
+    def signature(self) -> tuple[int, int] | None:
+        if self.path is None:
+            return None
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def events(self, now_s: float) -> list[HookEvent]:
+        if self.path is None:
+            return []
+        try:
+            stat = self.path.stat()
+        except OSError:
+            self._reset(None)
+            return []
+        if now_s - stat.st_mtime > SESSION_FILE_MAX_AGE_S:
+            try:
+                self.path.unlink()
+            except OSError:
+                pass
+            self._reset(None)
+            return []
+        identity = (stat.st_dev, stat.st_ino)
+        if identity != self._identity or stat.st_size < self._offset:
+            self._reset(identity)
+        if stat.st_size > self._offset:
+            try:
+                with self.path.open("rb") as file:
+                    file.seek(self._offset)
+                    chunk = file.read(stat.st_size - self._offset)
+            except OSError:
+                return self._events
+            # Only whole lines: a line still being written is read next time.
+            end = chunk.rfind(b"\n") + 1
+            self._offset += end
+            self._append(chunk[:end].decode("utf-8", errors="replace").splitlines())
+        return self._events
+
+    def _append(self, lines: list[str]) -> None:
+        # Newest first, stopping a day before the newest event: on the first
+        # read that skips parsing most of a large file.
+        newest = self._events[-1].timestamp if self._events else None
+        fresh: list[HookEvent] = []
+        for line in reversed(lines):
+            event = self._parse(line)
+            if event is None:
+                continue
+            if newest is None or event.timestamp > newest:
+                newest = event.timestamp
+            if event.timestamp < newest - IDLE_SESSION_MAX_MS:
+                break
+            fresh.append(event)
+        fresh.reverse()
+        cutoff = (newest or 0) - IDLE_SESSION_MAX_MS
+        self._events = [event for event in self._events if event.timestamp >= cutoff] + fresh
 
 
 def _pid_alive(pid: int) -> bool:
@@ -57,8 +212,11 @@ def _pid_alive(pid: int) -> bool:
 
 
 class AgentHookEventReader:
-    def __init__(self, event_path: Path = EVENT_PATH, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR, claude_projects_dir: Path | None = CLAUDE_PROJECTS_DIR, opencode_db_path: Path | None = OPENCODE_DB_PATH) -> None:
-        self.event_path = event_path
+    # The event sources default to none: the app passes the real locations
+    # (api/agents.py), since this reader deletes stale files in them.
+    def __init__(self, sessions_dir: Path | None = None, git_resolver: GitResolver | None = None, ttl_ms: int = HOOK_ACTIVITY_TTL_MS, claude_sessions_dir: Path | None = CLAUDE_SESSIONS_DIR, claude_projects_dir: Path | None = CLAUDE_PROJECTS_DIR, opencode_db_path: Path | None = OPENCODE_DB_PATH, legacy_event_path: Path | None = None) -> None:
+        self.session_files = SessionFiles(sessions_dir, self._parse_line)
+        self.legacy_log = LegacyEventLog(legacy_event_path, lambda line: self._parse_line(line, slim=True))
         # None disables the Claude session registry (hooks-only behaviour).
         self.claude_sessions_dir = claude_sessions_dir
         self.claude_projects_dir = claude_projects_dir
@@ -84,12 +242,13 @@ class AgentHookEventReader:
         is the real process, and its busy/idle status overrides the timer.
 
         The endpoint is polled every second, so the result is reused while the
-        events file and the registry are unchanged and nothing could have aged
+        session files and the registry are unchanged and nothing could have aged
         out or moved branch/commit (git resolver TTL). An explicit `now`
         always recomputes.
         """
         observed_at = now or int(time.time() * 1000)
-        signature = (self._file_signature(), registry_signature(self.claude_sessions_dir), self._transcripts_signature(), db_signature(self.opencode_db_path))
+        self.session_files.cleanup(time.time())
+        signature = (self.session_files.signature(), self.legacy_log.signature(), registry_signature(self.claude_sessions_dir), self._transcripts_signature(), db_signature(self.opencode_db_path))
         with self._lock:
             if now is None and signature == self._cached_signature and observed_at < self._cached_valid_until:
                 return [replace(scan, scanned_at=observed_at) for scan in self._cached_scans]
@@ -120,17 +279,14 @@ class AgentHookEventReader:
             self._transcript_cache[path] = cached
         return cached[1]
 
-    def _file_signature(self) -> tuple[int, int] | None:
-        try:
-            stat = self.event_path.stat()
-        except OSError:
-            return None
-        return (stat.st_mtime_ns, stat.st_size)
-
     def _compute_scans(self, observed_at: int) -> tuple[list[AgentRepositoryScan], int | None]:
         """Returns the scans plus the time the next active->idle flip happens."""
         sessions: dict[tuple[str, str], list[HookEvent]] = {}
+        # Where each session started: its first event, however old (the hooks
+        # keep it as the first line of the session's file).
+        started_in: dict[tuple[str, str], str | None] = {}
         for event in self._read_events():
+            started_in.setdefault(self._session_key(event), event.cwd)
             if observed_at - event.timestamp <= IDLE_SESSION_MAX_MS:
                 sessions.setdefault(self._session_key(event), []).append(event)
 
@@ -145,8 +301,7 @@ class AgentHookEventReader:
                 continue
             provider = session_key[0]
             session_id = session_events[-1].session_id
-            # Where the session started, taken before trimming to the latest prompt.
-            session_directory = session_events[0].cwd
+            session_directory = started_in.get(session_key)
             session_events = self._since_last_prompt(session_events)
             card: ClaudeSession | None = None
             opencode_session: OpenCodeSession | None = None
@@ -318,37 +473,34 @@ class AgentHookEventReader:
         return (event.provider, f"cwd:{event.cwd or 'unknown'}")
 
     def _read_events(self) -> list[HookEvent]:
-        if not self.event_path.exists():
-            return []
-        try:
-            lines = self.event_path.read_text(encoding="utf-8", errors="replace").splitlines()[-HOOK_EVENT_LIMIT:]
-        except OSError:
-            return []
-        events: list[HookEvent] = []
-        for line in lines:
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(data, dict):
-                continue
-            raw = data.get("raw") if isinstance(data.get("raw"), dict) else {}
-            timestamp = data.get("timestamp")
-            if not isinstance(timestamp, int):
-                continue
-            events.append(
-                HookEvent(
-                    provider=str(data.get("provider") or "unknown"),
-                    phase=str(data.get("phase") or "unknown"),
-                    session_id=self._session_id(raw),
-                    cwd=data.get("cwd") if isinstance(data.get("cwd"), str) else self._raw_string(raw, "cwd"),
-                    pid=data.get("pid") if isinstance(data.get("pid"), int) else None,
-                    agent_pid=self._agent_pid(data),
-                    timestamp=timestamp,
-                    raw=raw,
-                )
-            )
+        # The old log first: a session present in both has its older events there.
+        events = list(self.legacy_log.events(time.time()))
+        for file_events in self.session_files.events():
+            events.extend(file_events)
         return events
+
+    def _parse_line(self, line: str, slim: bool = False) -> HookEvent | None:
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        raw = data.get("raw") if isinstance(data.get("raw"), dict) else {}
+        timestamp = data.get("timestamp")
+        if not isinstance(timestamp, int):
+            return None
+        return HookEvent(
+            provider=str(data.get("provider") or "unknown"),
+            phase=str(data.get("phase") or "unknown"),
+            session_id=self._session_id(raw),
+            cwd=data.get("cwd") if isinstance(data.get("cwd"), str) else self._raw_string(raw, "cwd"),
+            pid=data.get("pid") if isinstance(data.get("pid"), int) else None,
+            agent_pid=self._agent_pid(data),
+            timestamp=timestamp,
+            # The old log kept whole payloads (tool output, file contents): keep only what is read.
+            raw=hooks.slim_raw(raw) if slim else raw,
+        )
 
     def _candidate_paths(self, event: HookEvent) -> list[Path]:
         paths: list[Path] = []
