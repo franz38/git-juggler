@@ -2,7 +2,7 @@ import { batch, createMemo, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
-import { ApiError, browseDirectory, pickFolderNative, pollCiRuns, fetchRecentPipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
+import { ApiError, browseDirectory, clearCiCache, pickFolderNative, pollCiRuns, fetchRecentPipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
 import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
 import { savePreference } from "./preferenceSync";
 
@@ -1942,6 +1942,16 @@ export function refreshActiveRepoCiRuns(): void {
   const repoId = activeRepo();
   if (!repoId || repoUnavailable(repoId) || repoLoadDeferred(repoId) || document.hidden || ciPollTimers.has(repoId)) return;
   void loadCiRunsInto(repoId);
+}
+
+// Forgets every stored finished run (incl. ones the CI servers deleted), then
+// reloads what is on screen from the providers.
+export async function clearStoredCiRuns(): Promise<void> {
+  await clearCiCache();
+  setRunStages({});
+  const repoId = activeRepo();
+  if (repoId) void loadCiRunsInto(repoId);
+  void refreshPipelines();
 }
 
 function pushedBranchForRepo(repoId: string, branchName?: string | null): string | null {

@@ -268,6 +268,9 @@ class CiRunInfo(BaseModel):
     # row in the commit graph.
     head_sha: str | None = None
     stages: list[CiStage] | None = None
+    # Served from the local run cache because the CI server no longer has it
+    # (e.g. Jenkins discarded the build); its `url` is dead.
+    archived: bool = False
 
 
 class ActivePipeline(BaseModel):

@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 
 from .. import config
-from ..ci import github_actions, jenkins
+from ..ci import github_actions, jenkins, run_cache
 from ..ci import get_ci_run_stages, get_ci_runs, get_recent_pipelines, poll_ci_runs
 from ..git.data import get_commit_hashes
 from ..repo_discovery import list_repos, resolve_repo_path
@@ -87,6 +87,12 @@ def api_ci_recent(limit: Annotated[int, Query(ge=1, le=50)] = 10) -> list[Active
         config.load_jenkins_config(),
         limit,
     )
+
+
+# Forget every stored finished run (and runs the CI servers no longer have).
+@router.post("/api/ci/cache/clear", status_code=204)
+def api_ci_cache_clear() -> None:
+    run_cache.clear()
 
 
 @router.post("/api/ci/github/test", response_model=CiConnectionTestResponse)
