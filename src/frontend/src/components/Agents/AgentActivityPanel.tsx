@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import type { AgentRepositoryScan, AgentWorktreeActivity, RepoSummary } from "../../api/types";
-import { agentActivity, agentActivityError, agentShowWorktrees, openRepoTab, openTerminal, repos } from "../../state/store";
-import { Disclosure, EmptyNote, GroupHeading, Hoverable, LiveDot, MONO, PanelButton, PanelHeader, Segmented } from "../Sidebar/panelKit";
+import { agentActivity, agentActivityError, agentShowWorktrees, repos } from "../../state/store";
+import { Disclosure, EmptyNote, GroupHeading, Hoverable, LiveDot, MONO, PanelHeader, Segmented } from "../Sidebar/panelKit";
 import { type AgentSessionGroup, formatAge, formatTime, groupSubagentScans, pathBasename, sessionLastActivity, sessionTitle, shortCommit, subagentParentLabel } from "./agentFormat";
 
 /* Agents sidebar panel: sessions grouped by repo, All/Active/Idle filter,
@@ -67,7 +67,6 @@ function SessionRow(props: { scan: AgentRepositoryScan; open: boolean; onToggle:
   const scan = () => props.scan;
   const state = () => sessionState(scan());
   const worktree = () => homeWorktree(scan());
-  const repo = () => repoFor(worktree(), repos());
   const summary = () =>
     [
       agentName(scan().provider),
@@ -143,24 +142,6 @@ function SessionRow(props: { scan: AgentRepositoryScan; open: boolean; onToggle:
                 />
               )}
             </For>
-          </Show>
-          <Show when={repo()}>
-            {(target) => (
-              <div style={{ display: "flex", "flex-wrap": "wrap", gap: "8px", "padding-top": "6px" }}>
-                <PanelButton
-                  title={`Open ${target().name} and its terminal`}
-                  onClick={() => {
-                    openRepoTab(target().id, target().name);
-                    openTerminal();
-                  }}
-                >
-                  Open terminal
-                </PanelButton>
-                <PanelButton muted onClick={() => openRepoTab(target().id, target().name)}>
-                  Show repo
-                </PanelButton>
-              </div>
-            )}
           </Show>
         </div>
       </Show>
