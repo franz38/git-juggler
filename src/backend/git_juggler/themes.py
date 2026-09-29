@@ -119,9 +119,20 @@ def strip_jsonc(text: str) -> str:
 
 def _load_json(path: Path) -> dict | None:
     try:
-        data = json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
     except (OSError, ValueError):
         return None
+    # Most files (every package.json, many themes) are strict JSON: parse them
+    # with the C parser and only fall back to the slow pure-Python JSONC
+    # stripper when that fails. Stripping large extension manifests up front
+    # made a full scan take seconds.
+    try:
+        data = json.loads(text)
+    except ValueError:
+        try:
+            data = json.loads(strip_jsonc(text))
+        except ValueError:
+            return None
     return data if isinstance(data, dict) else None
 
 
