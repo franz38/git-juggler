@@ -1,4 +1,4 @@
-import { batch, createMemo, createSignal } from "solid-js";
+import { batch, createMemo, createRoot, createSignal, type Accessor } from "solid-js";
 import { createStore } from "solid-js/store";
 import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
 import { agentCommitsMissingFromGraph } from "../lib/agentRings";
@@ -1591,29 +1591,60 @@ export function rowLayoutForRepo(repoId: string): { order: CommitSummary[]; offs
 // Searches the active repo's commit subject and hash. Matching rows are
 // highlighted; the search box scrolls to a single unambiguous match on Enter.
 
-const [searchQuery, setSearchQuery] = createSignal("");
-export { searchQuery, setSearchQuery };
+// `searchQuery` is what the input shows and updates on every keystroke;
+// `matchQuery` is what the matching runs on, trailing it by a short debounce so
+// typing stays responsive on a big graph (clearing applies immediately).
+const [searchQuery, setSearchQuerySignal] = createSignal("");
+const [matchQuery, setMatchQuery] = createSignal("");
+export { searchQuery };
 
-export const matchingHashes = createMemo<Set<string>>(() => {
-  const query = searchQuery().trim().toLowerCase();
-  if (!query) return new Set();
+const SEARCH_DEBOUNCE_MS = 150;
+let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+export function setSearchQuery(value: string): void {
+  setSearchQuerySignal(value);
+  clearTimeout(searchDebounce);
+  if (!value.trim()) {
+    setMatchQuery("");
+    return;
+  }
+  searchDebounce = setTimeout(() => setMatchQuery(value), SEARCH_DEBOUNCE_MS);
+}
+
+// Lowercased subjects, computed once per commit instead of once per keystroke.
+// (Hashes are already lowercase hex.)
+const lowerSubjects = new Map<string, string>();
+function lowerSubject(commit: CommitSummary): string {
+  let lower = lowerSubjects.get(commit.hash);
+  if (lower === undefined) {
+    lower = commit.subject.toLowerCase();
+    lowerSubjects.set(commit.hash, lower);
+  }
+  return lower;
+}
+
+function findMatches(list: CommitSummary[], query: string): Set<string> {
   const matches = new Set<string>();
-  for (const c of filteredCommits()) {
-    if (c.hash.toLowerCase().includes(query) || c.subject.toLowerCase().includes(query)) {
-      matches.add(c.hash);
-    }
+  if (!query) return matches;
+  for (const c of list) {
+    if (c.hash.includes(query) || lowerSubject(c).includes(query)) matches.add(c.hash);
   }
   return matches;
-});
+}
+
+export const matchingHashes = createMemo<Set<string>>(() => findMatches(filteredCommits(), matchQuery().trim().toLowerCase()));
+
+// One memo per repo, so each commit row reads a cached set instead of every row
+// rescanning the whole commit list on every change.
+const matchingHashesMemos = new Map<string, Accessor<Set<string>>>();
 
 export function matchingHashesForRepo(repoId: string): Set<string> {
-  const query = searchQuery().trim().toLowerCase();
-  if (!query) return new Set();
-  const matches = new Set<string>();
-  for (const c of filteredCommitsForRepo(repoId)) {
-    if (c.hash.toLowerCase().includes(query) || c.subject.toLowerCase().includes(query)) matches.add(c.hash);
+  let memo = matchingHashesMemos.get(repoId);
+  if (!memo) {
+    memo = createRoot(() => createMemo(() => findMatches(filteredCommitsForRepo(repoId), matchQuery().trim().toLowerCase())));
+    matchingHashesMemos.set(repoId, memo);
   }
-  return matches;
+  return memo();
 }
 
 // --- Settings (Cmd/Ctrl+Shift+P main menu) ---------------------------------------
