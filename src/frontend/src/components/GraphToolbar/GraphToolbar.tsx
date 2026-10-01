@@ -94,14 +94,22 @@ export function CommitSearch(props: {
   value: string; onInput: (v: string) => void; placeholder?: string; width?: string; ref?: (el: HTMLInputElement) => void;
   onKeyDown?: (e: KeyboardEvent) => void; /** shown in place of the ⌘F hint while there is a query */ count?: number;
 }) {
+  // Collapsed to just the icon until hovered, focused (click, ⌘F) or holding a query.
+  const [hover, setHover] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const expanded = () => hover() || focused() || props.value.length > 0;
+  let input: HTMLInputElement | undefined;
   return (
-    <div style={{ position: "relative", display: "flex", "align-items": "center", width: props.width ?? "260px" }}>
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--text-dim)" stroke-width="1.6" style={{ position: "absolute", left: "9px", "pointer-events": "none" }}><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" stroke-linecap="round" /></svg>
-      <input ref={props.ref} placeholder={props.placeholder ?? "Search commits, sha, author…"} value={props.value} onInput={(e) => props.onInput(e.currentTarget.value)} onKeyDown={props.onKeyDown} onFocus={focusOn} onBlur={focusOff}
-        style={{ ...inputStyle, width: "100%", height: "28px", padding: "0 44px 0 28px" }} />
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onClick={() => input?.focus()}
+      style={{ position: "relative", flex: "none", display: "flex", "align-items": "center", height: "30px", "box-sizing": "border-box", width: expanded() ? props.width ?? "260px" : "34px", overflow: "hidden", "border-radius": "6px", background: "var(--input-bg)", border: `1px solid ${focused() ? ACCENT : "var(--border)"}`, cursor: expanded() ? "text" : "pointer", transition: "width 180ms cubic-bezier(.3,.7,.4,1), border-color 120ms ease" }}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={expanded() ? "var(--text-dim)" : "var(--text)"} stroke-width="1.6" style={{ position: "absolute", left: "8px", "pointer-events": "none" }}><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" stroke-linecap="round" /></svg>
+      <input ref={(el) => { input = el; props.ref?.(el); }} placeholder={props.placeholder ?? "Search commits, sha, author…"} value={props.value} onInput={(e) => props.onInput(e.currentTarget.value)} onKeyDown={props.onKeyDown} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ ...inputStyle, flex: 1, "min-width": 0, height: "100%", padding: "0 52px 0 32px", border: "none", background: "transparent", opacity: expanded() ? 1 : 0, transition: "opacity 120ms ease" }} />
+      <Show when={expanded()}>
       <Show when={props.value.trim() && props.count !== undefined}
         fallback={<span style={{ position: "absolute", right: "7px", padding: "0 5px", "border-radius": "4px", border: "1px solid var(--border)", "font-family": MONO, "font-size": "10px", "line-height": "14px", color: "var(--text-dim)", "pointer-events": "none" }}>{isMac ? "⌘F" : "Ctrl F"}</span>}>
         <span title="Matching commits" style={{ position: "absolute", right: "9px", "font-family": MONO, "font-size": "11px", color: "var(--text-dim)", "pointer-events": "none" }}>{props.count}</span>
+      </Show>
       </Show>
     </div>
   );
@@ -115,9 +123,8 @@ function FilterBtn(props: { label: string; icon: JSX.Element; open: boolean; cou
   const [h, setH] = createSignal(false);
   return (
     <button type="button" class="filter-button" aria-expanded={props.open} title={`Filter ${props.label.toLowerCase()}`} onClick={props.onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
-      style={{ display: "flex", "align-items": "center", gap: "5px", height: "26px", padding: "0 8px", border: "none", background: props.open ? "color-mix(in srgb, var(--accent) 24%, transparent)" : props.count ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent", color: props.open || props.count || h() ? "var(--text-h)" : "var(--text-dim)", "font-family": SANS, "font-size": "12px", cursor: "pointer" }}>
+      style={{ display: "flex", "align-items": "center", gap: "6px", height: "100%", padding: "0 13px", border: "none", background: props.open ? "color-mix(in srgb, var(--accent) 24%, transparent)" : props.count ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent", color: props.open || props.count || h() ? "var(--text-h)" : "var(--text-dim)", "font-family": SANS, "font-size": "12px", cursor: "pointer" }}>
       {props.icon}
-      <span>{props.label}</span>
       <Show when={props.count}>
         <span style={{ "min-width": "14px", padding: "0 4px", "box-sizing": "border-box", "border-radius": "7px", background: ACCENT, color: "var(--accent-fg)", "font-family": MONO, "font-size": "10px", "line-height": "14px", "text-align": "center" }}>{props.count}</span>
       </Show>
@@ -127,12 +134,12 @@ function FilterBtn(props: { label: string; icon: JSX.Element; open: boolean; cou
 
 export function FilterButtons(props: { open: FilterPanel; onToggle: (p: Exclude<FilterPanel, null>) => void; commitCount: number; branchCount: number }) {
   return (
-    <div style={{ display: "flex", "border-radius": "6px", border: "1px solid var(--border)", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "30px", "box-sizing": "border-box", "border-radius": "6px", border: "1px solid var(--border)", overflow: "hidden" }}>
       <FilterBtn label="Commits" open={props.open === "commit"} count={props.commitCount} onClick={() => props.onToggle("commit")}
-        icon={<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12l-4.6 5.4V13l-2.8 1.2V8.4z" /></svg>} />
+        icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12l-4.6 5.4V13l-2.8 1.2V8.4z" /></svg>} />
       <div style={{ width: "1px", background: "var(--border)" }} />
       <FilterBtn label="Branches" open={props.open === "branch"} count={props.branchCount} onClick={() => props.onToggle("branch")}
-        icon={<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="4.5" cy="3.5" r="1.6" /><circle cx="4.5" cy="12.5" r="1.6" /><circle cx="11.5" cy="5" r="1.6" /><path d="M4.5 5.1v5.8M11.5 6.6c0 3-7 2.2-7 4.3" /></svg>} />
+        icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="4.5" cy="3.5" r="1.6" /><circle cx="4.5" cy="12.5" r="1.6" /><circle cx="11.5" cy="5" r="1.6" /><path d="M4.5 5.1v5.8M11.5 6.6c0 3-7 2.2-7 4.3" /></svg>} />
     </div>
   );
 }
