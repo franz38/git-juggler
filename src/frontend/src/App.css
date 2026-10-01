@@ -210,11 +210,6 @@ body.tab-dragging * {
   color: var(--text-dim);
 }
 
-.tab-changes {
-  flex: none;
-  color: var(--warning);
-}
-
 .tab-close {
   flex: none;
   border-radius: 4px;

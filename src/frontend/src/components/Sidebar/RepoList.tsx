@@ -39,7 +39,7 @@ interface GroupMenuState {
 
 function ChevronIcon() {
   return (
-    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+    <svg viewBox="0 0 12 12" width="13" height="13" aria-hidden="true">
       <path d="M2.5 4.5 L6 8 L9.5 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   );
@@ -64,7 +64,7 @@ function RepoRow(props: {
     return activity ? agentActivityState()?.scans.find((scan) => scan.worktrees.includes(activity)) : undefined;
   };
   // Working-tree changes are only known once the repo's graph/status is loaded
-  // (it has been opened); until then no dot or count is shown.
+  // (it has been opened); until then no dot is shown.
   const statusKnown = () => headCommitForRepo(props.repo.id) !== null;
   const changes = () => uncommittedFilesForRepo(props.repo.id).length;
 
@@ -129,11 +129,6 @@ function RepoRow(props: {
           <span class="repo-branch">{props.repo.current_branch}</span>
         </Show>
       </span>
-      <Show when={statusKnown() && changes() > 0}>
-        <span class="repo-changes" title="Uncommitted files">
-          {changes()}Δ
-        </span>
-      </Show>
       <input
         type="checkbox"
         class="repo-select"
