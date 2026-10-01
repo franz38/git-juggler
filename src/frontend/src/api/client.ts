@@ -153,6 +153,14 @@ export async function installAgentHook(provider: "claude" | "opencode"): Promise
   return res.json() as Promise<AgentHookProviderStatus>;
 }
 
+export async function uninstallAgentHook(provider: "claude" | "opencode"): Promise<AgentHookProviderStatus> {
+  const res = await fetch(`${API_BASE}/agents/hooks/${provider}`, { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`request failed (${res.status}): remove ${provider} hooks`);
+  }
+  return res.json() as Promise<AgentHookProviderStatus>;
+}
+
 export function fetchConfig(): Promise<ConfigResponse> {
   return getJson(`${API_BASE}/config`);
 }

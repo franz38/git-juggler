@@ -16,10 +16,15 @@ import {
   setAgentPollSeconds,
   setAgentShowWorktrees,
   setAgentsEnabled,
+  uninstallAgentHooks,
 } from "../../state/store";
 
-function HookSetupCard(props: { title: string; status: AgentHookProviderStatus; onInstall: () => void }) {
+function HookSetupCard(props: { title: string; status: AgentHookProviderStatus; onInstall: () => void; onRemove: () => void }) {
   const [copied, setCopied] = createSignal(false);
+  const removeHooks = () => {
+    const confirmed = window.confirm(`Remove git-juggler hooks for ${props.title}?\n\nOnly git-juggler-managed entries are removed; other ${props.title} configuration is left unchanged.`);
+    if (confirmed) props.onRemove();
+  };
   const copySnippet = async () => {
     await navigator.clipboard.writeText(props.status.snippet);
     setCopied(true);
@@ -44,11 +49,14 @@ function HookSetupCard(props: { title: string; status: AgentHookProviderStatus; 
         <button type="button" class="menu-primary-button" disabled={agentHooksLoading()} onClick={props.onInstall}>
           Auto-install
         </button>
+        <button type="button" class="menu-secondary-button danger" disabled={agentHooksLoading() || !props.status.installed} onClick={removeHooks}>
+          Remove hooks
+        </button>
         <button type="button" class="menu-secondary-button" onClick={() => void copySnippet()}>
           {copied() ? "Copied" : "Copy config"}
         </button>
       </div>
-      <p class="menu-hint">Manual setup: add this configuration globally, then restart existing agent sessions.</p>
+      <p class="menu-hint">Manual setup: add this configuration globally, then restart existing agent sessions. Remove hooks only deletes git-juggler-managed hook entries.</p>
       <pre class="agent-hook-snippet"><code>{props.status.snippet}</code></pre>
     </div>
   );
@@ -110,8 +118,8 @@ export function AgentsSettings() {
         <Show when={agentHooks()} fallback={<div class="menu-hint">Open this section to load hook setup status.</div>}>
           {(hooks) => (
             <div class="agent-hook-grid">
-              <HookSetupCard title="Claude" status={hooks().claude} onInstall={() => void installAgentHooks("claude")} />
-              <HookSetupCard title="OpenCode" status={hooks().opencode} onInstall={() => void installAgentHooks("opencode")} />
+              <HookSetupCard title="Claude" status={hooks().claude} onInstall={() => void installAgentHooks("claude")} onRemove={() => void uninstallAgentHooks("claude")} />
+              <HookSetupCard title="OpenCode" status={hooks().opencode} onInstall={() => void installAgentHooks("opencode")} onRemove={() => void uninstallAgentHooks("opencode")} />
             </div>
           )}
         </Show>

@@ -1,10 +1,61 @@
-import { batch, createMemo, createRoot, createSignal, type Accessor } from "solid-js";
+import {
+  batch,
+  createMemo,
+  createRoot,
+  createSignal,
+  type Accessor,
+} from "solid-js";
 import { createStore } from "solid-js/store";
-import { branchNames, startOfDayMs, visibleCommitHashes } from "../lib/branchVisibility";
+import {
+  branchNames,
+  startOfDayMs,
+  visibleCommitHashes,
+} from "../lib/branchVisibility";
 import { agentCommitsMissingFromGraph } from "../lib/agentRings";
 import { mergePolledRuns, runningRefs } from "../lib/ciPoll";
-import { ApiError, browseDirectory, clearCiCache, pickFolderNative, pollCiRuns, fetchRecentPipelines, fetchAgentActivity, fetchAgentHooks, fetchCiRuns, fetchCommitDetail, fetchConfig, fetchGraph, fetchRepoScanProgress, fetchRepoStatus, fetchRepos, fetchRunStages, installAgentHook, resetConfig, updateConfig } from "../api/client";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, AgentRepositoryScan, AgentWorktreeActivity, BrowseEntry, CiRunInfo, CiStage, CommitDetail, CommitSummary, FileChange, GitHubConfig, JenkinsConfig, Preferences, RepoGroupConfig, RepoStatusResponse, RepoSummary, TerminalShell } from "../api/types";
+import {
+  ApiError,
+  browseDirectory,
+  clearCiCache,
+  pickFolderNative,
+  pollCiRuns,
+  fetchRecentPipelines,
+  fetchAgentActivity,
+  fetchAgentHooks,
+  fetchCiRuns,
+  fetchCommitDetail,
+  fetchConfig,
+  fetchGraph,
+  fetchRepoScanProgress,
+  fetchRepoStatus,
+  fetchRepos,
+  fetchRunStages,
+  installAgentHook,
+  resetConfig,
+  uninstallAgentHook,
+  updateConfig,
+} from "../api/client";
+import type {
+  ActivePipeline,
+  AgentActivityResponse,
+  AgentHookProviderStatus,
+  AgentHooksResponse,
+  AgentRepositoryScan,
+  AgentWorktreeActivity,
+  BrowseEntry,
+  CiRunInfo,
+  CiStage,
+  CommitDetail,
+  CommitSummary,
+  FileChange,
+  GitHubConfig,
+  JenkinsConfig,
+  Preferences,
+  RepoGroupConfig,
+  RepoStatusResponse,
+  RepoSummary,
+  TerminalShell,
+} from "../api/types";
 import { savePreference } from "./preferenceSync";
 
 export const COLLAPSED_ROW_HEIGHT = 28;
@@ -68,14 +119,35 @@ function loadTabsState(): PersistedTabsState {
     const parsed = JSON.parse(raw) as PersistedTabsState;
     const parsedTabs = Array.isArray(parsed.tabs) ? parsed.tabs : [];
     const restoredTabs = parsedTabs
-      .filter((tab) => typeof tab.id === "string" && typeof tab.name === "string")
+      .filter(
+        (tab) => typeof tab.id === "string" && typeof tab.name === "string",
+      )
       .map((tab) => {
         const pane: PaneId = tab.pane === "right" ? "right" : "left";
-        return { id: tab.id, name: tab.name, pinned: Boolean(tab.pinned), pane };
+        return {
+          id: tab.id,
+          name: tab.name,
+          pinned: Boolean(tab.pinned),
+          pane,
+        };
       });
-    const restoredActive = typeof parsed.activeRepo === "string" && restoredTabs.some((tab) => tab.id === parsed.activeRepo) ? parsed.activeRepo : restoredTabs[0]?.id ?? null;
-    const activeRepoByPane = typeof parsed.activeRepoByPane === "object" && parsed.activeRepoByPane ? parsed.activeRepoByPane : undefined;
-    return { tabs: restoredTabs, activeRepo: restoredActive, activePane: parsed.activePane === "right" ? "right" : "left", activeRepoByPane, splitRatio: typeof parsed.splitRatio === "number" ? parsed.splitRatio : undefined };
+    const restoredActive =
+      typeof parsed.activeRepo === "string" &&
+      restoredTabs.some((tab) => tab.id === parsed.activeRepo)
+        ? parsed.activeRepo
+        : (restoredTabs[0]?.id ?? null);
+    const activeRepoByPane =
+      typeof parsed.activeRepoByPane === "object" && parsed.activeRepoByPane
+        ? parsed.activeRepoByPane
+        : undefined;
+    return {
+      tabs: restoredTabs,
+      activeRepo: restoredActive,
+      activePane: parsed.activePane === "right" ? "right" : "left",
+      activeRepoByPane,
+      splitRatio:
+        typeof parsed.splitRatio === "number" ? parsed.splitRatio : undefined,
+    };
   } catch {
     return { tabs: [], activeRepo: null };
   }
@@ -87,21 +159,43 @@ const [reposLoading, setReposLoading] = createSignal(false);
 const [reposLoaded, setReposLoaded] = createSignal(false);
 const [reposFound, setReposFound] = createSignal(0);
 const [tabs, setTabsSignal] = createSignal<TabInfo[]>(restoredTabsState.tabs);
-const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(restoredTabsState.activeRepo);
-const [activePane, setActivePaneSignal] = createSignal<PaneId>(restoredTabsState.activePane ?? "left");
-const [activeRepoByPane, setActiveRepoByPane] = createSignal<Record<PaneId, string | null>>({
-  left: restoredTabsState.activeRepoByPane?.left ?? (restoredTabsState.activePane !== "right" ? restoredTabsState.activeRepo : null),
-  right: restoredTabsState.activeRepoByPane?.right ?? (restoredTabsState.activePane === "right" ? restoredTabsState.activeRepo : null),
+const [activeRepo, setActiveRepoSignal] = createSignal<string | null>(
+  restoredTabsState.activeRepo,
+);
+const [activePane, setActivePaneSignal] = createSignal<PaneId>(
+  restoredTabsState.activePane ?? "left",
+);
+const [activeRepoByPane, setActiveRepoByPane] = createSignal<
+  Record<PaneId, string | null>
+>({
+  left:
+    restoredTabsState.activeRepoByPane?.left ??
+    (restoredTabsState.activePane !== "right"
+      ? restoredTabsState.activeRepo
+      : null),
+  right:
+    restoredTabsState.activeRepoByPane?.right ??
+    (restoredTabsState.activePane === "right"
+      ? restoredTabsState.activeRepo
+      : null),
 });
-const [splitRatio, setSplitRatioSignal] = createSignal(restoredTabsState.splitRatio ?? 0.5);
+const [splitRatio, setSplitRatioSignal] = createSignal(
+  restoredTabsState.splitRatio ?? 0.5,
+);
 const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
 const inFlightDetailRequests = new Set<string>();
 const pendingGraphRefreshes = new Set<string>();
 export { activePane, splitRatio };
 
-export const splitActive = createMemo(() => tabs().some((tab) => tab.pane === "right"));
-export const leftTabs = createMemo(() => tabs().filter((tab) => tab.pane !== "right"));
-export const rightTabs = createMemo(() => tabs().filter((tab) => tab.pane === "right"));
+export const splitActive = createMemo(() =>
+  tabs().some((tab) => tab.pane === "right"),
+);
+export const leftTabs = createMemo(() =>
+  tabs().filter((tab) => tab.pane !== "right"),
+);
+export const rightTabs = createMemo(() =>
+  tabs().filter((tab) => tab.pane === "right"),
+);
 
 export function tabsForPane(pane: PaneId): TabInfo[] {
   return pane === "right" ? rightTabs() : leftTabs();
@@ -114,9 +208,24 @@ export function activeRepoForPane(pane: PaneId): string | null {
   return paneTabs[0]?.id ?? null;
 }
 
-function persistTabsState(nextTabs = tabs(), nextActiveRepo = activeRepo(), nextActivePane = activePane(), nextSplitRatio = splitRatio(), nextActiveRepoByPane = activeRepoByPane()): void {
+function persistTabsState(
+  nextTabs = tabs(),
+  nextActiveRepo = activeRepo(),
+  nextActivePane = activePane(),
+  nextSplitRatio = splitRatio(),
+  nextActiveRepoByPane = activeRepoByPane(),
+): void {
   try {
-    localStorage.setItem(TABS_STATE_KEY, JSON.stringify({ tabs: nextTabs, activeRepo: nextActiveRepo, activePane: nextActivePane, activeRepoByPane: nextActiveRepoByPane, splitRatio: nextSplitRatio }));
+    localStorage.setItem(
+      TABS_STATE_KEY,
+      JSON.stringify({
+        tabs: nextTabs,
+        activeRepo: nextActiveRepo,
+        activePane: nextActivePane,
+        activeRepoByPane: nextActiveRepoByPane,
+        splitRatio: nextSplitRatio,
+      }),
+    );
   } catch {
     // Not critical — tabs just won't survive a reload.
   }
@@ -132,7 +241,10 @@ function setTabs(nextTabs: TabInfo[]): void {
   }
   if (!nextTabs.some((tab) => tab.pane === "right")) {
     const active = activeRepo();
-    const leftActive = active && nextTabs.some((tab) => tab.id === active) ? active : nextTabs[0]?.id ?? null;
+    const leftActive =
+      active && nextTabs.some((tab) => tab.id === active)
+        ? active
+        : (nextTabs[0]?.id ?? null);
     setActivePaneSignal("left");
     setActiveRepoByPane({ left: leftActive, right: null });
   }
@@ -165,7 +277,9 @@ export function setSplitRatio(nextRatio: number): void {
 // for layout was the previous approach, but any drift between an estimate
 // and the true DOM height (borders, font metrics, ...) accumulates down the
 // list and throws the graph's dots out of alignment with their rows.
-const [measuredHeights, setMeasuredHeights] = createStore<Record<string, number>>({});
+const [measuredHeights, setMeasuredHeights] = createStore<
+  Record<string, number>
+>({});
 
 export function reportRowHeight(hash: string, height: number): void {
   if (measuredHeights[hash] !== height) {
@@ -185,7 +299,9 @@ const rowResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const key = rowKeys.get(entry.target);
       if (key === undefined) continue;
-      const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).getBoundingClientRect().height;
+      const height =
+        entry.borderBoxSize?.[0]?.blockSize ??
+        (entry.target as HTMLElement).getBoundingClientRect().height;
       reportRowHeight(key, height);
     }
   });
@@ -214,7 +330,9 @@ function loadSidebarWidth(): number {
   try {
     const raw = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     const n = raw ? Number(raw) : NaN;
-    return Number.isFinite(n) ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n)) : SIDEBAR_DEFAULT_WIDTH;
+    return Number.isFinite(n)
+      ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n))
+      : SIDEBAR_DEFAULT_WIDTH;
   } catch {
     return SIDEBAR_DEFAULT_WIDTH;
   }
@@ -224,7 +342,10 @@ const [sidebarWidth, setSidebarWidthSignal] = createSignal(loadSidebarWidth());
 export { sidebarWidth };
 
 export function setSidebarWidth(width: number): void {
-  const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+  const clamped = Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_MIN_WIDTH, width),
+  );
   setSidebarWidthSignal(clamped);
   try {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
@@ -281,24 +402,50 @@ export interface DirectoryBrowserState {
   onSelect: (path: string) => void;
 }
 
-const [directoryBrowser, setDirectoryBrowser] = createSignal<DirectoryBrowserState | null>(null);
+const [directoryBrowser, setDirectoryBrowser] =
+  createSignal<DirectoryBrowserState | null>(null);
 export { directoryBrowser };
 
-async function loadBrowseDirectory(path: string | undefined, onSelect: (path: string) => void): Promise<void> {
+async function loadBrowseDirectory(
+  path: string | undefined,
+  onSelect: (path: string) => void,
+): Promise<void> {
   setDirectoryBrowser((current) =>
-    current ? { ...current, loading: true, error: null } : { path: path ?? "", parent: null, entries: [], loading: true, error: null, onSelect },
+    current
+      ? { ...current, loading: true, error: null }
+      : {
+          path: path ?? "",
+          parent: null,
+          entries: [],
+          loading: true,
+          error: null,
+          onSelect,
+        },
   );
   try {
     const data = await browseDirectory(path);
-    setDirectoryBrowser({ path: data.path, parent: data.parent, entries: data.entries, loading: false, error: null, onSelect });
+    setDirectoryBrowser({
+      path: data.path,
+      parent: data.parent,
+      entries: data.entries,
+      loading: false,
+      error: null,
+      onSelect,
+    });
   } catch (e) {
-    setDirectoryBrowser((current) => (current ? { ...current, loading: false, error: (e as Error).message } : current));
+    setDirectoryBrowser((current) =>
+      current
+        ? { ...current, loading: false, error: (e as Error).message }
+        : current,
+    );
   }
 }
 
 // Prefers the OS's native folder dialog; falls back to the in-app browser when
 // none is available (e.g. headless Linux, or a backend on another machine).
-export async function openDirectoryBrowser(onSelect: (path: string) => void): Promise<void> {
+export async function openDirectoryBrowser(
+  onSelect: (path: string) => void,
+): Promise<void> {
   try {
     const { path } = await pickFolderNative();
     if (path) onSelect(path);
@@ -335,7 +482,11 @@ export interface KeyBinding {
   alt: boolean;
 }
 
-export type KeyBindingAction = "nextTab" | "prevTab" | "toggleMenu" | "commandPalette";
+export type KeyBindingAction =
+  | "nextTab"
+  | "prevTab"
+  | "toggleMenu"
+  | "commandPalette";
 
 export const KEY_BINDING_ACTIONS: { id: KeyBindingAction; label: string }[] = [
   { id: "nextTab", label: "Next tab" },
@@ -357,7 +508,9 @@ function loadKeyBindings(): Record<KeyBindingAction, KeyBinding> {
   try {
     const raw = localStorage.getItem(KEY_BINDINGS_KEY);
     if (!raw) return { ...DEFAULT_KEY_BINDINGS };
-    const parsed = JSON.parse(raw) as Partial<Record<KeyBindingAction, KeyBinding>>;
+    const parsed = JSON.parse(raw) as Partial<
+      Record<KeyBindingAction, KeyBinding>
+    >;
     return { ...DEFAULT_KEY_BINDINGS, ...parsed };
   } catch {
     return { ...DEFAULT_KEY_BINDINGS };
@@ -367,7 +520,10 @@ function loadKeyBindings(): Record<KeyBindingAction, KeyBinding> {
 const [keyBindings, setKeyBindingsSignal] = createSignal(loadKeyBindings());
 export { keyBindings };
 
-export function setKeyBinding(action: KeyBindingAction, binding: KeyBinding): void {
+export function setKeyBinding(
+  action: KeyBindingAction,
+  binding: KeyBinding,
+): void {
   const next = { ...keyBindings(), [action]: binding };
   setKeyBindingsSignal(next);
   try {
@@ -382,7 +538,10 @@ export function resetKeyBinding(action: KeyBindingAction): void {
   setKeyBinding(action, DEFAULT_KEY_BINDINGS[action]);
 }
 
-export function matchesKeyBinding(e: KeyboardEvent, binding: KeyBinding): boolean {
+export function matchesKeyBinding(
+  e: KeyboardEvent,
+  binding: KeyBinding,
+): boolean {
   return (
     e.key.toLowerCase() === binding.key.toLowerCase() &&
     (e.metaKey || e.ctrlKey) === binding.mod &&
@@ -404,7 +563,9 @@ export function formatKeyBinding(binding: KeyBinding): string {
   if (binding.mod) parts.push("Cmd/Ctrl");
   if (binding.shift) parts.push("Shift");
   if (binding.alt) parts.push("Alt");
-  const keyName = KEY_DISPLAY_NAMES[binding.key] ?? (binding.key.length === 1 ? binding.key.toUpperCase() : binding.key);
+  const keyName =
+    KEY_DISPLAY_NAMES[binding.key] ??
+    (binding.key.length === 1 ? binding.key.toUpperCase() : binding.key);
   parts.push(keyName);
   return parts.join("+");
 }
@@ -436,11 +597,15 @@ function saveBoolean(key: string, value: boolean): void {
   }
 }
 
-const [agentsEnabled, setAgentsEnabledSignal] = createSignal(loadBoolean(AGENTS_ENABLED_KEY));
+const [agentsEnabled, setAgentsEnabledSignal] = createSignal(
+  loadBoolean(AGENTS_ENABLED_KEY),
+);
 export { agentsEnabled };
 
 // Whether the agents panel lists each session's worktrees (off by default).
-const [agentShowWorktrees, setAgentShowWorktreesSignal] = createSignal(loadBoolean(AGENT_WORKTREES_KEY));
+const [agentShowWorktrees, setAgentShowWorktreesSignal] = createSignal(
+  loadBoolean(AGENT_WORKTREES_KEY),
+);
 export { agentShowWorktrees };
 export function setAgentShowWorktrees(show: boolean): void {
   setAgentShowWorktreesSignal(show);
@@ -449,7 +614,9 @@ export function setAgentShowWorktrees(show: boolean): void {
 }
 
 // Whether the diff viewer shows the whole file instead of only the changed hunks.
-const [diffFullFile, setDiffFullFileSignal] = createSignal(loadBoolean(DIFF_FULL_FILE_KEY));
+const [diffFullFile, setDiffFullFileSignal] = createSignal(
+  loadBoolean(DIFF_FULL_FILE_KEY),
+);
 export { diffFullFile };
 export function setDiffFullFile(full: boolean): void {
   setDiffFullFileSignal(full);
@@ -466,9 +633,12 @@ export type SidebarTab = "repos" | "agents" | "pipelines";
 const [requestedSidebarTab, setSidebarTab] = createSignal<SidebarTab>("repos");
 export { setSidebarTab };
 
-const [agentActivity, setAgentActivity] = createSignal<AgentActivityResponse | null>(null);
+const [agentActivity, setAgentActivity] =
+  createSignal<AgentActivityResponse | null>(null);
 const [agentActivityLoading, setAgentActivityLoading] = createSignal(false);
-const [agentActivityError, setAgentActivityError] = createSignal<string | null>(null);
+const [agentActivityError, setAgentActivityError] = createSignal<string | null>(
+  null,
+);
 export { agentActivity, agentActivityLoading, agentActivityError };
 
 // How often agent activity is polled, in seconds (Menu > Agents). Polling
@@ -485,13 +655,17 @@ function clampPollSeconds(value: number): number {
 function loadAgentPollSeconds(): number {
   try {
     const stored = localStorage.getItem(AGENT_POLL_SECONDS_KEY);
-    return stored === null ? DEFAULT_AGENT_POLL_SECONDS : clampPollSeconds(Number(stored));
+    return stored === null
+      ? DEFAULT_AGENT_POLL_SECONDS
+      : clampPollSeconds(Number(stored));
   } catch {
     return DEFAULT_AGENT_POLL_SECONDS;
   }
 }
 
-const [agentPollSeconds, setAgentPollSecondsSignal] = createSignal(loadAgentPollSeconds());
+const [agentPollSeconds, setAgentPollSecondsSignal] = createSignal(
+  loadAgentPollSeconds(),
+);
 export { agentPollSeconds };
 export function setAgentPollSeconds(seconds: number): void {
   const next = clampPollSeconds(seconds);
@@ -504,7 +678,9 @@ export function setAgentPollSeconds(seconds: number): void {
   savePreference({ agent_poll_seconds: next });
 }
 
-const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(null);
+const [agentHooks, setAgentHooks] = createSignal<AgentHooksResponse | null>(
+  null,
+);
 const [agentHooksLoading, setAgentHooksLoading] = createSignal(false);
 const [agentHooksError, setAgentHooksError] = createSignal<string | null>(null);
 export { agentHooks, agentHooksLoading, agentHooksError };
@@ -525,7 +701,9 @@ export function setAgentsEnabled(enabled: boolean): void {
   savePreference({ agents_enabled: enabled });
 }
 
-export const agentActivityByWorktreePath = createMemo<Map<string, AgentWorktreeActivity>>(() => {
+export const agentActivityByWorktreePath = createMemo<
+  Map<string, AgentWorktreeActivity>
+>(() => {
   const byPath = new Map<string, AgentWorktreeActivity>();
   for (const scan of agentActivity()?.scans ?? []) {
     for (const activity of scan.worktrees) {
@@ -538,7 +716,9 @@ export const agentActivityByWorktreePath = createMemo<Map<string, AgentWorktreeA
   return byPath;
 });
 
-export const agentActivityByRepositoryId = createMemo<Map<string, AgentWorktreeActivity[]>>(() => {
+export const agentActivityByRepositoryId = createMemo<
+  Map<string, AgentWorktreeActivity[]>
+>(() => {
   const byRepository = new Map<string, AgentWorktreeActivity[]>();
   for (const scan of agentActivity()?.scans ?? []) {
     for (const activity of scan.worktrees) {
@@ -562,11 +742,15 @@ export interface AgentSessionCounts {
 // for the badges on the repo tabs: total sessions, and how many of those are
 // active (vs. idle) — the badge is shown whenever there's at least one
 // session, active or not, but colored by whether any of them is active.
-export const agentSessionCountsByRepositoryId = createMemo<Map<string, AgentSessionCounts>>(() => {
+export const agentSessionCountsByRepositoryId = createMemo<
+  Map<string, AgentSessionCounts>
+>(() => {
   const counts = new Map<string, AgentSessionCounts>();
   for (const scan of agentActivity()?.scans ?? []) {
     if (scan.worktrees.length === 0) continue;
-    for (const repositoryId of new Set(scan.worktrees.map((worktree) => worktree.repository_id))) {
+    for (const repositoryId of new Set(
+      scan.worktrees.map((worktree) => worktree.repository_id),
+    )) {
       const existing = counts.get(repositoryId) ?? { total: 0, active: 0 };
       existing.total += 1;
       if (scan.state === "active") existing.active += 1;
@@ -585,16 +769,25 @@ const agentCommitReloads = new Map<string, Set<string>>();
 // graph's own status poll notices the commit, and its ring can only be drawn
 // on a loaded commit: reload the graphs on screen as soon as that happens.
 function reloadGraphsMissingAgentCommits(scans: AgentRepositoryScan[]): void {
-  for (const repoId of new Set([activeRepoForPane("left"), activeRepoForPane("right")])) {
+  for (const repoId of new Set([
+    activeRepoForPane("left"),
+    activeRepoForPane("right"),
+  ])) {
     if (!repoId) continue;
     const state = repoStates[repoId];
-    const repositoryId = repos().find((repo) => repo.id === repoId)?.repository_id;
-    if (!state || !repositoryId || state.loading || state.commits.length === 0) continue;
+    const repositoryId = repos().find(
+      (repo) => repo.id === repoId,
+    )?.repository_id;
+    if (!state || !repositoryId || state.loading || state.commits.length === 0)
+      continue;
     const loaded = new Set(state.commits.map((commit) => commit.hash));
-    const missing = agentCommitsMissingFromGraph(scans, repositoryId, (hash) => loaded.has(hash));
+    const missing = agentCommitsMissingFromGraph(scans, repositoryId, (hash) =>
+      loaded.has(hash),
+    );
     const asked = agentCommitReloads.get(repoId);
     agentCommitReloads.set(repoId, missing);
-    if ([...missing].some((hash) => !asked?.has(hash))) void refreshRepoGraph(repoId);
+    if ([...missing].some((hash) => !asked?.has(hash)))
+      void refreshRepoGraph(repoId);
   }
 }
 
@@ -626,7 +819,9 @@ export async function refreshAgentHooks(): Promise<void> {
   }
 }
 
-export async function installAgentHooks(provider: "claude" | "opencode"): Promise<void> {
+export async function installAgentHooks(
+  provider: "claude" | "opencode",
+): Promise<void> {
   if (agentHooksLoading()) return;
   setAgentHooksLoading(true);
   setAgentHooksError(null);
@@ -648,8 +843,34 @@ export async function installAgentHooks(provider: "claude" | "opencode"): Promis
   }
 }
 
+export async function uninstallAgentHooks(
+  provider: "claude" | "opencode",
+): Promise<void> {
+  if (agentHooksLoading()) return;
+  setAgentHooksLoading(true);
+  setAgentHooksError(null);
+  try {
+    const status: AgentHookProviderStatus = await uninstallAgentHook(provider);
+    const current = agentHooks();
+    if (!current) {
+      setAgentHooks(await fetchAgentHooks());
+      return;
+    }
+    setAgentHooks({
+      claude: provider === "claude" ? status : current.claude,
+      opencode: provider === "opencode" ? status : current.opencode,
+    });
+  } catch (e) {
+    setAgentHooksError((e as Error).message);
+  } finally {
+    setAgentHooksLoading(false);
+  }
+}
+
 function updateGroupsFromConfig(groups: RepoGroupConfig[]): void {
-  setRepoGroups(groups.map((group) => ({ ...group, repo_paths: [...group.repo_paths] })));
+  setRepoGroups(
+    groups.map((group) => ({ ...group, repo_paths: [...group.repo_paths] })),
+  );
 }
 
 export async function toggleRepoPinned(path: string): Promise<void> {
@@ -664,7 +885,10 @@ export async function toggleRepoPinned(path: string): Promise<void> {
   }
 }
 
-export async function setRepoPinned(path: string, pinned: boolean): Promise<void> {
+export async function setRepoPinned(
+  path: string,
+  pinned: boolean,
+): Promise<void> {
   const next = new Set(pinnedRepos());
   if (pinned) next.add(path);
   else next.delete(path);
@@ -685,7 +909,10 @@ async function saveRepoGroups(next: RepoGroupConfig[]): Promise<void> {
   }
 }
 
-export async function createRepoGroup(name: string, repoPath?: string): Promise<void> {
+export async function createRepoGroup(
+  name: string,
+  repoPath?: string,
+): Promise<void> {
   const trimmed = name.trim();
   if (!trimmed) return;
   const group: RepoGroupConfig = {
@@ -696,10 +923,15 @@ export async function createRepoGroup(name: string, repoPath?: string): Promise<
   await saveRepoGroups([...repoGroups(), group]);
 }
 
-export async function renameRepoGroup(groupId: string, name: string): Promise<void> {
+export async function renameRepoGroup(
+  groupId: string,
+  name: string,
+): Promise<void> {
   const trimmed = name.trim();
   if (!trimmed) return;
-  const next = repoGroups().map((group) => (group.id === groupId ? { ...group, name: trimmed } : group));
+  const next = repoGroups().map((group) =>
+    group.id === groupId ? { ...group, name: trimmed } : group,
+  );
   await saveRepoGroups(next);
 }
 
@@ -710,7 +942,9 @@ export async function deleteRepoGroup(groupId: string): Promise<void> {
 
 // "New group" dialog: holds the repo the group is being created for (it becomes
 // the group's first member), or null when the dialog is closed.
-const [newGroupModal, setNewGroupModal] = createSignal<{ repoPath: string } | null>(null);
+const [newGroupModal, setNewGroupModal] = createSignal<{
+  repoPath: string;
+} | null>(null);
 export { newGroupModal };
 
 export function openNewGroupModal(repoPath: string): void {
@@ -721,7 +955,11 @@ export function closeNewGroupModal(): void {
   setNewGroupModal(null);
 }
 
-export async function setRepoInGroup(groupId: string, repoPath: string, inGroup: boolean): Promise<void> {
+export async function setRepoInGroup(
+  groupId: string,
+  repoPath: string,
+  inGroup: boolean,
+): Promise<void> {
   const next = repoGroups().map((group) => {
     if (group.id !== groupId) return group;
     const repoPaths = group.repo_paths.filter((path) => path !== repoPath);
@@ -731,7 +969,10 @@ export async function setRepoInGroup(groupId: string, repoPath: string, inGroup:
   await saveRepoGroups(next);
 }
 
-export async function moveRepoGroup(fromId: string, toId: string): Promise<void> {
+export async function moveRepoGroup(
+  fromId: string,
+  toId: string,
+): Promise<void> {
   if (fromId === toId) return;
   const next = [...repoGroups()];
   const fromIndex = next.findIndex((group) => group.id === fromId);
@@ -742,7 +983,10 @@ export async function moveRepoGroup(fromId: string, toId: string): Promise<void>
   await saveRepoGroups(next);
 }
 
-export async function moveRepoGroupToIndex(fromId: string, toIndex: number): Promise<void> {
+export async function moveRepoGroupToIndex(
+  fromId: string,
+  toIndex: number,
+): Promise<void> {
   const next = [...repoGroups()];
   const fromIndex = next.findIndex((group) => group.id === fromId);
   if (fromIndex < 0) return;
@@ -752,7 +996,11 @@ export async function moveRepoGroupToIndex(fromId: string, toIndex: number): Pro
   await saveRepoGroups(next);
 }
 
-export async function moveRepoInGroup(groupId: string, fromRepoPath: string, toRepoPath: string): Promise<void> {
+export async function moveRepoInGroup(
+  groupId: string,
+  fromRepoPath: string,
+  toRepoPath: string,
+): Promise<void> {
   if (fromRepoPath === toRepoPath) return;
   const next = repoGroups().map((group) => {
     if (group.id !== groupId) return group;
@@ -806,7 +1054,10 @@ const graphGenerations = new Map<string, number>();
 // Appends the next (older) page to what's loaded. Pages arrive oldest-first
 // like the first one, and everything older than the loaded history sorts
 // before it, so the page goes in front. Returns whether a page was added.
-async function loadOlderPage(name: string, generation: number): Promise<boolean> {
+async function loadOlderPage(
+  name: string,
+  generation: number,
+): Promise<boolean> {
   const state = repoStates[name];
   if (!state || !state.hasMore || !state.nextCursor) return false;
   setRepoStates(name, "loadingMore", true);
@@ -831,7 +1082,8 @@ async function loadOlderPage(name: string, generation: number): Promise<boolean>
     setRepoStates(name, "error", (e as Error).message);
     return false;
   } finally {
-    if (graphGenerations.get(name) === generation) setRepoStates(name, "loadingMore", false);
+    if (graphGenerations.get(name) === generation)
+      setRepoStates(name, "loadingMore", false);
   }
 }
 
@@ -842,7 +1094,10 @@ export async function loadMoreCommits(repoId: string): Promise<void> {
   await loadOlderPage(repoId, graphGenerations.get(repoId) ?? 0);
 }
 
-async function loadGraphInto(name: string, preserveLoaded = true): Promise<void> {
+async function loadGraphInto(
+  name: string,
+  preserveLoaded = true,
+): Promise<void> {
   const generation = (graphGenerations.get(name) ?? 0) + 1;
   graphGenerations.set(name, generation);
   const alreadyLoaded = preserveLoaded ? repoStates[name].commits.length : 0;
@@ -909,7 +1164,10 @@ async function loadRepoGraphIfNeeded(name: string): Promise<void> {
 // Re-fetches a repo's graph regardless of whether it's already loaded — used
 // to pick up HEAD moving after a checkout (see the terminal's command
 // detection), since the initial load only happens once per repo otherwise.
-export async function refreshRepoGraph(repoId: string, preserveLoaded = true): Promise<void> {
+export async function refreshRepoGraph(
+  repoId: string,
+  preserveLoaded = true,
+): Promise<void> {
   if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return;
   ensureRepoState(repoId);
   if (repoStates[repoId].loading) {
@@ -926,7 +1184,10 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
   try {
     const status = await fetchRepoStatus(repoId);
     maybeDetectExternalPush(repoId, status, state.upstreamCommit);
-    if (status.head_commit !== state.headCommit || status.current_branch !== state.currentBranch) {
+    if (
+      status.head_commit !== state.headCommit ||
+      status.current_branch !== state.currentBranch
+    ) {
       await refreshRepoGraph(repoId);
       return;
     }
@@ -948,7 +1209,10 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
 }
 
 const graphRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const checkoutRefreshTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+const checkoutRefreshTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>[]
+>();
 const CHECKOUT_REFRESH_DEBOUNCE_MS = 600;
 const CHECKOUT_REFRESH_DELAYS_MS = [600, 1500];
 const COMMIT_REFRESH_DELAYS_MS = [600, 1500, 3000];
@@ -1005,7 +1269,11 @@ function scheduleTimedGraphRefreshes(repoId: string, delays: number[]): void {
   checkoutRefreshTimers.set(repoId, timers);
 }
 
-export function openRepoTab(id: string, name: string, pane: PaneId = activePane()): void {
+export function openRepoTab(
+  id: string,
+  name: string,
+  pane: PaneId = activePane(),
+): void {
   const current = tabs();
   const existing = current.find((t) => t.id === id);
   if (!existing) {
@@ -1034,7 +1302,11 @@ export function pinTab(id: string): void {
   setTabs(tabs().map((t) => (t.id === id ? { ...t, pinned: true } : t)));
 }
 
-export function moveTab(draggedId: string, targetId: string, placement: "before" | "after" = "before"): void {
+export function moveTab(
+  draggedId: string,
+  targetId: string,
+  placement: "before" | "after" = "before",
+): void {
   if (draggedId === targetId) return;
   const current = tabs();
   const from = current.findIndex((tab) => tab.id === draggedId);
@@ -1043,7 +1315,11 @@ export function moveTab(draggedId: string, targetId: string, placement: "before"
   const next = [...current];
   const [dragged] = next.splice(from, 1);
   const targetIndex = next.findIndex((tab) => tab.id === targetId);
-  next.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, dragged);
+  next.splice(
+    placement === "after" ? targetIndex + 1 : targetIndex,
+    0,
+    dragged,
+  );
   setTabs(next);
 }
 
@@ -1051,7 +1327,9 @@ export function moveTabToPane(tabId: string, pane: PaneId): void {
   const current = tabs();
   const tab = current.find((item) => item.id === tabId);
   if (!tab) return;
-  const next = current.map((item) => (item.id === tabId ? { ...item, pane } : item));
+  const next = current.map((item) =>
+    item.id === tabId ? { ...item, pane } : item,
+  );
   setTabs(next);
   setActivePane(pane);
   setActiveRepo(tabId);
@@ -1061,7 +1339,10 @@ export function activateAdjacentTab(direction: 1 | -1): void {
   const current = tabs();
   if (current.length === 0) return;
   const active = activeRepo();
-  const index = Math.max(0, current.findIndex((tab) => tab.id === active));
+  const index = Math.max(
+    0,
+    current.findIndex((tab) => tab.id === active),
+  );
   const nextIndex = (index + direction + current.length) % current.length;
   activateTab(current[nextIndex].id);
 }
@@ -1075,10 +1356,22 @@ export function closeTab(id: string): void {
   setTabs(next);
   const paneTabs = next.filter((t) => t.pane === closed.pane);
   if (activeRepoByPane()[closed.pane] === id) {
-    const paneFallback = paneTabs.find((t) => current.indexOf(t) > idx) ?? paneTabs[paneTabs.length - 1] ?? null;
-    const nextByPane = { ...activeRepoByPane(), [closed.pane]: paneFallback?.id ?? null };
+    const paneFallback =
+      paneTabs.find((t) => current.indexOf(t) > idx) ??
+      paneTabs[paneTabs.length - 1] ??
+      null;
+    const nextByPane = {
+      ...activeRepoByPane(),
+      [closed.pane]: paneFallback?.id ?? null,
+    };
     setActiveRepoByPane(nextByPane);
-    persistTabsState(next, activeRepo(), activePane(), splitRatio(), nextByPane);
+    persistTabsState(
+      next,
+      activeRepo(),
+      activePane(),
+      splitRatio(),
+      nextByPane,
+    );
   }
   if (activeRepo() === id) {
     const fallback = next[idx] ?? next[idx - 1];
@@ -1099,7 +1392,7 @@ export function closeOtherTabs(id: string): void {
 
 export const commits = createMemo<CommitSummary[]>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.commits ?? [] : [];
+  return name ? (repoStates[name]?.commits ?? []) : [];
 });
 
 export function commitsForRepo(repoId: string): CommitSummary[] {
@@ -1123,10 +1416,21 @@ export interface CommitFilters {
   authors: string[];
   hasTag: TagFilter;
 }
-export const emptyCommitFilters: CommitFilters = { text: "", authors: [], hasTag: "any" };
-export const countCommitFilters = (f: CommitFilters): number => (f.text.trim() ? 1 : 0) + (f.authors.length ? 1 : 0) + (f.hasTag !== "any" ? 1 : 0);
+export const emptyCommitFilters: CommitFilters = {
+  text: "",
+  authors: [],
+  hasTag: "any",
+};
+export const countCommitFilters = (f: CommitFilters): number =>
+  (f.text.trim() ? 1 : 0) +
+  (f.authors.length ? 1 : 0) +
+  (f.hasTag !== "any" ? 1 : 0);
 
-export const commitFilters = (): CommitFilters => ({ text: commentFilter(), authors: authorFilter(), hasTag: tagFilter() });
+export const commitFilters = (): CommitFilters => ({
+  text: commentFilter(),
+  authors: authorFilter(),
+  hasTag: tagFilter(),
+});
 
 export function setCommitFilters(next: CommitFilters): void {
   setCommentFilterSignal(next.text);
@@ -1160,14 +1464,18 @@ export const commitAuthors = createMemo<string[]>(() => {
 // The checked branches are remembered per repo (branch names differ between
 // repos); the "commits since" date applies to whichever repo is active.
 
-const [branchSelections, setBranchSelections] = createSignal<Record<string, string[]>>({});
+const [branchSelections, setBranchSelections] = createSignal<
+  Record<string, string[]>
+>({});
 // "Active since" is either a rolling preset (7d/30d/90d) or a fixed date; the
 // date wins when both are set. `branchSince` is the effective yyyy-mm-dd date.
 export type SincePreset = "any" | "7d" | "30d" | "90d";
-const [branchSincePreset, setBranchSincePresetSignal] = createSignal<SincePreset>("any");
+const [branchSincePreset, setBranchSincePresetSignal] =
+  createSignal<SincePreset>("any");
 const [branchSinceDate, setBranchSinceDateSignal] = createSignal("");
 
-const localIsoDate = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const localIsoDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export const branchSince = createMemo<string>(() => {
   if (branchSinceDate()) return branchSinceDate();
@@ -1188,10 +1496,17 @@ export interface BranchFilters {
   since: SincePreset;
   sinceDate: string;
 }
-export const emptyBranchFilters: BranchFilters = { branches: [], since: "any", sinceDate: "" };
-export const countBranchFilters = (f: BranchFilters): number => (f.branches.length ? 1 : 0) + (f.since !== "any" || f.sinceDate ? 1 : 0);
+export const emptyBranchFilters: BranchFilters = {
+  branches: [],
+  since: "any",
+  sinceDate: "",
+};
+export const countBranchFilters = (f: BranchFilters): number =>
+  (f.branches.length ? 1 : 0) + (f.since !== "any" || f.sinceDate ? 1 : 0);
 
-export const commitBranches = createMemo<string[]>(() => branchNames(commits()));
+export const commitBranches = createMemo<string[]>(() =>
+  branchNames(commits()),
+);
 
 export function commitBranchesForRepo(repoId: string): string[] {
   return branchNames(commitsForRepo(repoId));
@@ -1200,7 +1515,7 @@ export function commitBranchesForRepo(repoId: string): string[] {
 // Checked branches of the active repo, ignoring ones that no longer exist.
 export const branchFilter = createMemo<string[]>(() => {
   const name = activeRepo();
-  const selected = name ? branchSelections()[name] ?? [] : [];
+  const selected = name ? (branchSelections()[name] ?? []) : [];
   const existing = new Set(commitBranches());
   return selected.filter((branch) => existing.has(branch));
 });
@@ -1213,10 +1528,15 @@ export function branchFilterForRepo(repoId: string): string[] {
 
 export function setBranchFilter(branches: string[]): void {
   const name = activeRepo();
-  if (name) setBranchSelections((current) => ({ ...current, [name]: branches }));
+  if (name)
+    setBranchSelections((current) => ({ ...current, [name]: branches }));
 }
 
-export const branchFilters = (): BranchFilters => ({ branches: branchFilter(), since: branchSincePreset(), sinceDate: branchSinceDate() });
+export const branchFilters = (): BranchFilters => ({
+  branches: branchFilter(),
+  since: branchSincePreset(),
+  sinceDate: branchSinceDate(),
+});
 
 export function setBranchFilters(next: BranchFilters): void {
   setBranchFilter(next.branches);
@@ -1228,10 +1548,16 @@ export function clearBranchFilters(): void {
   setBranchFilters(emptyBranchFilters);
 }
 
-const visibleBranchHashes = createMemo<Set<string> | null>(() => visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())));
+const visibleBranchHashes = createMemo<Set<string> | null>(() =>
+  visibleCommitHashes(commits(), branchFilter(), startOfDayMs(branchSince())),
+);
 
 export function visibleBranchHashesForRepo(repoId: string): Set<string> | null {
-  return visibleCommitHashes(commitsForRepo(repoId), branchFilterForRepo(repoId), startOfDayMs(branchSince()));
+  return visibleCommitHashes(
+    commitsForRepo(repoId),
+    branchFilterForRepo(repoId),
+    startOfDayMs(branchSince()),
+  );
 }
 
 // Commits that survive the branch filter but are hidden by the row filters
@@ -1248,7 +1574,7 @@ const rowFilterHiddenHashes = createMemo<Set<string>>(() => {
     if (
       (authors.length > 0 && !authors.includes(commit.author.name)) ||
       (comment && !commit.subject.toLowerCase().includes(comment)) ||
-      (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes"))
+      (tagged !== "any" && commit.refs.tags.length > 0 !== (tagged === "yes"))
     ) {
       hidden.add(commit.hash);
     }
@@ -1259,7 +1585,11 @@ const rowFilterHiddenHashes = createMemo<Set<string>>(() => {
 export const filteredCommits = createMemo<CommitSummary[]>(() => {
   const visibleByBranch = visibleBranchHashes();
   const hidden = rowFilterHiddenHashes();
-  return commits().filter((commit) => (!visibleByBranch || visibleByBranch.has(commit.hash)) && !hidden.has(commit.hash));
+  return commits().filter(
+    (commit) =>
+      (!visibleByBranch || visibleByBranch.has(commit.hash)) &&
+      !hidden.has(commit.hash),
+  );
 });
 
 export function filteredCommitsForRepo(repoId: string): CommitSummary[] {
@@ -1269,19 +1599,27 @@ export function filteredCommitsForRepo(repoId: string): CommitSummary[] {
   const visibleByBranch = visibleBranchHashesForRepo(repoId);
   return commitsForRepo(repoId).filter((commit) => {
     if (visibleByBranch && !visibleByBranch.has(commit.hash)) return false;
-    if (authors.length > 0 && !authors.includes(commit.author.name)) return false;
-    if (comment && !commit.subject.toLowerCase().includes(comment)) return false;
-    if (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes")) return false;
+    if (authors.length > 0 && !authors.includes(commit.author.name))
+      return false;
+    if (comment && !commit.subject.toLowerCase().includes(comment))
+      return false;
+    if (tagged !== "any" && commit.refs.tags.length > 0 !== (tagged === "yes"))
+      return false;
     return true;
   });
 }
 
-const commitsByHash = createMemo(() => new Map(commits().map((c) => [c.hash, c])));
+const commitsByHash = createMemo(
+  () => new Map(commits().map((c) => [c.hash, c])),
+);
 
 // Follows first parents from `parentHash` through commits hidden by the row
 // filters to the nearest visible ancestor. `skipped` is false when the parent
 // itself is visible (a normal, solid edge); null when no visible ancestor exists.
-export function resolveVisibleParent(parentHash: string, visible: Map<string, CommitSummary>): { hash: string; skipped: boolean } | null {
+export function resolveVisibleParent(
+  parentHash: string,
+  visible: Map<string, CommitSummary>,
+): { hash: string; skipped: boolean } | null {
   if (visible.has(parentHash)) return { hash: parentHash, skipped: false };
   const hidden = rowFilterHiddenHashes();
   const all = commitsByHash();
@@ -1295,7 +1633,11 @@ export function resolveVisibleParent(parentHash: string, visible: Map<string, Co
   return null;
 }
 
-export function resolveVisibleParentForRepo(repoId: string, parentHash: string, visible: Map<string, CommitSummary>): { hash: string; skipped: boolean } | null {
+export function resolveVisibleParentForRepo(
+  repoId: string,
+  parentHash: string,
+  visible: Map<string, CommitSummary>,
+): { hash: string; skipped: boolean } | null {
   if (visible.has(parentHash)) return { hash: parentHash, skipped: false };
   const visibleByBranch = visibleBranchHashesForRepo(repoId);
   const authors = authorFilter();
@@ -1313,7 +1655,8 @@ export function resolveVisibleParentForRepo(repoId: string, parentHash: string, 
       !branchHidden &&
       ((authors.length > 0 && !authors.includes(commit.author.name)) ||
         (comment && !commit.subject.toLowerCase().includes(comment)) ||
-        (tagged !== "any" && (commit.refs.tags.length > 0) !== (tagged === "yes")));
+        (tagged !== "any" &&
+          commit.refs.tags.length > 0 !== (tagged === "yes")));
     if (visible.has(cursor)) return { hash: cursor, skipped: rowHidden };
     if (branchHidden || !rowHidden) return null;
     cursor = commit.parents[0];
@@ -1323,7 +1666,7 @@ export function resolveVisibleParentForRepo(repoId: string, parentHash: string, 
 
 export const currentBranch = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.currentBranch ?? null : null;
+  return name ? (repoStates[name]?.currentBranch ?? null) : null;
 });
 
 export function currentBranchForRepo(repoId: string): string | null {
@@ -1335,12 +1678,12 @@ export function currentBranchForRepo(repoId: string): string | null {
 // own stable lane instead of packing it like an ordinary branch.
 export const checkedOutBranches = createMemo<string[]>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.checkedOutBranches ?? [] : [];
+  return name ? (repoStates[name]?.checkedOutBranches ?? []) : [];
 });
 
 export const headCommit = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.headCommit ?? null : null;
+  return name ? (repoStates[name]?.headCommit ?? null) : null;
 });
 
 export function headCommitForRepo(repoId: string): string | null {
@@ -1349,7 +1692,7 @@ export function headCommitForRepo(repoId: string): string | null {
 
 export const upstreamCommit = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.upstreamCommit ?? null : null;
+  return name ? (repoStates[name]?.upstreamCommit ?? null) : null;
 });
 
 export function upstreamCommitForRepo(repoId: string): string | null {
@@ -1358,17 +1701,17 @@ export function upstreamCommitForRepo(repoId: string): string | null {
 
 export const upstreamRemote = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.upstreamRemote ?? null : null;
+  return name ? (repoStates[name]?.upstreamRemote ?? null) : null;
 });
 
 export const upstreamBranch = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.upstreamBranch ?? null : null;
+  return name ? (repoStates[name]?.upstreamBranch ?? null) : null;
 });
 
 export const isDirty = createMemo<boolean>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.isDirty ?? false : false;
+  return name ? (repoStates[name]?.isDirty ?? false) : false;
 });
 
 export function isDirtyForRepo(repoId: string): boolean {
@@ -1393,7 +1736,7 @@ export function workingTreeVisibleForRepo(repoId: string): boolean {
 
 export const uncommittedFiles = createMemo<FileChange[]>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.uncommittedFiles ?? [] : [];
+  return name ? (repoStates[name]?.uncommittedFiles ?? []) : [];
 });
 
 export function uncommittedFilesForRepo(repoId: string): FileChange[] {
@@ -1402,7 +1745,7 @@ export function uncommittedFilesForRepo(repoId: string): FileChange[] {
 
 export const uncommittedExpanded = createMemo<boolean>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.uncommittedExpanded ?? false : false;
+  return name ? (repoStates[name]?.uncommittedExpanded ?? false) : false;
 });
 
 export function uncommittedExpandedForRepo(repoId: string): boolean {
@@ -1413,12 +1756,20 @@ export function toggleUncommittedExpanded(): void {
   const name = activeRepo();
   if (!name) return;
   ensureRepoState(name);
-  setRepoStates(name, "uncommittedExpanded", !repoStates[name].uncommittedExpanded);
+  setRepoStates(
+    name,
+    "uncommittedExpanded",
+    !repoStates[name].uncommittedExpanded,
+  );
 }
 
 export function toggleUncommittedExpandedForRepo(repoId: string): void {
   ensureRepoState(repoId);
-  setRepoStates(repoId, "uncommittedExpanded", !repoStates[repoId].uncommittedExpanded);
+  setRepoStates(
+    repoId,
+    "uncommittedExpanded",
+    !repoStates[repoId].uncommittedExpanded,
+  );
 }
 
 // For displaying a tab's branch without it being the active repo.
@@ -1428,7 +1779,9 @@ export function repoCurrentBranch(name: string): string | null {
 
 export const expandedHashes = createMemo<Set<string>>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.expanded ?? new Set<string>() : new Set<string>();
+  return name
+    ? (repoStates[name]?.expanded ?? new Set<string>())
+    : new Set<string>();
 });
 
 export function expandedHashesForRepo(repoId: string): Set<string> {
@@ -1437,16 +1790,18 @@ export function expandedHashesForRepo(repoId: string): Set<string> {
 
 export const commitDetails = createMemo<Record<string, CommitDetail>>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.details ?? {} : {};
+  return name ? (repoStates[name]?.details ?? {}) : {};
 });
 
-export function commitDetailsForRepo(repoId: string): Record<string, CommitDetail> {
+export function commitDetailsForRepo(
+  repoId: string,
+): Record<string, CommitDetail> {
   return repoStates[repoId]?.details ?? {};
 }
 
 export const ciRuns = createMemo<Record<string, CiRunInfo[]>>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.ciRuns ?? {} : {};
+  return name ? (repoStates[name]?.ciRuns ?? {}) : {};
 });
 
 export function ciRunsForRepo(repoId: string): Record<string, CiRunInfo[]> {
@@ -1455,7 +1810,7 @@ export function ciRunsForRepo(repoId: string): Record<string, CiRunInfo[]> {
 
 export const graphLoading = createMemo<boolean>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.loading ?? false : false;
+  return name ? (repoStates[name]?.loading ?? false) : false;
 });
 
 export function graphLoadingForRepo(repoId: string): boolean {
@@ -1465,7 +1820,7 @@ export function graphLoadingForRepo(repoId: string): boolean {
 // Older commits exist beyond the loaded ones (the list loads them on scroll).
 export const graphHasMore = createMemo<boolean>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.hasMore ?? false : false;
+  return name ? (repoStates[name]?.hasMore ?? false) : false;
 });
 
 export function graphHasMoreForRepo(repoId: string): boolean {
@@ -1474,7 +1829,7 @@ export function graphHasMoreForRepo(repoId: string): boolean {
 
 export const graphLoadingMore = createMemo<boolean>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.loadingMore ?? false : false;
+  return name ? (repoStates[name]?.loadingMore ?? false) : false;
 });
 
 export function graphLoadingMoreForRepo(repoId: string): boolean {
@@ -1483,7 +1838,7 @@ export function graphLoadingMoreForRepo(repoId: string): boolean {
 
 export const errorMessage = createMemo<string | null>(() => {
   const name = activeRepo();
-  return name ? repoStates[name]?.error ?? null : null;
+  return name ? (repoStates[name]?.error ?? null) : null;
 });
 
 export function errorMessageForRepo(repoId: string): string | null {
@@ -1518,7 +1873,8 @@ export function toggleExpandForRepo(repoId: string, hash: string): void {
 
 async function ensureDetail(repo: string, hash: string): Promise<void> {
   const key = `${repo}:${hash}`;
-  if (repoStates[repo]?.details[hash] || inFlightDetailRequests.has(key)) return;
+  if (repoStates[repo]?.details[hash] || inFlightDetailRequests.has(key))
+    return;
   inFlightDetailRequests.add(key);
   try {
     const detail = await fetchCommitDetail(repo, hash);
@@ -1541,7 +1897,13 @@ function rowHeight(name: string, hash: string): number {
   const detail = state.details[hash];
   if (!detail) return COLLAPSED_ROW_HEIGHT + DETAIL_LOADING_HEIGHT;
   const messageLines = detail.message.trimEnd().split("\n").length;
-  return COLLAPSED_ROW_HEIGHT + EXPANDED_BASE_HEIGHT + MESSAGE_BLOCK_PADDING + messageLines * MESSAGE_LINE_HEIGHT + detail.files.length * FILE_ROW_HEIGHT;
+  return (
+    COLLAPSED_ROW_HEIGHT +
+    EXPANDED_BASE_HEIGHT +
+    MESSAGE_BLOCK_PADDING +
+    messageLines * MESSAGE_LINE_HEIGHT +
+    detail.files.length * FILE_ROW_HEIGHT
+  );
 }
 
 export const uncommittedRowHeight = createMemo<number>(() => {
@@ -1550,15 +1912,23 @@ export const uncommittedRowHeight = createMemo<number>(() => {
   const measured = measuredHeights[UNCOMMITTED_ROW_KEY];
   if (measured !== undefined) return measured;
   if (!repoStates[name]?.uncommittedExpanded) return COLLAPSED_ROW_HEIGHT;
-  return COLLAPSED_ROW_HEIGHT + 16 + uncommittedFiles().length * FILE_ROW_HEIGHT;
+  return (
+    COLLAPSED_ROW_HEIGHT + 16 + uncommittedFiles().length * FILE_ROW_HEIGHT
+  );
 });
 
 export function uncommittedRowHeightForRepo(repoId: string): number {
   if (!isDirtyForRepo(repoId) || headCommitForRepo(repoId) === null) return 0;
-  const measured = measuredHeights[`${repoId}:${UNCOMMITTED_ROW_KEY}`] ?? measuredHeights[UNCOMMITTED_ROW_KEY];
+  const measured =
+    measuredHeights[`${repoId}:${UNCOMMITTED_ROW_KEY}`] ??
+    measuredHeights[UNCOMMITTED_ROW_KEY];
   if (measured !== undefined) return measured;
   if (!repoStates[repoId]?.uncommittedExpanded) return COLLAPSED_ROW_HEIGHT;
-  return COLLAPSED_ROW_HEIGHT + 16 + uncommittedFilesForRepo(repoId).length * FILE_ROW_HEIGHT;
+  return (
+    COLLAPSED_ROW_HEIGHT +
+    16 +
+    uncommittedFilesForRepo(repoId).length * FILE_ROW_HEIGHT
+  );
 }
 
 // Single source of truth for vertical layout, shared by the graph SVG and
@@ -1576,7 +1946,11 @@ export const rowLayout = createMemo(() => {
   return { order, offsetByHash, total: y };
 });
 
-export function rowLayoutForRepo(repoId: string): { order: CommitSummary[]; offsetByHash: Map<string, number>; total: number } {
+export function rowLayoutForRepo(repoId: string): {
+  order: CommitSummary[];
+  offsetByHash: Map<string, number>;
+  total: number;
+} {
   const order = [...filteredCommitsForRepo(repoId)].reverse();
   const offsetByHash = new Map<string, number>();
   let y = 0;
@@ -1627,12 +2001,15 @@ function findMatches(list: CommitSummary[], query: string): Set<string> {
   const matches = new Set<string>();
   if (!query) return matches;
   for (const c of list) {
-    if (c.hash.includes(query) || lowerSubject(c).includes(query)) matches.add(c.hash);
+    if (c.hash.includes(query) || lowerSubject(c).includes(query))
+      matches.add(c.hash);
   }
   return matches;
 }
 
-export const matchingHashes = createMemo<Set<string>>(() => findMatches(filteredCommits(), matchQuery().trim().toLowerCase()));
+export const matchingHashes = createMemo<Set<string>>(() =>
+  findMatches(filteredCommits(), matchQuery().trim().toLowerCase()),
+);
 
 // One memo per repo, so each commit row reads a cached set instead of every row
 // rescanning the whole commit list on every change.
@@ -1641,7 +2018,14 @@ const matchingHashesMemos = new Map<string, Accessor<Set<string>>>();
 export function matchingHashesForRepo(repoId: string): Set<string> {
   let memo = matchingHashesMemos.get(repoId);
   if (!memo) {
-    memo = createRoot(() => createMemo(() => findMatches(filteredCommitsForRepo(repoId), matchQuery().trim().toLowerCase())));
+    memo = createRoot(() =>
+      createMemo(() =>
+        findMatches(
+          filteredCommitsForRepo(repoId),
+          matchQuery().trim().toLowerCase(),
+        ),
+      ),
+    );
     matchingHashesMemos.set(repoId, memo);
   }
   return memo();
@@ -1649,9 +2033,24 @@ export function matchingHashesForRepo(repoId: string): Set<string> {
 
 // --- Settings (Cmd/Ctrl+Shift+P main menu) ---------------------------------------
 
-export type MenuSection = "repos" | "appearance" | "github" | "jenkins" | "agents" | "keybindings" | "configuration";
+export type MenuSection =
+  | "repos"
+  | "appearance"
+  | "github"
+  | "jenkins"
+  | "agents"
+  | "keybindings"
+  | "configuration";
 
-export const MENU_SECTION_ORDER: MenuSection[] = ["repos", "appearance", "github", "jenkins", "agents", "keybindings", "configuration"];
+export const MENU_SECTION_ORDER: MenuSection[] = [
+  "repos",
+  "appearance",
+  "github",
+  "jenkins",
+  "agents",
+  "keybindings",
+  "configuration",
+];
 
 const [menuOpen, setMenuOpen] = createSignal(false);
 export { menuOpen };
@@ -1706,8 +2105,12 @@ export function toggleCommandPalette(): void {
 // for everyone talking to this backend. `null` means "not loaded yet" (the
 // preferences fetch hasn't answered), and the wizard stays hidden rather than
 // flashing on screen while that's unknown — see applyRemotePreferences.
-const [onboardingComplete, setOnboardingCompleteSignal] = createSignal<boolean | null>(null);
-export const welcomeWizardOpen = createMemo(() => onboardingComplete() === false);
+const [onboardingComplete, setOnboardingCompleteSignal] = createSignal<
+  boolean | null
+>(null);
+export const welcomeWizardOpen = createMemo(
+  () => onboardingComplete() === false,
+);
 
 function setOnboardingComplete(complete: boolean): void {
   setOnboardingCompleteSignal(complete);
@@ -1751,7 +2154,9 @@ const [terminalShell, setTerminalShell] = createSignal<TerminalShell>("posix");
 export { terminalShell };
 
 const [excludedPaths, setExcludedPaths] = createSignal<string[]>([]);
-const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(null);
+const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(
+  null,
+);
 export { excludedPaths, excludedPathsError };
 
 export const DEFAULT_GRAPH_PAGE_SIZE = 500;
@@ -1763,7 +2168,9 @@ function clampGraphPageSize(value: number): number {
 }
 
 const [graphPageSize, setGraphPageSize] = createSignal(DEFAULT_GRAPH_PAGE_SIZE);
-const [graphPageSizeError, setGraphPageSizeError] = createSignal<string | null>(null);
+const [graphPageSizeError, setGraphPageSizeError] = createSignal<string | null>(
+  null,
+);
 export { graphPageSize, graphPageSizeError };
 
 const defaultGitHubConfig: GitHubConfig = {
@@ -1784,15 +2191,23 @@ const defaultJenkinsConfig: JenkinsConfig = {
   rules: [],
 };
 
-const [githubConfig, setGitHubConfig] = createSignal<GitHubConfig>(defaultGitHubConfig);
-const [githubConfigError, setGitHubConfigError] = createSignal<string | null>(null);
+const [githubConfig, setGitHubConfig] =
+  createSignal<GitHubConfig>(defaultGitHubConfig);
+const [githubConfigError, setGitHubConfigError] = createSignal<string | null>(
+  null,
+);
 export { githubConfig, githubConfigError };
 
-const [jenkinsConfig, setJenkinsConfig] = createSignal<JenkinsConfig>(defaultJenkinsConfig);
-const [jenkinsConfigError, setJenkinsConfigError] = createSignal<string | null>(null);
+const [jenkinsConfig, setJenkinsConfig] =
+  createSignal<JenkinsConfig>(defaultJenkinsConfig);
+const [jenkinsConfigError, setJenkinsConfigError] = createSignal<string | null>(
+  null,
+);
 export { jenkinsConfig, jenkinsConfigError };
 
-export const ciEnabled = createMemo(() => githubConfig().enabled || jenkinsConfig().enabled);
+export const ciEnabled = createMemo(
+  () => githubConfig().enabled || jenkinsConfig().enabled,
+);
 
 export const sidebarTab = createMemo<SidebarTab>(() => {
   const tab = requestedSidebarTab();
@@ -1826,7 +2241,9 @@ export async function refreshPipelines(): Promise<void> {
 
 // Stages of individual runs, loaded lazily when a commit's CI badge is
 // hovered. `null` = the provider has no stage data for that run.
-const [runStages, setRunStages] = createSignal<Record<string, CiStage[] | null>>({});
+const [runStages, setRunStages] = createSignal<
+  Record<string, CiStage[] | null>
+>({});
 export { runStages };
 const runStagesInFlight = new Set<string>();
 
@@ -1834,7 +2251,10 @@ export function runStagesKey(run: CiRunInfo): string {
   return `${run.provider}:${run.run_id ?? ""}`;
 }
 
-export async function loadRunStages(repoId: string, run: CiRunInfo): Promise<void> {
+export async function loadRunStages(
+  repoId: string,
+  run: CiRunInfo,
+): Promise<void> {
   if (!run.run_id) return;
   const key = runStagesKey(run);
   // Finished runs never change, so they're cached; running ones are refetched
@@ -1875,13 +2295,16 @@ function clampCiPollSeconds(value: number): number {
 function loadCiPollSeconds(): number {
   try {
     const stored = localStorage.getItem(CI_POLL_SECONDS_KEY);
-    return stored === null ? DEFAULT_CI_POLL_SECONDS : clampCiPollSeconds(Number(stored));
+    return stored === null
+      ? DEFAULT_CI_POLL_SECONDS
+      : clampCiPollSeconds(Number(stored));
   } catch {
     return DEFAULT_CI_POLL_SECONDS;
   }
 }
 
-const [ciPollSeconds, setCiPollSecondsSignal] = createSignal(loadCiPollSeconds());
+const [ciPollSeconds, setCiPollSecondsSignal] =
+  createSignal(loadCiPollSeconds());
 export { ciPollSeconds };
 export function setCiPollSeconds(seconds: number): void {
   const next = clampCiPollSeconds(seconds);
@@ -1962,9 +2385,16 @@ async function discoverCiRuns(repoId: string): Promise<void> {
   if (!ciPollTimers.has(repoId)) scheduleCiTrackingIfNeeded(repoId);
 }
 
-async function discoverCiRunsForBranch(repoId: string, branchName: string, headSha?: string | null): Promise<void> {
+async function discoverCiRunsForBranch(
+  repoId: string,
+  branchName: string,
+  headSha?: string | null,
+): Promise<void> {
   try {
-    applyPolledRuns(repoId, await pollCiRuns(repoId, undefined, headSha ?? undefined, branchName));
+    applyPolledRuns(
+      repoId,
+      await pollCiRuns(repoId, undefined, headSha ?? undefined, branchName),
+    );
     void refreshPipelines();
   } catch {
     // Opportunistic; the next discovery delay or the completed refresh catches up.
@@ -2057,7 +2487,14 @@ async function loadCiRunsInto(repoId: string): Promise<void> {
 export const CI_COMPLETED_REFRESH_INTERVAL_MS = CI_COMPLETED_REFRESH_MS;
 export function refreshActiveRepoCiRuns(): void {
   const repoId = activeRepo();
-  if (!repoId || repoUnavailable(repoId) || repoLoadDeferred(repoId) || document.hidden || ciPollTimers.has(repoId)) return;
+  if (
+    !repoId ||
+    repoUnavailable(repoId) ||
+    repoLoadDeferred(repoId) ||
+    document.hidden ||
+    ciPollTimers.has(repoId)
+  )
+    return;
   void loadCiRunsInto(repoId);
 }
 
@@ -2071,11 +2508,22 @@ export async function clearStoredCiRuns(): Promise<void> {
   void refreshPipelines();
 }
 
-function pushedBranchForRepo(repoId: string, branchName?: string | null): string | null {
-  return branchName || repoStates[repoId]?.upstreamBranch || repoStates[repoId]?.currentBranch || null;
+function pushedBranchForRepo(
+  repoId: string,
+  branchName?: string | null,
+): string | null {
+  return (
+    branchName ||
+    repoStates[repoId]?.upstreamBranch ||
+    repoStates[repoId]?.currentBranch ||
+    null
+  );
 }
 
-export function scheduleCiRefreshAfterPush(repoId: string, branchName?: string | null): void {
+export function scheduleCiRefreshAfterPush(
+  repoId: string,
+  branchName?: string | null,
+): void {
   scheduleGraphRefresh(repoId);
   if (!githubConfig().enabled && !jenkinsConfig().enabled) return;
   clearCiPushRefresh(repoId);
@@ -2088,7 +2536,8 @@ export function scheduleCiRefreshAfterPush(repoId: string, branchName?: string |
       const remaining = current.filter((item) => item !== timer);
       if (remaining.length > 0) ciPushRefreshTimers.set(repoId, remaining);
       else ciPushRefreshTimers.delete(repoId);
-      if (pushedBranch) void discoverCiRunsForBranch(repoId, pushedBranch, headSha);
+      if (pushedBranch)
+        void discoverCiRunsForBranch(repoId, pushedBranch, headSha);
       else void discoverCiRuns(repoId);
     }, delay);
     timers.push(timer);
@@ -2096,17 +2545,34 @@ export function scheduleCiRefreshAfterPush(repoId: string, branchName?: string |
   ciPushRefreshTimers.set(repoId, timers);
 }
 
-function maybeDetectExternalPush(repoId: string, status: RepoStatusResponse, previousUpstream: string | null): void {
-  if (!jenkinsConfig().enabled || !jenkinsConfig().detect_external_pushes || repoId !== activeRepo()) return;
-  if (!previousUpstream || !status.upstream_commit || previousUpstream === status.upstream_commit) return;
-  if (!status.current_branch || status.head_commit !== status.upstream_commit) return;
+function maybeDetectExternalPush(
+  repoId: string,
+  status: RepoStatusResponse,
+  previousUpstream: string | null,
+): void {
+  if (
+    !jenkinsConfig().enabled ||
+    !jenkinsConfig().detect_external_pushes ||
+    repoId !== activeRepo()
+  )
+    return;
+  if (
+    !previousUpstream ||
+    !status.upstream_commit ||
+    previousUpstream === status.upstream_commit
+  )
+    return;
+  if (!status.current_branch || status.head_commit !== status.upstream_commit)
+    return;
   const key = `${repoId}:${status.current_branch}:${status.upstream_commit}`;
   const now = Date.now();
   const previousDetection = ciExternalPushDetections.get(key);
-  if (previousDetection && now - previousDetection < CI_EXTERNAL_PUSH_DEDUPE_MS) return;
+  if (previousDetection && now - previousDetection < CI_EXTERNAL_PUSH_DEDUPE_MS)
+    return;
   ciExternalPushDetections.set(key, now);
   for (const [storedKey, detectedAt] of ciExternalPushDetections) {
-    if (now - detectedAt > CI_EXTERNAL_PUSH_DEDUPE_MS) ciExternalPushDetections.delete(storedKey);
+    if (now - detectedAt > CI_EXTERNAL_PUSH_DEDUPE_MS)
+      ciExternalPushDetections.delete(storedKey);
   }
   scheduleCiRefreshAfterPush(repoId, status.current_branch);
 }
@@ -2117,7 +2583,11 @@ export async function saveGitHubConfig(next: GitHubConfig): Promise<void> {
     applyGitHubConfig(data.github);
     setGitHubConfigError(null);
     const current = activeRepo();
-    if (current && ((data.github ?? defaultGitHubConfig).enabled || jenkinsConfig().enabled)) void loadCiRunsInto(current);
+    if (
+      current &&
+      ((data.github ?? defaultGitHubConfig).enabled || jenkinsConfig().enabled)
+    )
+      void loadCiRunsInto(current);
   } catch (e) {
     setGitHubConfigError((e as Error).message);
   }
@@ -2129,7 +2599,11 @@ export async function saveJenkinsConfig(next: JenkinsConfig): Promise<void> {
     applyJenkinsConfig(data.jenkins);
     setJenkinsConfigError(null);
     const current = activeRepo();
-    if (current && ((data.jenkins ?? defaultJenkinsConfig).enabled || githubConfig().enabled)) void loadCiRunsInto(current);
+    if (
+      current &&
+      ((data.jenkins ?? defaultJenkinsConfig).enabled || githubConfig().enabled)
+    )
+      void loadCiRunsInto(current);
   } catch (e) {
     setJenkinsConfigError((e as Error).message);
   }
@@ -2174,7 +2648,9 @@ export async function saveExcludedPaths(next: string[]): Promise<void> {
 
 export async function saveGraphPageSize(next: number): Promise<void> {
   try {
-    const data = await updateConfig({ graph_page_size: clampGraphPageSize(next) });
+    const data = await updateConfig({
+      graph_page_size: clampGraphPageSize(next),
+    });
     setGraphPageSize(clampGraphPageSize(data.graph_page_size));
     setGraphPageSizeError(null);
     const current = activeRepo();
@@ -2204,7 +2680,8 @@ function loadTerminalHeight(): number {
 }
 
 const [terminalOpen, setTerminalOpen] = createSignal(true);
-const [terminalHeight, setTerminalHeightSignal] = createSignal(loadTerminalHeight());
+const [terminalHeight, setTerminalHeightSignal] =
+  createSignal(loadTerminalHeight());
 export { terminalHeight, terminalOpen };
 
 export function toggleTerminalOpen(): void {
@@ -2232,15 +2709,25 @@ export function setTerminalHeight(height: number): void {
 // timeout), or until something needs them sooner: switching to the tab, or a
 // command queued via runInTerminal.
 const BACKGROUND_TERMINAL_FALLBACK_MS = 4000;
-const [backgroundTerminalsReady, setBackgroundTerminalsReady] = createSignal(false);
-const [demandedTerminals, setDemandedTerminals] = createSignal<ReadonlySet<string>>(new Set());
-setTimeout(() => setBackgroundTerminalsReady(true), BACKGROUND_TERMINAL_FALLBACK_MS);
+const [backgroundTerminalsReady, setBackgroundTerminalsReady] =
+  createSignal(false);
+const [demandedTerminals, setDemandedTerminals] = createSignal<
+  ReadonlySet<string>
+>(new Set());
+setTimeout(
+  () => setBackgroundTerminalsReady(true),
+  BACKGROUND_TERMINAL_FALLBACK_MS,
+);
 
 export function shouldConnectTerminal(repoId: string | null): boolean {
   // The repo-less shell is only visible when no tabs are open.
   if (repoId === null) return tabs().length === 0 || backgroundTerminalsReady();
   if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return false;
-  return backgroundTerminalsReady() || repoId === activeRepo() || demandedTerminals().has(repoId);
+  return (
+    backgroundTerminalsReady() ||
+    repoId === activeRepo() ||
+    demandedTerminals().has(repoId)
+  );
 }
 
 // Called when any terminal delivers its first output.
@@ -2258,7 +2745,10 @@ const terminalSenders = new Map<string, (data: string) => void>();
 // after opening its tab) are queued here and flushed once it registers.
 const pendingCommands = new Map<string, string[]>();
 
-export function registerTerminalSender(repoId: string, send: (data: string) => void): void {
+export function registerTerminalSender(
+  repoId: string,
+  send: (data: string) => void,
+): void {
   terminalSenders.set(repoId, send);
 }
 
@@ -2306,7 +2796,8 @@ export interface CreateTagTarget {
   subject: string;
 }
 
-const [createTagModal, setCreateTagModal] = createSignal<CreateTagTarget | null>(null);
+const [createTagModal, setCreateTagModal] =
+  createSignal<CreateTagTarget | null>(null);
 export { createTagModal };
 
 export function openCreateTagModal(target: CreateTagTarget): void {
@@ -2327,7 +2818,8 @@ export interface CreateBranchTarget {
   subject?: string;
 }
 
-const [createBranchModal, setCreateBranchModal] = createSignal<CreateBranchTarget | null>(null);
+const [createBranchModal, setCreateBranchModal] =
+  createSignal<CreateBranchTarget | null>(null);
 export { createBranchModal };
 
 export function openCreateBranchModal(target: CreateBranchTarget): void {
@@ -2345,10 +2837,16 @@ export interface FileDiffTarget {
   file: FileChange;
 }
 
-const [fileDiffModal, setFileDiffModal] = createSignal<FileDiffTarget | null>(null);
+const [fileDiffModal, setFileDiffModal] = createSignal<FileDiffTarget | null>(
+  null,
+);
 export { fileDiffModal };
 
-export function openFileDiff(repo: string, hash: string | null, file: FileChange): void {
+export function openFileDiff(
+  repo: string,
+  hash: string | null,
+  file: FileChange,
+): void {
   setFileDiffModal({ repo, hash, file });
 }
 
@@ -2447,7 +2945,10 @@ function echoSafe(marker: string): string {
   return `"${marker.slice(0, mid)}""${marker.slice(mid)}"`;
 }
 
-function runTrackedTagCommand(repoId: string, gitTagCommand: string): Promise<boolean> {
+function runTrackedTagCommand(
+  repoId: string,
+  gitTagCommand: string,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const watcherId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const successMarker = "git-juggler: tag created";
@@ -2465,7 +2966,10 @@ function runTrackedTagCommand(repoId: string, gitTagCommand: string): Promise<bo
       resolve(success);
     };
 
-    const timeoutHandle = setTimeout(() => finish(false), TAG_COMMAND_TIMEOUT_MS);
+    const timeoutHandle = setTimeout(
+      () => finish(false),
+      TAG_COMMAND_TIMEOUT_MS,
+    );
 
     terminalOutputWatchers.set(watcherId, {
       repoId,
@@ -2480,7 +2984,11 @@ function runTrackedTagCommand(repoId: string, gitTagCommand: string): Promise<bo
   });
 }
 
-export function createLightweightTagInTerminal(repoId: string, hash: string, name: string): Promise<boolean> {
+export function createLightweightTagInTerminal(
+  repoId: string,
+  hash: string,
+  name: string,
+): Promise<boolean> {
   return runTrackedTagCommand(repoId, `git tag ${shellQuote(name)} ${hash}`);
 }
 
@@ -2490,7 +2998,10 @@ export function createAnnotatedTagInTerminal(
   name: string,
   message: string,
 ): Promise<boolean> {
-  return runTrackedTagCommand(repoId, `git tag -a ${shellQuote(name)} -m ${shellQuote(message)} ${hash}`);
+  return runTrackedTagCommand(
+    repoId,
+    `git tag -a ${shellQuote(name)} -m ${shellQuote(message)} ${hash}`,
+  );
 }
 
 // --- Commit context menu ------------------------------------------------
@@ -2501,7 +3012,9 @@ export interface ContextMenuState {
   hash: string;
 }
 
-const [contextMenu, setContextMenu] = createSignal<ContextMenuState | null>(null);
+const [contextMenu, setContextMenu] = createSignal<ContextMenuState | null>(
+  null,
+);
 export { contextMenu };
 
 export function openContextMenu(x: number, y: number, hash: string): void {
@@ -2536,13 +3049,22 @@ export interface DeleteTagModalState {
   name: string;
 }
 
-const [branchContextMenu, setBranchContextMenu] = createSignal<BranchContextMenuState | null>(null);
-const [deleteBranchModal, setDeleteBranchModal] = createSignal<DeleteBranchModalState | null>(null);
-const [tagContextMenu, setTagContextMenu] = createSignal<TagContextMenuState | null>(null);
-const [deleteTagModal, setDeleteTagModal] = createSignal<DeleteTagModalState | null>(null);
+const [branchContextMenu, setBranchContextMenu] =
+  createSignal<BranchContextMenuState | null>(null);
+const [deleteBranchModal, setDeleteBranchModal] =
+  createSignal<DeleteBranchModalState | null>(null);
+const [tagContextMenu, setTagContextMenu] =
+  createSignal<TagContextMenuState | null>(null);
+const [deleteTagModal, setDeleteTagModal] =
+  createSignal<DeleteTagModalState | null>(null);
 export { branchContextMenu, deleteBranchModal, tagContextMenu, deleteTagModal };
 
-export function openBranchContextMenu(x: number, y: number, name: string, remote: boolean): void {
+export function openBranchContextMenu(
+  x: number,
+  y: number,
+  name: string,
+  remote: boolean,
+): void {
   setBranchContextMenu({ x, y, name, remote });
 }
 
@@ -2585,11 +3107,26 @@ export interface RepoContextMenuState {
   source: "repo-list" | "tab";
 }
 
-const [repoContextMenu, setRepoContextMenu] = createSignal<RepoContextMenuState | null>(null);
+const [repoContextMenu, setRepoContextMenu] =
+  createSignal<RepoContextMenuState | null>(null);
 export { repoContextMenu };
 
-export function openRepoContextMenu(x: number, y: number, repoId: string, repoName: string, repoPath?: string, source: "repo-list" | "tab" = "repo-list"): void {
-  setRepoContextMenu({ x, y, repoId, repoName, repoPath: repoPath ?? null, source });
+export function openRepoContextMenu(
+  x: number,
+  y: number,
+  repoId: string,
+  repoName: string,
+  repoPath?: string,
+  source: "repo-list" | "tab" = "repo-list",
+): void {
+  setRepoContextMenu({
+    x,
+    y,
+    repoId,
+    repoName,
+    repoPath: repoPath ?? null,
+    source,
+  });
 }
 
 export function closeRepoContextMenu(): void {
@@ -2611,7 +3148,9 @@ const PUSH_MAX_DURATION_MS = 30000;
 
 const [fetchingRepos, setFetchingRepos] = createSignal<Set<string>>(new Set());
 const [pushingRepos, setPushingRepos] = createSignal<Set<string>>(new Set());
-const [pushingTargetCommits, setPushingTargetCommits] = createSignal<Record<string, string>>({});
+const [pushingTargetCommits, setPushingTargetCommits] = createSignal<
+  Record<string, string>
+>({});
 export { fetchingRepos, pushingRepos, pushingTargetCommits };
 
 const fetchQuietTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -2676,7 +3215,10 @@ export function startPush(repoId: string, targetCommit?: string): void {
   next.add(repoId);
   setPushingRepos(next);
   if (targetCommit) {
-    setPushingTargetCommits({ ...pushingTargetCommits(), [repoId]: targetCommit });
+    setPushingTargetCommits({
+      ...pushingTargetCommits(),
+      [repoId]: targetCommit,
+    });
   }
   clearPushTimers(repoId);
   pushMaxTimers.set(
@@ -2734,7 +3276,8 @@ function loadBranchColorMode(): BranchColorMode {
   }
 }
 
-const [branchColorMode, setBranchColorModeSignal] = createSignal<BranchColorMode>(loadBranchColorMode());
+const [branchColorMode, setBranchColorModeSignal] =
+  createSignal<BranchColorMode>(loadBranchColorMode());
 export { branchColorMode };
 
 export function setBranchColorMode(next: BranchColorMode): void {
@@ -2761,7 +3304,14 @@ function isStoredLocally(key: string): boolean {
 
 function isKeyBinding(value: unknown): value is KeyBinding {
   const b = value as KeyBinding | null;
-  return !!b && typeof b.key === "string" && b.key.length > 0 && typeof b.mod === "boolean" && typeof b.shift === "boolean" && typeof b.alt === "boolean";
+  return (
+    !!b &&
+    typeof b.key === "string" &&
+    b.key.length > 0 &&
+    typeof b.mod === "boolean" &&
+    typeof b.shift === "boolean" &&
+    typeof b.alt === "boolean"
+  );
 }
 
 /**
@@ -2784,8 +3334,10 @@ export function applyRemotePreferences(remote: Preferences): Preferences {
     seed.branch_color_mode = branchColorMode();
   }
 
-  if (typeof remote.agents_enabled === "boolean") applyAgentsEnabled(remote.agents_enabled);
-  else if (isStoredLocally(AGENTS_ENABLED_KEY)) seed.agents_enabled = agentsEnabled();
+  if (typeof remote.agents_enabled === "boolean")
+    applyAgentsEnabled(remote.agents_enabled);
+  else if (isStoredLocally(AGENTS_ENABLED_KEY))
+    seed.agents_enabled = agentsEnabled();
 
   if (typeof remote.agent_show_worktrees === "boolean") {
     setAgentShowWorktreesSignal(remote.agent_show_worktrees);
@@ -2815,7 +3367,9 @@ export function applyRemotePreferences(remote: Preferences): Preferences {
 
   if (remote.key_bindings) {
     const merged = { ...DEFAULT_KEY_BINDINGS };
-    for (const action of Object.keys(DEFAULT_KEY_BINDINGS) as KeyBindingAction[]) {
+    for (const action of Object.keys(
+      DEFAULT_KEY_BINDINGS,
+    ) as KeyBindingAction[]) {
       const candidate = remote.key_bindings[action];
       if (isKeyBinding(candidate)) merged[action] = candidate;
     }
@@ -2831,7 +3385,11 @@ export function applyRemotePreferences(remote: Preferences): Preferences {
 
   // Centralized only — no local fallback: unset on the backend means nobody
   // has been through it yet, so it's still everyone's first run.
-  setOnboardingCompleteSignal(typeof remote.onboarding_complete === "boolean" ? remote.onboarding_complete : false);
+  setOnboardingCompleteSignal(
+    typeof remote.onboarding_complete === "boolean"
+      ? remote.onboarding_complete
+      : false,
+  );
 
   return seed;
 }

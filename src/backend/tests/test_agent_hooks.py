@@ -51,6 +51,47 @@ class AgentHooksTest(unittest.TestCase):
             self.assertEqual(len(data["hooks"]["SessionStart"]), 1)
             self.assertTrue(recorder_path.exists())
 
+    def test_uninstalls_claude_hooks_without_removing_user_hooks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings_path = root / "settings.json"
+            recorder_path = root / "agent-hook-recorder.py"
+            event_path = root / "agent-events.jsonl"
+
+            with patch.object(agent_hooks, "CLAUDE_SETTINGS_PATH", settings_path), patch.object(agent_hooks, "RECORDER_PATH", recorder_path), patch.object(agent_hooks, "EVENT_PATH", event_path), patch.object(agent_hooks, "DATA_DIR", root):
+                settings_path.write_text(
+                    json.dumps(
+                        {
+                            "theme": "dark",
+                            "hooks": {
+                                "SessionStart": [
+                                    agent_hooks._claude_hook_entry("SessionStart"),
+                                    {"hooks": [{"type": "command", "command": "user-session-hook"}]},
+                                ],
+                                "PreToolUse": [
+                                    {
+                                        "matcher": "Bash|Task",
+                                        "hooks": [
+                                            {"type": "command", "command": agent_hooks._recorder_command("claude", "PreToolUse")},
+                                            {"type": "command", "command": "user-tool-hook"},
+                                        ],
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+                status = agent_hooks.uninstall_claude_hooks()
+
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertFalse(status.installed)
+            self.assertEqual(data["theme"], "dark")
+            self.assertIn("user-session-hook", json.dumps(data))
+            self.assertIn("user-tool-hook", json.dumps(data))
+            self.assertNotIn(str(recorder_path), json.dumps(data))
+
     def test_opencode_install_writes_global_plugin(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             plugin_path = Path(directory) / "plugins" / "git-juggler.js"
@@ -59,6 +100,23 @@ class AgentHooksTest(unittest.TestCase):
 
             self.assertTrue(status.installed)
             self.assertIn("GitJugglerPlugin", plugin_path.read_text(encoding="utf-8"))
+
+    def test_opencode_uninstall_only_removes_managed_plugin_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            plugin_path = Path(directory) / "plugins" / "git-juggler.js"
+            plugin_path.parent.mkdir(parents=True)
+            plugin_path.write_text(agent_hooks.OPENCODE_PLUGIN, encoding="utf-8")
+            with patch.object(agent_hooks, "OPENCODE_PLUGIN_PATH", plugin_path):
+                status = agent_hooks.uninstall_opencode_hooks()
+                self.assertFalse(status.installed)
+                self.assertFalse(plugin_path.exists())
+
+            plugin_path.write_text("export const GitJugglerPlugin = async () => ({})", encoding="utf-8")
+            with patch.object(agent_hooks, "OPENCODE_PLUGIN_PATH", plugin_path):
+                status = agent_hooks.uninstall_opencode_hooks()
+                self.assertFalse(status.installed)
+                self.assertIsNotNone(status.error)
+                self.assertTrue(plugin_path.exists())
 
     def test_hook_event_resolves_command_target_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

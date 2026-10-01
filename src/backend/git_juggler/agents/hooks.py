@@ -19,7 +19,9 @@ SESSIONS_DIR = DATA_DIR / "agent-sessions"
 EVENT_PATH = DATA_DIR / "agent-events.jsonl"
 RECORDER_PATH = DATA_DIR / "agent-hook-recorder.py"
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
-OPENCODE_PLUGIN_PATH = Path.home() / ".config" / "opencode" / "plugins" / "git-juggler.js"
+OPENCODE_PLUGIN_PATH = (
+    Path.home() / ".config" / "opencode" / "plugins" / "git-juggler.js"
+)
 
 # Shared by the reader and both hooks (injected into their source below).
 PROMPT_PHASES = ("userpromptsubmit",)
@@ -31,7 +33,17 @@ SESSION_EVENT_LIMIT = 300
 COMPACT_BYTES = 1024 * 1024
 # The payload fields the reader uses. Everything else (tool output, file
 # contents, the prompt text, ...) is never written.
-RAW_KEYS = ("session_id", "sessionId", "sessionID", "cwd", "worktree", "directory", "tool_name", "tool", "command")
+RAW_KEYS = (
+    "session_id",
+    "sessionId",
+    "sessionID",
+    "cwd",
+    "worktree",
+    "directory",
+    "tool_name",
+    "tool",
+    "command",
+)
 INPUT_KEYS = ("command", "file_path", "filePath", "path")
 
 
@@ -58,7 +70,11 @@ def slim_raw(raw: dict) -> dict:
                 kept[container] = inputs
     event = raw.get("event")
     if isinstance(event, dict):
-        slim_event = {key: event[key] for key in ("type", "sessionID", "session_id", "sessionId") if key in event}
+        slim_event = {
+            key: event[key]
+            for key in ("type", "sessionID", "session_id", "sessionId")
+            if key in event
+        }
         properties = event.get("properties")
         if isinstance(properties, dict):
             slim_properties: dict = {}
@@ -231,8 +247,16 @@ def _claude_snippet_dict() -> dict:
         "hooks": {
             "SessionStart": [_claude_hook_entry("SessionStart")],
             "UserPromptSubmit": [_claude_hook_entry("UserPromptSubmit")],
-            "PreToolUse": [_claude_hook_entry("PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task")],
-            "PostToolUse": [_claude_hook_entry("PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task")],
+            "PreToolUse": [
+                _claude_hook_entry(
+                    "PreToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task"
+                )
+            ],
+            "PostToolUse": [
+                _claude_hook_entry(
+                    "PostToolUse", "Bash|Edit|MultiEdit|Write|Read|Glob|Grep|LS|Task"
+                )
+            ],
             "SessionEnd": [_claude_hook_entry("SessionEnd")],
         }
     }
@@ -246,7 +270,7 @@ OPENCODE_PLUGIN_MARKER = "git-juggler-plugin v4"
 
 # Loaded once per OpenCode process (no spawn per event); it writes the same
 # per-session files with the same trimming as the recorder.
-_OPENCODE_PLUGIN_TEMPLATE = r'''// git-juggler global activity hook. Managed by git-juggler. __MARKER__
+_OPENCODE_PLUGIN_TEMPLATE = r"""// git-juggler global activity hook. Managed by git-juggler. __MARKER__
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -358,7 +382,7 @@ export const GitJugglerPlugin = async (ctx) => {
     },
   }
 }
-'''
+"""
 
 RECORDER_SCRIPT = _inject(_RECORDER_TEMPLATE)
 OPENCODE_PLUGIN = _inject(_OPENCODE_PLUGIN_TEMPLATE)
@@ -395,7 +419,13 @@ def _has_claude_hook(settings: dict) -> bool:
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return False
-    for phase in ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"):
+    for phase in (
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "SessionEnd",
+    ):
         entries = hooks.get(phase)
         if not isinstance(entries, list):
             return False
@@ -404,11 +434,59 @@ def _has_claude_hook(settings: dict) -> bool:
             if not isinstance(entry, dict):
                 continue
             for hook in entry.get("hooks", []):
-                if isinstance(hook, dict) and _is_git_juggler_command(str(hook.get("command", ""))):
+                if isinstance(hook, dict) and _is_git_juggler_command(
+                    str(hook.get("command", ""))
+                ):
                     found = True
         if not found:
             return False
     return True
+
+
+def _remove_git_juggler_claude_hooks(settings: dict) -> bool:
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return False
+    changed = False
+    for phase, entries in list(hooks.items()):
+        if not isinstance(entries, list):
+            continue
+        new_entries = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                new_entries.append(entry)
+                continue
+            hook_list = entry.get("hooks")
+            if not isinstance(hook_list, list):
+                new_entries.append(entry)
+                continue
+            kept_hooks = [
+                hook
+                for hook in hook_list
+                if not (
+                    isinstance(hook, dict)
+                    and _is_git_juggler_command(str(hook.get("command", "")))
+                )
+            ]
+            if len(kept_hooks) == len(hook_list):
+                new_entries.append(entry)
+                continue
+            changed = True
+            if kept_hooks:
+                new_entry = dict(entry)
+                new_entry["hooks"] = kept_hooks
+                new_entries.append(new_entry)
+            elif set(entry.keys()).difference({"matcher", "hooks"}):
+                # Preserve unusual user-authored metadata rather than guessing it
+                # is safe to delete the whole entry.
+                new_entry = dict(entry)
+                new_entry["hooks"] = []
+                new_entries.append(new_entry)
+        if new_entries:
+            hooks[phase] = new_entries
+        else:
+            del hooks[phase]
+    return changed
 
 
 def claude_status() -> HookProviderStatus:
@@ -429,7 +507,11 @@ def opencode_status() -> HookProviderStatus:
     error = None
     installed = False
     try:
-        text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8") if OPENCODE_PLUGIN_PATH.exists() else ""
+        text = (
+            OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
+            if OPENCODE_PLUGIN_PATH.exists()
+            else ""
+        )
         # The marker rules out plugins installed before session ids and prompt events were recorded.
         installed = "GitJugglerPlugin" in text and OPENCODE_PLUGIN_MARKER in text
     except OSError as exc:
@@ -488,7 +570,8 @@ def install_claude_hooks() -> HookProviderStatus:
                 error=f"Cannot auto-install because Claude hooks.{phase} is not a list.",
             )
         if not any(
-            isinstance(hook, dict) and _is_git_juggler_command(str(hook.get("command", "")))
+            isinstance(hook, dict)
+            and _is_git_juggler_command(str(hook.get("command", "")))
             for entry in existing
             if isinstance(entry, dict)
             for hook in entry.get("hooks", [])
@@ -497,7 +580,9 @@ def install_claude_hooks() -> HookProviderStatus:
             existing.extend(entries)
 
     CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CLAUDE_SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    CLAUDE_SETTINGS_PATH.write_text(
+        json.dumps(settings, indent=2) + "\n", encoding="utf-8"
+    )
     return claude_status()
 
 
@@ -516,14 +601,56 @@ def upgrade_installed_hooks() -> None:
     on its next start. Never installs anything the user hasn't.
     """
     try:
-        if RECORDER_PATH.exists() and RECORDER_PATH.read_text(encoding="utf-8") != RECORDER_SCRIPT:
+        if (
+            RECORDER_PATH.exists()
+            and RECORDER_PATH.read_text(encoding="utf-8") != RECORDER_SCRIPT
+        ):
             ensure_recorder_script()
     except OSError:
         pass
     try:
         if OPENCODE_PLUGIN_PATH.exists():
             text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
-            if "GitJugglerPlugin" in text and "Managed by git-juggler" in text and text != OPENCODE_PLUGIN:
+            if (
+                "GitJugglerPlugin" in text
+                and "Managed by git-juggler" in text
+                and text != OPENCODE_PLUGIN
+            ):
                 OPENCODE_PLUGIN_PATH.write_text(OPENCODE_PLUGIN, encoding="utf-8")
     except OSError:
         pass
+
+
+def uninstall_claude_hooks() -> HookProviderStatus:
+    settings, error = _load_json(CLAUDE_SETTINGS_PATH)
+    if settings is None:
+        return HookProviderStatus(
+            provider="claude",
+            installed=False,
+            config_path=str(CLAUDE_SETTINGS_PATH),
+            event_path=str(EVENT_PATH),
+            snippet=claude_snippet(),
+            description=claude_status().description,
+            error=f"Cannot auto-remove from invalid Claude settings: {error}",
+        )
+    if _remove_git_juggler_claude_hooks(settings):
+        CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CLAUDE_SETTINGS_PATH.write_text(
+            json.dumps(settings, indent=2) + "\n", encoding="utf-8"
+        )
+    return claude_status()
+
+
+def uninstall_opencode_hooks() -> HookProviderStatus:
+    error = None
+    try:
+        if OPENCODE_PLUGIN_PATH.exists():
+            text = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
+            if "GitJugglerPlugin" in text and "git-juggler-plugin" in text:
+                OPENCODE_PLUGIN_PATH.unlink()
+            else:
+                error = "Not removing because the OpenCode plugin file does not look managed by git-juggler."
+    except OSError as exc:
+        error = str(exc)
+    status = opencode_status()
+    return HookProviderStatus(**{**status.__dict__, "error": error or status.error})

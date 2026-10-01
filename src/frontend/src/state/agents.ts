@@ -19,6 +19,7 @@ export {
   setAgentPollSeconds,
   setAgentShowWorktrees,
   setAgentsEnabled,
+  uninstallAgentHooks,
 } from "./storeCore";
 
 export type { AgentSessionCounts } from "./storeCore";
