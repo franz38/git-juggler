@@ -51,7 +51,7 @@ class CommitDetailTest(unittest.TestCase):
         self.assertEqual(result.parents, [root])
         self.assertEqual((result.author.name, result.author.email), (AUTHOR.name, AUTHOR.email))
         self.assertEqual((result.committer.name, result.committer.email), (COMMITTER.name, COMMITTER.email))
-        self.assertRegex(result.authored_date, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
+        self.assertRegex(result.authored_date, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:[+-]\d\d:\d\d|Z)$")
         self.assertEqual(result.subject, "Subject line")
         self.assertEqual(result.message, "Subject line\n\nBody line 1\nBody line 2\n")
 

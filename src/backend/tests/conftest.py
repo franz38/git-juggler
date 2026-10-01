@@ -12,5 +12,6 @@ def _isolated_ci_cache(tmp_path, monkeypatch):
     cache on under `config.CONFIG_DIR`, so point that at a temp dir, and leave
     the cache off once the test is done."""
     monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
     yield
     run_cache.configure(None)
