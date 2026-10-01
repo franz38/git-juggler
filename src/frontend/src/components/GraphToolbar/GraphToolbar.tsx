@@ -101,9 +101,9 @@ export function CommitSearch(props: {
   let input: HTMLInputElement | undefined;
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onClick={() => input?.focus()}
-      style={{ position: "relative", flex: "none", display: "flex", "align-items": "center", height: "30px", "box-sizing": "border-box", width: expanded() ? props.width ?? "260px" : "34px", overflow: "hidden", "border-radius": "6px", background: "var(--input-bg)", border: `1px solid ${focused() ? ACCENT : "var(--border)"}`, cursor: expanded() ? "text" : "pointer", transition: "width 180ms cubic-bezier(.3,.7,.4,1), border-color 120ms ease" }}>
-      <span style={{ flex: "none", width: "32px", display: "flex", "align-items": "center", "justify-content": "center", "pointer-events": "none" }}>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={expanded() ? "var(--text-dim)" : "var(--text)"} stroke-width="1.6"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" stroke-linecap="round" /></svg>
+      style={{ position: "relative", flex: "none", display: "flex", "align-items": "center", height: "30px", "box-sizing": "border-box", width: expanded() ? props.width ?? "260px" : "41px", overflow: "hidden", "border-radius": "6px", background: expanded() ? "var(--input-bg)" : "transparent", border: `1px solid ${focused() ? ACCENT : "var(--border)"}`, cursor: expanded() ? "text" : "pointer", transition: "width 180ms cubic-bezier(.3,.7,.4,1), border-color 120ms ease" }}>
+      <span style={{ flex: "none", width: "39px", display: "flex", "align-items": "center", "justify-content": "center", "pointer-events": "none" }}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--text-dim)" stroke-width="1.6"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" stroke-linecap="round" /></svg>
       </span>
       <input ref={(el) => { input = el; props.ref?.(el); }} placeholder={props.placeholder ?? "Search commits, sha, author…"} value={props.value} onInput={(e) => props.onInput(e.currentTarget.value)} onKeyDown={props.onKeyDown} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{ ...inputStyle, flex: 1, "min-width": 0, height: "100%", padding: "0 52px 0 0", border: "none", background: "transparent", opacity: expanded() ? 1 : 0, transition: "opacity 120ms ease" }} />
