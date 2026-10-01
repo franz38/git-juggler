@@ -24,10 +24,11 @@ import { activeTheme } from "../../state/themes";
 // commits / graph refreshes trigger the same way whether the command was
 // typed by hand or injected via a menu action (see runInTerminal).
 const FETCH_COMMAND_RE = /\bgit\s+fetch\b/;
+const PULL_COMMAND_RE = /\bgit\s+pull\b/;
 const CHECKOUT_COMMAND_RE = /\bgit\s+(checkout|switch)\b/;
 const COMMIT_COMMAND_RE = /\bgit\s+commit\b/;
 const PUSH_COMMAND_RE = /\bgit\s+push\b/;
-const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|pull|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
+const GRAPH_MUTATION_COMMAND_RE = /\bgit\s+(merge|rebase|reset|cherry-pick|revert|tag|branch|stash)\b/;
 const LINE_BUFFER_MAX = 200;
 
 export function TerminalPanel(props: { repo: string | null }) {
@@ -76,7 +77,7 @@ export function TerminalPanel(props: { repo: string | null }) {
       const clean = stripAnsi(chunk);
       for (const ch of clean) {
         if (ch === "\n") {
-          if (FETCH_COMMAND_RE.test(lineBuffer)) startFetch(repo);
+          if (FETCH_COMMAND_RE.test(lineBuffer) || PULL_COMMAND_RE.test(lineBuffer)) startFetch(repo);
           if (CHECKOUT_COMMAND_RE.test(lineBuffer)) scheduleCheckoutRefresh(repo);
           if (COMMIT_COMMAND_RE.test(lineBuffer)) scheduleCommitRefresh(repo);
           if (GRAPH_MUTATION_COMMAND_RE.test(lineBuffer)) scheduleGraphRefresh(repo);
