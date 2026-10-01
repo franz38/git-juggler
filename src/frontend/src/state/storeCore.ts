@@ -54,6 +54,7 @@ import type {
   RepoGroupConfig,
   RepoStatusResponse,
   RepoSummary,
+  TagInfo,
   TerminalShell,
 } from "../api/types";
 import { savePreference } from "./preferenceSync";
@@ -87,6 +88,8 @@ interface PersistedTabsState {
 
 interface RepoState {
   commits: CommitSummary[];
+  /** Every tag in the repo (not only those on loaded commits), newest first. */
+  tags: TagInfo[];
   currentBranch: string | null;
   checkedOutBranches: string[];
   headCommit: string | null;
@@ -1023,6 +1026,7 @@ function ensureRepoState(name: string): void {
   if (!repoStates[name]) {
     setRepoStates(name, {
       commits: [],
+      tags: [],
       currentBranch: null,
       checkedOutBranches: [],
       headCommit: null,
@@ -1125,6 +1129,7 @@ async function loadGraphInto(
     setRepoStates(name, "commits", commits);
     setRepoStates(name, "hasMore", hasMore);
     setRepoStates(name, "nextCursor", nextCursor);
+    setRepoStates(name, "tags", data.tags ?? []);
     setRepoStates(name, "currentBranch", data.current_branch);
     setRepoStates(name, "checkedOutBranches", data.checked_out_branches);
     setRepoStates(name, "headCommit", data.head_commit);
@@ -1397,6 +1402,10 @@ export const commits = createMemo<CommitSummary[]>(() => {
 
 export function commitsForRepo(repoId: string): CommitSummary[] {
   return repoStates[repoId]?.commits ?? [];
+}
+
+export function tagsForRepo(repoId: string): TagInfo[] {
+  return repoStates[repoId]?.tags ?? [];
 }
 
 const [authorFilter, setAuthorFilterSignal] = createSignal<string[]>([]);

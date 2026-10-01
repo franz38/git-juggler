@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal } from "solid-js";
+import { Show, createMemo } from "solid-js";
 import {
   activeRepo,
   closeCreateTagModal,
@@ -6,122 +6,60 @@ import {
   createLightweightTagInTerminal,
   createTagModal,
   scheduleGraphRefresh,
+  tagsForRepo,
 } from "../../state/store";
 import { overlayZIndex, useOverlay } from "../../state/overlayStack";
-
-type Phase = "form" | "pending" | "error";
+import { formatAge } from "../Agents/agentFormat";
+import { CreateTagDialog, suggestNextTag, type RecentTag } from "../Tags/CreateTagDialog";
 
 export function CreateTagModal() {
-  const [tagName, setTagName] = createSignal("");
-  const [message, setMessage] = createSignal("");
-  const [phase, setPhase] = createSignal<Phase>("form");
-  const [pendingLabel, setPendingLabel] = createSignal("");
-  const [resultText, setResultText] = createSignal("");
-
-  createEffect(() => {
-    if (!createTagModal()) {
-      setTagName("");
-      setMessage("");
-      setPhase("form");
-      setResultText("");
-    }
-  });
-
   useOverlay("create-tag", () => !!createTagModal(), closeCreateTagModal);
 
-  const sanitizedName = () => tagName().trim().replace(/\s+/g, "-");
-  const canCreateLightweight = () => sanitizedName().length > 0 && phase() !== "pending";
-  const canCreateAnnotated = () => sanitizedName().length > 0 && message().trim().length > 0 && phase() !== "pending";
+  // Every tag in the repo, newest first. Only computed while the dialog is open.
+  const tags = createMemo<RecentTag[]>(() => {
+    const repo = activeRepo();
+    if (!createTagModal() || !repo) return [];
+    return tagsForRepo(repo).map((tag) => ({
+      name: tag.name,
+      sha: tag.commit.slice(0, 7),
+      age: tag.created ? formatAge(tag.created * 1000) : undefined,
+      annotated: tag.annotated,
+    }));
+  });
+  const existingTags = createMemo(() => tags().map((t) => t.name));
+  const suggestedName = createMemo(() =>
+    tags()
+      .map((t) => suggestNextTag(t.name))
+      .find((name) => name !== undefined && !existingTags().includes(name)),
+  );
 
-  const submit = async (kind: "lightweight" | "annotated") => {
+  const create = async (tag: { name: string; message?: string; annotated: boolean }) => {
     const target = createTagModal();
     const repo = activeRepo();
     if (!target || !repo) return;
 
-    const name = sanitizedName();
-    setTagName(name);
-    setPhase("pending");
-    setPendingLabel(kind === "annotated" ? "Creating annotated tag…" : "Creating tag…");
+    const success = tag.annotated
+      ? await createAnnotatedTagInTerminal(repo, target.hash, tag.name, tag.message ?? "")
+      : await createLightweightTagInTerminal(repo, target.hash, tag.name);
 
-    const success =
-      kind === "annotated"
-        ? await createAnnotatedTagInTerminal(repo, target.hash, name, message().trim())
-        : await createLightweightTagInTerminal(repo, target.hash, name);
-
-    if (success) {
-      scheduleGraphRefresh(repo);
-      closeCreateTagModal();
-    } else {
-      setPhase("error");
-      setResultText(`Failed to create tag "${name}" — see the terminal for details.`);
-    }
+    if (!success) return `Failed to create tag "${tag.name}" — see the terminal for details.`;
+    scheduleGraphRefresh(repo);
+    closeCreateTagModal();
   };
 
   return (
     <Show when={createTagModal()}>
       {(target) => (
         <div class="menu-overlay" style={{ "z-index": overlayZIndex("create-tag") }} onClick={closeCreateTagModal}>
-          <div class="create-tag-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Create tag</h3>
-            <p class="menu-hint">
-              On {target().shortHash} — {target().subject}
-            </p>
-
-            <label class="menu-field">
-              <span>Tag name</span>
-              <input
-                type="text"
-                value={tagName()}
-                disabled={phase() === "pending"}
-                onInput={(e) => setTagName(e.currentTarget.value)}
-              />
-            </label>
-            <div class="menu-actions">
-              <button
-                type="button"
-                class="menu-primary-button"
-                disabled={!canCreateLightweight()}
-                onClick={() => void submit("lightweight")}
-              >
-                Create tag
-              </button>
-            </div>
-
-            <label class="menu-field">
-              <span>Tagging message</span>
-              <textarea
-                rows={3}
-                value={message()}
-                disabled={phase() === "pending"}
-                onInput={(e) => setMessage(e.currentTarget.value)}
-              />
-            </label>
-            <div class="menu-actions">
-              <button
-                type="button"
-                class="menu-primary-button"
-                disabled={!canCreateAnnotated()}
-                onClick={() => void submit("annotated")}
-              >
-                Create annotated tag
-              </button>
-            </div>
-
-            <Show when={phase() === "pending"}>
-              <p class="menu-hint">{pendingLabel()}</p>
-            </Show>
-            <Show when={phase() === "error"}>
-              <p class="menu-error">{resultText()}</p>
-              <div class="menu-actions">
-                <button type="button" class="menu-secondary-button" onClick={() => setPhase("form")}>
-                  Try again
-                </button>
-                <button type="button" class="menu-secondary-button" onClick={closeCreateTagModal}>
-                  Close
-                </button>
-              </div>
-            </Show>
-          </div>
+          <CreateTagDialog
+            sha={target().shortHash}
+            subject={target().subject}
+            existingTags={existingTags()}
+            recentTags={tags()}
+            suggestedName={suggestedName()}
+            onCreate={create}
+            onCancel={closeCreateTagModal}
+          />
         </div>
       )}
     </Show>
