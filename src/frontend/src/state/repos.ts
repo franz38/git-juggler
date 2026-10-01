@@ -23,6 +23,7 @@ export {
   openDirectoryBrowser,
   openNewGroupModal,
   pinnedRepos,
+  pullRepo,
   removeRepoPath,
   renameRepoGroup,
   repoGroups,

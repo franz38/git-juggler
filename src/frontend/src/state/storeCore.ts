@@ -2913,6 +2913,7 @@ interface TerminalOutputWatcher {
 const terminalOutputWatchers = new Map<string, TerminalOutputWatcher>();
 
 export function feedTerminalOutput(repoId: string, chunk: string): void {
+  noteFetchCompletionMarker(repoId, chunk);
   for (const watcher of terminalOutputWatchers.values()) {
     if (watcher.repoId === repoId) watcher.onChunk(chunk);
   }
@@ -3139,10 +3140,14 @@ export function closeRepoContextMenu(): void {
 // guideline, git actions may only be invoked via the terminal, so we can't
 // just ask the backend "is fetch done?" either. So: a repo counts as
 // "fetching" from the moment its Fetch command is sent, and stays that way
-// while its terminal keeps producing output, plus a short quiet-period
-// grace, capped at a hard timeout as a safety net.
-const FETCH_OUTPUT_QUIET_MS = 1200;
-const FETCH_MAX_DURATION_MS = 30000;
+// while its terminal keeps producing output. Fetches launched by the UI append
+// a completion marker so long silent phases (e.g. remote object enumeration)
+// don't clear the placeholder early; manually typed fetches still fall back to
+// a quiet-period grace, capped at a hard timeout as a safety net.
+const FETCH_OUTPUT_QUIET_MS = 4000;
+const FETCH_MAX_DURATION_MS = 5 * 60 * 1000;
+const FETCH_DONE_MARKER = "git-juggler: fetch finished";
+const FETCH_MARKER_BUFFER_MAX = 512;
 const PUSH_OUTPUT_QUIET_MS = 1200;
 const PUSH_MAX_DURATION_MS = 30000;
 
@@ -3155,6 +3160,8 @@ export { fetchingRepos, pushingRepos, pushingTargetCommits };
 
 const fetchQuietTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const fetchMaxTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const markerTrackedFetches = new Set<string>();
+const fetchMarkerBuffers = new Map<string, string>();
 const pushQuietTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pushMaxTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -3169,21 +3176,37 @@ function clearFetchTimers(repoId: string): void {
 
 export function stopFetch(repoId: string): void {
   clearFetchTimers(repoId);
+  markerTrackedFetches.delete(repoId);
+  fetchMarkerBuffers.delete(repoId);
   if (!fetchingRepos().has(repoId)) return;
   const next = new Set(fetchingRepos());
   next.delete(repoId);
   setFetchingRepos(next);
+  void refreshRepoGraph(repoId);
 }
 
-export function startFetch(repoId: string): void {
+export function startFetch(repoId: string, markerTracked = false): void {
   const next = new Set(fetchingRepos());
   next.add(repoId);
   setFetchingRepos(next);
+  if (markerTracked) markerTrackedFetches.add(repoId);
   clearFetchTimers(repoId);
   fetchMaxTimers.set(
     repoId,
     setTimeout(() => stopFetch(repoId), FETCH_MAX_DURATION_MS),
   );
+}
+
+function noteFetchCompletionMarker(repoId: string, chunk: string): void {
+  if (!markerTrackedFetches.has(repoId)) return;
+  const buffer = `${fetchMarkerBuffers.get(repoId) ?? ""}${chunk}`.slice(
+    -FETCH_MARKER_BUFFER_MAX,
+  );
+  if (buffer.includes(FETCH_DONE_MARKER)) {
+    stopFetch(repoId);
+    return;
+  }
+  fetchMarkerBuffers.set(repoId, buffer);
 }
 
 function clearPushTimers(repoId: string): void {
@@ -3230,7 +3253,7 @@ export function startPush(repoId: string, targetCommit?: string): void {
 // Called with every chunk of terminal output; resets quiet-period timers for
 // long-running terminal-driven git states such as fetch/push.
 export function noteTerminalOutput(repoId: string): void {
-  if (fetchingRepos().has(repoId)) {
+  if (fetchingRepos().has(repoId) && !markerTrackedFetches.has(repoId)) {
     const quiet = fetchQuietTimers.get(repoId);
     if (quiet) clearTimeout(quiet);
     fetchQuietTimers.set(
@@ -3248,10 +3271,22 @@ export function noteTerminalOutput(repoId: string): void {
   }
 }
 
+function runFetchLikeCommand(repoId: string, command: string): void {
+  startFetch(repoId, true);
+  runInTerminal(
+    repoId,
+    `${command}; __git_juggler_fetch_status=$?; echo ${echoSafe(FETCH_DONE_MARKER)}; (exit $__git_juggler_fetch_status)`,
+  );
+}
+
 export function fetchRepo(repoId: string, repoName: string): void {
   openRepoTab(repoId, repoName);
-  startFetch(repoId);
-  runInTerminal(repoId, "git fetch");
+  runFetchLikeCommand(repoId, "git fetch");
+}
+
+export function pullRepo(repoId: string, repoName: string): void {
+  openRepoTab(repoId, repoName);
+  runFetchLikeCommand(repoId, "git pull");
 }
 
 // --- Appearance settings --------------------------------------------------
