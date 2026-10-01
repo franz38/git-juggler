@@ -1,14 +1,20 @@
 import { For, Show, createEffect, createSignal } from "solid-js";
 import {
+  DEFAULT_GRAPH_PAGE_SIZE,
+  MAX_GRAPH_PAGE_SIZE,
   addRepoPath,
   excludedPaths,
   excludedPathsError,
+  graphPageSize,
+  graphPageSizeError,
   openDirectoryBrowser,
   removeRepoPath,
   repoPaths,
   repoPathsError,
   saveExcludedPaths,
+  saveGraphPageSize,
 } from "../../state/store";
+import { NumberField } from "../inputs/NumberField";
 import { TextField } from "../inputs/TextField";
 
 // The "Search paths" settings: which top-level folders get scanned for git
@@ -86,6 +92,17 @@ export function RepoPathsSettings() {
       />
       <Show when={excludedPathsError()}>
         <div class="menu-error">{excludedPathsError()}</div>
+      </Show>
+      <NumberField
+        label="Commits per graph page"
+        description={`How many commits to request when a repo graph loads and when older commits are fetched. Default ${DEFAULT_GRAPH_PAGE_SIZE}.`}
+        min={1}
+        max={MAX_GRAPH_PAGE_SIZE}
+        value={graphPageSize()}
+        onChange={(value) => void saveGraphPageSize(value ?? DEFAULT_GRAPH_PAGE_SIZE)}
+      />
+      <Show when={graphPageSizeError()}>
+        <div class="menu-error">{graphPageSizeError()}</div>
       </Show>
     </>
   );

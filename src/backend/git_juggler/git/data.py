@@ -29,7 +29,7 @@ from .utils import parse_worktree_branches
 
 # Commits per graph page. The graph endpoint returns the newest page first and
 # the frontend asks for the next (older) page when the user scrolls to the end.
-GRAPH_PAGE_SIZE = 1000
+GRAPH_PAGE_SIZE = 500
 
 class HistoryChangedError(LookupError):
     """The page cursor is no longer part of the repo's history."""

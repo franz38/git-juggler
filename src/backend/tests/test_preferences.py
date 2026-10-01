@@ -88,6 +88,19 @@ def test_unknown_patch_keys_are_ignored():
     assert "not_a_setting" not in json.loads(config.CONFIG_PATH.read_text())["preferences"]
 
 
+def test_graph_page_size_defaults_and_sanitizes_stored_values():
+    assert config.load_graph_page_size() == 500
+
+    config.save_graph_page_size(750)
+    assert config.load_graph_page_size() == 750
+
+    config.CONFIG_PATH.write_text(json.dumps({"graph_page_size": 100_000}))
+    assert config.load_graph_page_size() == 5000
+
+    config.CONFIG_PATH.write_text(json.dumps({"graph_page_size": "many"}))
+    assert config.load_graph_page_size() == 500
+
+
 def test_onboarding_complete_is_centralized_like_any_other_preference():
     assert config.load_preferences().onboarding_complete is None
 

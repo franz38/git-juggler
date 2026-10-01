@@ -811,7 +811,7 @@ async function loadOlderPage(name: string, generation: number): Promise<boolean>
   if (!state || !state.hasMore || !state.nextCursor) return false;
   setRepoStates(name, "loadingMore", true);
   try {
-    const page = await fetchGraph(name, state.nextCursor);
+    const page = await fetchGraph(name, state.nextCursor, graphPageSize());
     if (graphGenerations.get(name) !== generation) return false;
     const known = new Set(repoStates[name].commits.map((c) => c.hash));
     const older = page.commits.filter((c) => !known.has(c.hash));
@@ -842,15 +842,15 @@ export async function loadMoreCommits(repoId: string): Promise<void> {
   await loadOlderPage(repoId, graphGenerations.get(repoId) ?? 0);
 }
 
-async function loadGraphInto(name: string): Promise<void> {
+async function loadGraphInto(name: string, preserveLoaded = true): Promise<void> {
   const generation = (graphGenerations.get(name) ?? 0) + 1;
   graphGenerations.set(name, generation);
-  const alreadyLoaded = repoStates[name].commits.length;
+  const alreadyLoaded = preserveLoaded ? repoStates[name].commits.length : 0;
   setRepoStates(name, "loading", true);
   setRepoStates(name, "loadingMore", false);
   setRepoStates(name, "error", null);
   try {
-    const data = await fetchGraph(name);
+    const data = await fetchGraph(name, undefined, graphPageSize());
     // A refresh only brings back the newest page; re-fetch as many older ones
     // as the user had already scrolled through *before* swapping anything in,
     // so the list doesn't shrink and then regrow under their scroll position.
@@ -859,7 +859,7 @@ async function loadGraphInto(name: string): Promise<void> {
     let nextCursor = data.next_cursor;
     while (hasMore && nextCursor && commits.length < alreadyLoaded) {
       try {
-        const page = await fetchGraph(name, nextCursor);
+        const page = await fetchGraph(name, nextCursor, graphPageSize());
         commits = [...page.commits, ...commits];
         hasMore = page.has_more;
         nextCursor = page.next_cursor;
@@ -909,14 +909,14 @@ async function loadRepoGraphIfNeeded(name: string): Promise<void> {
 // Re-fetches a repo's graph regardless of whether it's already loaded — used
 // to pick up HEAD moving after a checkout (see the terminal's command
 // detection), since the initial load only happens once per repo otherwise.
-export async function refreshRepoGraph(repoId: string): Promise<void> {
+export async function refreshRepoGraph(repoId: string, preserveLoaded = true): Promise<void> {
   if (repoUnavailable(repoId) || repoLoadDeferred(repoId)) return;
   ensureRepoState(repoId);
   if (repoStates[repoId].loading) {
     pendingGraphRefreshes.add(repoId);
     return;
   }
-  await loadGraphInto(repoId);
+  await loadGraphInto(repoId, preserveLoaded);
 }
 
 export async function pollRepoStatus(repoId: string): Promise<void> {
@@ -1754,6 +1754,18 @@ const [excludedPaths, setExcludedPaths] = createSignal<string[]>([]);
 const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(null);
 export { excludedPaths, excludedPathsError };
 
+export const DEFAULT_GRAPH_PAGE_SIZE = 500;
+export const MAX_GRAPH_PAGE_SIZE = 5000;
+
+function clampGraphPageSize(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_GRAPH_PAGE_SIZE;
+  return Math.min(MAX_GRAPH_PAGE_SIZE, Math.max(1, Math.round(value)));
+}
+
+const [graphPageSize, setGraphPageSize] = createSignal(DEFAULT_GRAPH_PAGE_SIZE);
+const [graphPageSizeError, setGraphPageSizeError] = createSignal<string | null>(null);
+export { graphPageSize, graphPageSizeError };
+
 const defaultGitHubConfig: GitHubConfig = {
   enabled: true,
   auto_detect: true,
@@ -2001,11 +2013,13 @@ export async function loadConfig(): Promise<void> {
     setPinnedRepos(new Set(data.pinned_repo_paths));
     updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
+    setGraphPageSize(clampGraphPageSize(data.graph_page_size));
     applyGitHubConfig(data.github);
     applyJenkinsConfig(data.jenkins);
     setTerminalShell(data.terminal_shell);
     setRepoPathsError(null);
     setExcludedPathsError(null);
+    setGraphPageSizeError(null);
     setGitHubConfigError(null);
     setJenkinsConfigError(null);
   } catch (e) {
@@ -2155,6 +2169,18 @@ export async function saveExcludedPaths(next: string[]): Promise<void> {
     }
   } catch (e) {
     setExcludedPathsError((e as Error).message);
+  }
+}
+
+export async function saveGraphPageSize(next: number): Promise<void> {
+  try {
+    const data = await updateConfig({ graph_page_size: clampGraphPageSize(next) });
+    setGraphPageSize(clampGraphPageSize(data.graph_page_size));
+    setGraphPageSizeError(null);
+    const current = activeRepo();
+    if (current) void refreshRepoGraph(current, false);
+  } catch (e) {
+    setGraphPageSizeError((e as Error).message);
   }
 }
 

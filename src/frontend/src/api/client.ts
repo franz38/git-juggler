@@ -63,8 +63,11 @@ export async function pickFolderNative(): Promise<PickFolderResponse> {
  * the repo-wide state (branches, status, upstream); with `before` (a previous
  * page's `next_cursor`) it is the next, older page of commits only.
  */
-export function fetchGraph(repoId: string, before?: string): Promise<GraphResponse> {
-  const query = before ? `?before=${encodeURIComponent(before)}` : "";
+export function fetchGraph(repoId: string, before?: string, limit?: number): Promise<GraphResponse> {
+  const params = new URLSearchParams();
+  if (before) params.set("before", before);
+  if (limit) params.set("limit", String(limit));
+  const query = params.size > 0 ? `?${params.toString()}` : "";
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/graph${query}`);
 }
 

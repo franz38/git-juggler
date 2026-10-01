@@ -28,6 +28,7 @@ def create_config_router(root_path: Path) -> APIRouter:
             pinned_repo_paths=config.load_pinned_repo_paths(),
             repo_groups=config.load_repo_groups(),
             excluded_paths=config.load_excluded_paths(),
+            graph_page_size=config.load_graph_page_size(),
             github=config.load_github_config(),
             jenkins=config.load_jenkins_config(),
             terminal_shell=terminal_shell,
@@ -62,6 +63,9 @@ def create_config_router(root_path: Path) -> APIRouter:
 
         if body.excluded_paths is not None:
             config.save_excluded_paths(body.excluded_paths)
+
+        if body.graph_page_size is not None:
+            config.save_graph_page_size(body.graph_page_size)
 
         if body.github is not None:
             config.save_github_config(body.github.model_dump())

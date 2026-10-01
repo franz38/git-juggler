@@ -158,6 +158,19 @@ def save_excluded_paths(paths: list[str]) -> None:
     _save_raw(data)
 
 
+def load_graph_page_size() -> int:
+    raw = _load_raw().get("graph_page_size")
+    if not isinstance(raw, int):
+        return 500
+    return min(5000, max(1, raw))
+
+
+def save_graph_page_size(size: int) -> None:
+    data = _load_raw()
+    data["graph_page_size"] = min(5000, max(1, size))
+    _save_raw(data)
+
+
 def load_github_config() -> dict | None:
     raw = _load_raw().get("github")
     return raw if isinstance(raw, dict) else None

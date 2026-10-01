@@ -111,6 +111,7 @@ class ConfigResponse(BaseModel):
     pinned_repo_paths: list[str]
     repo_groups: list[RepoGroupConfig] = Field(default_factory=list)
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
+    graph_page_size: int = Field(default=500, ge=1, le=5000)
     github: GitHubConfig | None = None
     jenkins: JenkinsConfig | None = None
     # The shell run_terminal_session actually spawns (see terminal.py) --
@@ -125,6 +126,7 @@ class ConfigUpdateRequest(BaseModel):
     pinned_repo_paths: list[str] | None = None
     repo_groups: list[RepoGroupConfig] | None = None
     excluded_paths: list[str] | None = None
+    graph_page_size: int | None = Field(default=None, ge=1, le=5000)
     github: GitHubConfig | None = None
     jenkins: JenkinsConfig | None = None
 

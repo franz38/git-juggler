@@ -46,6 +46,7 @@ export interface ConfigResponse {
   pinned_repo_paths: string[];
   repo_groups: RepoGroupConfig[];
   excluded_paths: string[];
+  graph_page_size: number;
   github: GitHubConfig | null;
   jenkins: JenkinsConfig | null;
   terminal_shell: TerminalShell;
@@ -56,6 +57,7 @@ export interface ConfigUpdateRequest {
   pinned_repo_paths?: string[];
   repo_groups?: RepoGroupConfig[];
   excluded_paths?: string[];
+  graph_page_size?: number;
   github?: GitHubConfig | null;
   jenkins?: JenkinsConfig | null;
 }
