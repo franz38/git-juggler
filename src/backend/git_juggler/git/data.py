@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .. import config
-from ..schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse
+from ..schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse, TagInfo
 from .command import GIT_POOL as _pool
 from .command import GitCommandError, run_git as _run_git, run_git_or_empty as _run_git_or_empty
 from .refs import HEADS as _HEADS
@@ -394,10 +394,29 @@ class GraphData(NamedTuple):
     refs_signature: str
     has_more: bool
     next_cursor: str | None  # pass as `before` to get the next, older page
+    tags: list[TagInfo]  # every tag in the repo, newest first
+
+
+def _tag_infos(refs: list[_Ref]) -> list[TagInfo]:
+    tags = [
+        TagInfo(
+            name=ref.short,
+            commit=ref.commit,
+            annotated=ref.object_sha != ref.commit,
+            created=ref.created,
+        )
+        for ref in refs
+        if ref.name.startswith(_TAGS) and ref.commit
+    ]
+    tags.sort(key=lambda tag: (tag.created, tag.name), reverse=True)
+    return tags
 
 
 def _empty_graph(
-    status: RepoStatusResponse | None, branches: list[str], checked_out: list[str]
+    status: RepoStatusResponse | None,
+    branches: list[str],
+    checked_out: list[str],
+    tags: list[TagInfo],
 ) -> GraphData:
     status = status or RepoStatusResponse()
     return GraphData(
@@ -414,6 +433,7 @@ def _empty_graph(
         status.refs_signature,
         False,
         None,
+        tags,
     )
 
 
@@ -466,8 +486,9 @@ def get_graph(
 
     heads = [r for r in refs if r.name.startswith(_HEADS)]
     branch_names = [r.short for r in heads]
+    tags = _tag_infos(refs)
     if not heads:
-        return _empty_graph(status, [], checked_out)
+        return _empty_graph(status, [], checked_out, tags)
 
     if history is None:
         assert status is not None
@@ -550,6 +571,7 @@ def get_graph(
         status.refs_signature,
         has_more,
         page[0] if has_more and page else None,
+        tags,
     )
 
 

@@ -137,6 +137,14 @@ export interface RefsInfo {
   stashes: string[];
 }
 
+export interface TagInfo {
+  name: string;
+  commit: string;
+  annotated: boolean;
+  /** Unix seconds: the tagger date for an annotated tag, else the commit date. */
+  created: number;
+}
+
 export interface CommitSummary {
   hash: string;
   short_hash: string;
@@ -153,6 +161,8 @@ export interface CommitSummary {
 export interface GraphResponse {
   commits: CommitSummary[];
   branches: string[];
+  /** Every tag in the repo, not just those on this page's commits; newest first. */
+  tags: TagInfo[];
   current_branch: string | null;
   head_commit: string | null;
   upstream_commit: string | null;

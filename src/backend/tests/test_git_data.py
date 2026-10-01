@@ -393,6 +393,35 @@ class GitGraphTest(unittest.TestCase):
             self.assertEqual(status.upstream_branch, branch)
             self.assertEqual(status.current_branch, branch)
 
+    def test_every_tag_is_returned_newest_first_beyond_the_page(self) -> None:
+        author = Actor("Test User", "test@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            repo = self._init_repo(path, author)
+            commits = []
+            for day in (1, 2, 3):
+                (path / "notes.txt").write_text(f"{day}\n", encoding="utf-8")
+                repo.index.add(["notes.txt"])
+                date = f"2026-01-0{day}T12:00:00"
+                commits.append(
+                    repo.index.commit(f"day {day}", author=author, committer=author, author_date=date, commit_date=date)
+                )
+            repo.create_tag("v0.1.0", ref=commits[0])
+            repo.create_tag("v0.1.1", ref=commits[1])
+            # Annotated, on the oldest commit but tagged last: its tagger date wins.
+            repo.git.tag("-a", "v0.2.0", "-m", "release", commits[0].hexsha, env={"GIT_COMMITTER_DATE": "2026-02-01T12:00:00"})
+
+            graph = get_graph(path, limit=1)
+
+            self.assertTrue(graph.has_more)
+            self.assertEqual([tag.name for tag in graph.tags], ["v0.2.0", "v0.1.1", "v0.1.0"])
+            self.assertEqual([tag.annotated for tag in graph.tags], [True, False, False])
+            self.assertEqual(
+                [tag.commit for tag in graph.tags],
+                [commits[0].hexsha, commits[1].hexsha, commits[0].hexsha],
+            )
+            self.assertGreater(graph.tags[0].created, graph.tags[1].created)
+
 
 if __name__ == "__main__":
     unittest.main()

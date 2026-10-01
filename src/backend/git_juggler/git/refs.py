@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import dataclass
 
 
-REF_FORMAT = "%(refname)%09%(objectname)%09%(objecttype)%09%(*objectname)%09%(*objecttype)%09%(committerdate:unix)%09%(upstream)%09%(upstream:remotename)"
+REF_FORMAT = "%(refname)%09%(objectname)%09%(objecttype)%09%(*objectname)%09%(*objecttype)%09%(committerdate:unix)%09%(upstream)%09%(upstream:remotename)%09%(creatordate:unix)"
 HEADS = "refs/heads/"
 TAGS = "refs/tags/"
 REMOTES = "refs/remotes/"
@@ -18,6 +18,9 @@ class Ref:
     date: int  # committer date of that commit (0 when unknown)
     upstream: str
     upstream_remote: str
+    # When the ref's own object was made: the tagger date for an annotated
+    # tag, the committer date otherwise (0 when unknown).
+    created: int = 0
 
     @property
     def short(self) -> str:
@@ -36,6 +39,7 @@ def parse_refs(raw: str) -> list[Ref]:
         name, sha, kind, peeled_sha, peeled_kind, date, upstream, upstream_remote = (
             fields[:8]
         )
+        created = fields[8] if len(fields) > 8 else ""
         commit = (
             sha
             if kind == "commit"
@@ -49,6 +53,7 @@ def parse_refs(raw: str) -> list[Ref]:
                 date=int(date) if date.isdigit() else 0,
                 upstream=upstream,
                 upstream_remote=upstream_remote,
+                created=int(created) if created.isdigit() else 0,
             )
         )
     return refs

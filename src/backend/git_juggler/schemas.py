@@ -173,6 +173,14 @@ class RefsInfo(BaseModel):
     stashes: list[str] = []
 
 
+class TagInfo(BaseModel):
+    name: str
+    commit: str
+    annotated: bool = False
+    # Unix seconds: the tagger date for an annotated tag, else the commit date.
+    created: int = 0
+
+
 class CommitSummary(BaseModel):
     hash: str
     short_hash: str
@@ -204,6 +212,8 @@ class FileDiff(BaseModel):
 class GraphResponse(BaseModel):
     commits: list[CommitSummary]
     branches: list[str]
+    # Every tag in the repo, not just those on this page's commits; newest first.
+    tags: list[TagInfo] = Field(default_factory=list)
     current_branch: str | None = None
     head_commit: str | None = None
     upstream_commit: str | None = None

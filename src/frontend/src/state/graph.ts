@@ -70,6 +70,7 @@ export {
   setSearchQuery,
   setTagFilter,
   tagFilter,
+  tagsForRepo,
   toggleExpand,
   toggleExpandForRepo,
   toggleUncommittedExpanded,
