@@ -3,7 +3,6 @@ name: Build Python package
 on:
   push:
     tags: ["*"]
-  workflow_dispatch:
 
 jobs:
   validate-tag:
@@ -41,7 +40,21 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python build tooling
-        run: python -m pip install --upgrade pip build
+        run: python -m pip install --upgrade pip build pytest
+
+      - name: Install backend test dependencies
+        run: python -m pip install -e .
+
+      - name: Run backend tests
+        run: python -m pytest src/backend/tests
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: src/frontend
+        run: npm test
 
       - name: Build frontend and Python distributions
         run: ./scripts/build-package.sh
@@ -54,6 +67,7 @@ jobs:
           if-no-files-found: error
 
   publish:
+    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment:

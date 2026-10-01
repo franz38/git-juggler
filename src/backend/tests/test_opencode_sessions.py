@@ -196,7 +196,7 @@ class OpenCodeReaderTest(unittest.TestCase):
 
             self.assertEqual({Path(w.worktree_path).name: w.is_home for w in scan.worktrees}, {"repo": False, "repo-wt": True})
 
-    def test_child_archived_and_sessionless_events_are_skipped_when_the_db_exists(self) -> None:
+    def test_child_sessions_are_subagents_but_archived_and_sessionless_events_are_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
             root = Path(directory)
             repo, _ = self._repo(root)
@@ -206,7 +206,13 @@ class OpenCodeReaderTest(unittest.TestCase):
             add_session(connection, "archived", directory=str(repo), time_archived=1)
             reader = self._reader(root, db)
 
-            for session_id in ("child", "archived", None):
+            self._events(root / "agent-sessions", repo, "child", phases=("SessionStart",))
+            scans = reader.recent_scans()
+            self.assertEqual(len(scans), 1)
+            self.assertTrue(scans[0].is_subagent)
+            self.assertEqual(scans[0].parent_session_id, "ses_parent")
+
+            for session_id in ("archived", None):
                 self._events(root / "agent-sessions", repo, session_id, phases=("SessionStart",))
                 self.assertEqual(reader.recent_scans(), [], session_id)
 
