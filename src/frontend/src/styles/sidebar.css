@@ -285,13 +285,6 @@
   white-space: nowrap;
 }
 
-.repo-changes {
-  flex: 0 0 auto;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 10px;
-  color: var(--warning);
-}
-
 .repo-list .repo-group-heading {
   padding: 18px 16px 6px;
   overflow: hidden;
