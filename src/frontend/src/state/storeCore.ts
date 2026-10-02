@@ -2777,7 +2777,10 @@ export function flushPendingCommands(repoId: string): void {
 
 export function runInTerminal(repoId: string, command: string): void {
   openTerminal();
-  const data = `${command}\n`;
+  // xterm sends carriage return for Enter; cmd.exe via WinPTY needs the same
+  // to submit a line, while POSIX shells accept the line feed used before.
+  const submit = terminalShell() === "cmd" ? "\r" : "\n";
+  const data = `${command}${submit}`;
   const send = terminalSenders.get(repoId);
   if (send) {
     send(data);
