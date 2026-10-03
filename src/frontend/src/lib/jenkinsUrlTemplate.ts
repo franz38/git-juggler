@@ -2,6 +2,15 @@ import type { AppTheme } from "./appTheme.ts";
 import { contrast, mix, parseColor, readableOn, toHex } from "./color.ts";
 import type { TemplateVariable } from "./templateTokens.ts";
 
+// The example rule a fresh install ships with (EXAMPLE_JENKINS_RULE in
+// config.py). "Add rule" starts from it too, on the configured base URL.
+export const EXAMPLE_JENKINS_BASE_URL = "https://jenkins.example.com";
+export const EXAMPLE_JENKINS_RULE_NAME = "Example rule";
+
+export function exampleJobUrl(baseUrl: string): string {
+  return `${(baseUrl.trim() || EXAMPLE_JENKINS_BASE_URL).replace(/\/+$/, "")}/job/{repo_name_url}/job/{branch_name_url}`;
+}
+
 // The placeholders the backend substitutes into a Jenkins rule's job URL
 // (`_repo_template_values` / `_branch_template_values` in ci/jenkins.py).
 // `color` picks a hue from the theme's 6-color branch palette; the three

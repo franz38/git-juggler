@@ -9,7 +9,7 @@ import { ToggleField } from "../inputs/ToggleField";
 import { MultiSelect } from "../Search/MultiSelect";
 import { jenkinsConfig, jenkinsConfigError, repos, saveJenkinsConfig } from "../../state/store";
 import { activeTheme } from "../../state/themes";
-import { jenkinsUrlVariables } from "../../lib/jenkinsUrlTemplate";
+import { EXAMPLE_JENKINS_BASE_URL, EXAMPLE_JENKINS_RULE_NAME, exampleJobUrl, jenkinsUrlVariables } from "../../lib/jenkinsUrlTemplate";
 
 const emptyJenkinsConfig: JenkinsConfig = {
   enabled: true,
@@ -121,9 +121,9 @@ export function JenkinsSettings() {
         ...current.rules,
         {
           id: newId(),
-          name: "New Jenkins rule",
+          name: EXAMPLE_JENKINS_RULE_NAME,
           repo_paths: [],
-          job_url: "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}",
+          job_url: exampleJobUrl(current.base_url),
         },
       ],
     }));
@@ -230,7 +230,7 @@ export function JenkinsSettings() {
 
       <TextField
         label="Jenkins base URL"
-        placeholder="https://jenkins.example.com"
+        placeholder={EXAMPLE_JENKINS_BASE_URL}
         value={draft().base_url}
         onChange={(value) => update("base_url", value, "later")}
         onBlur={flushPendingSave}
@@ -277,7 +277,7 @@ export function JenkinsSettings() {
                   <MultiSelect options={repoOptionsForRule(ruleIndex)} selected={rule().repo_paths} onChange={(next) => updateRule(ruleIndex, "repo_paths", next)} placeholder="Select repos" />
                   <TemplateInput
                     value={rule().job_url}
-                    placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}"
+                    placeholder={exampleJobUrl(draft().base_url)}
                     variables={jenkinsUrlVariables(activeTheme(), rule().repo_paths[0])}
                     onInput={(value) => updateRule(ruleIndex, "job_url", value)}
                   />
