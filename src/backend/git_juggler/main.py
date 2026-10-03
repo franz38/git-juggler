@@ -45,7 +45,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory whose first-level children will be scanned for git repos (default: cwd)",
     )
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=8788)
     parser.add_argument("--reload", action="store_true", help="Enable dev auto-reload")
     parser.add_argument("--no-open", action="store_true", help="Do not open the app in a browser")
     args = parser.parse_args(argv)

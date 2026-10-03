@@ -17,6 +17,14 @@ Watch agents work live, follow every repo’s git graph, and catch what changed 
 - Connects GitHub Actions and Jenkins runs to commits and active pipelines.
 - VS Code-compatible themes.
 
+## Privacy / local-first
+
+- Runs locally and binds to `127.0.0.1` by default.
+- No telemetry or analytics are built in, and none are planned.
+- Repo scanning and Claude/OpenCode session tracking read local files on your machine.
+- Git mutations run through visible terminal commands, so you can see the exact command and output.
+- Network requests are only used for features you configure, such as CI integrations.
+
 ## How to install
 
 git-juggler is published on PyPI. The recommended way to install it is with
@@ -33,7 +41,7 @@ to seed the initial search path; after that, search paths are managed in the app
 from the welcome wizard or Settings.
 
 - `--host HOST` changes the bind host from the default `127.0.0.1`.
-- `--port PORT` changes the backend port from the default `8000`.
+- `--port PORT` changes the backend port from the default `8788`.
 - `--no-open` disables opening the app in your browser automatically.
 
 If you don't have pipx yet:
@@ -72,7 +80,7 @@ Use the dev script to start both the backend and frontend dev servers:
 ```
 
 - `path-to-scan` is optional. On first run, it seeds the folder whose immediate children are scanned for Git repos.
-- `--port PORT` is optional. It changes the backend port from the default `8000`; if you use it, update `src/frontend/vite.config.ts` locally so Vite proxies `/api` and `/ws` to the same port.
+- `--port PORT` is optional. It changes the backend port from the default `8788`; the dev script passes the selected port to Vite automatically.
 - `--no-open` disables opening the app in your browser automatically.
 
 Or run them manually in two terminals:
@@ -86,7 +94,7 @@ python3 -m venv .venv
 ```
 cd src/frontend
 npm install
-npm run dev                                     # http://localhost:5173 (proxies /api and /ws to :8000)
+npm run dev                                     # http://localhost:5173 (proxies /api and /ws to :8788)
 ```
 
 Open http://localhost:5173.
@@ -100,7 +108,7 @@ cd src/frontend && npm install && npm run build
 cd ../.. && .venv/bin/git-juggler <path-to-scan> [--no-open]
 ```
 
-The backend serves the built frontend in this mode, so only port 8000 is needed.
+The backend serves the built frontend in this mode, so only port 8788 is needed.
 By default, it opens the app in your browser.
 
 ## Build a Python package

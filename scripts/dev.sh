@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Runs the backend and frontend dev servers together, both hot-reloading.
-# See CLAUDE.md's "How to run locally" section for the equivalent manual steps.
+# See README.md's "Dev mode" section for the equivalent manual steps.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKEND_PORT=8000
+BACKEND_PORT=8788
 OPEN_BROWSER=1
 
 usage() {
@@ -12,8 +12,7 @@ usage() {
   echo "  path-to-scan    optional: directory whose first-level children get scanned for git repos." >&2
   echo "                  Only used to seed the config on first run; scan paths are otherwise" >&2
   echo "                  managed in the app (welcome wizard / Settings)." >&2
-  echo "  --port PORT     backend port (default: 8000). If you change this, also update" >&2
-  echo "                  src/frontend/vite.config.ts's proxy target -- don't commit that change." >&2
+  echo "  --port PORT     backend port (default: 8788)." >&2
   echo "  --no-open       don't open the app in a browser automatically." >&2
 }
 
@@ -115,7 +114,7 @@ fi
 BACKEND_PID=$!
 
 echo "Starting frontend dev server..."
-(cd "$ROOT_DIR/src/frontend" && npm run dev) &
+(cd "$ROOT_DIR/src/frontend" && GIT_JUGGLER_BACKEND_URL="http://127.0.0.1:$BACKEND_PORT" npm run dev) &
 FRONTEND_PID=$!
 
 if [ "$OPEN_BROWSER" = "1" ]; then
@@ -125,11 +124,6 @@ fi
 echo ""
 echo "Backend:  http://127.0.0.1:$BACKEND_PORT"
 echo "Frontend: http://localhost:5173  <- open this"
-if [ "$BACKEND_PORT" != "8000" ]; then
-  echo ""
-  echo "NOTE: backend is on a non-default port. Update the proxy target in" \
-       "src/frontend/vite.config.ts to http://127.0.0.1:$BACKEND_PORT (local-only change, do not commit)."
-fi
 echo ""
 echo "Press Ctrl+C to stop both."
 

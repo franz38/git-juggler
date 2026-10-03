@@ -25,7 +25,8 @@ secrets.env
 .vscode/
 *.sw?
 
-# Personal task notes (see CLAUDE.md)
+# Local assistant/project notes
+CLAUDE.md
 todo.txt
 
 plans/

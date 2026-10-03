@@ -5,6 +5,23 @@ description = "A local Git dashboard for people juggling agents and too many rep
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+keywords = ["agents", "dashboard", "git", "repositories", "terminal"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+]
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -14,6 +31,12 @@ dependencies = [
 
 [project.scripts]
 git-juggler = "git_juggler.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/franz38/git-juggler"
+Repository = "https://github.com/franz38/git-juggler"
+Issues = "https://github.com/franz38/git-juggler/issues"
+Releases = "https://github.com/franz38/git-juggler/releases"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
