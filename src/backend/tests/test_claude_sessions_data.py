@@ -11,6 +11,7 @@ from unittest.mock import patch
 from git_juggler.agents.hook_events import AgentHookEventReader
 from git_juggler.agents.tracking import claude_transcripts
 from git_juggler.agents.tracking.claude_transcripts import find_transcript, read_transcript_info
+from git_juggler.agents.tracking.git_resolver import GitResolver
 from hook_event_files import write_session_files
 
 
@@ -132,6 +133,85 @@ class SessionDetailsTest(unittest.TestCase):
                 file.write(_lines({"type": "ai-title", "aiTitle": "T2"}))
             with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
                 self.assertEqual(reader.recent_scans()[0].details.title, "T2")
+
+
+class IdleSessionHeadPinningTest(unittest.TestCase):
+    def _git(self, cwd: Path, *args: str) -> str:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+
+    def _repo(self, path: Path) -> str:
+        path.mkdir()
+        for args in (("init",), ("config", "user.name", "T"), ("config", "user.email", "t@e.c")):
+            self._git(path, *args)
+        (path / "a.txt").write_text("x\n", encoding="utf-8")
+        self._git(path, "add", "a.txt")
+        self._git(path, "commit", "-m", "i")
+        return self._git(path, "rev-parse", "HEAD")
+
+    def _commit(self, path: Path, text: str, message: str) -> str:
+        (path / "a.txt").write_text(text, encoding="utf-8")
+        self._git(path, "commit", "-am", message)
+        return self._git(path, "rev-parse", "HEAD")
+
+    def _card(self, sessions: Path, status: str) -> None:
+        sessions.mkdir(exist_ok=True)
+        (sessions / "111.json").write_text(
+            json.dumps(
+                {
+                    "pid": 111,
+                    "sessionId": "sid",
+                    "status": status,
+                    "statusUpdatedAt": 2000,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_idle_session_stays_on_last_active_commit_until_active_again(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            first_commit = self._repo(repo)
+            sessions = root / "sessions"
+            events_dir = root / "agent-sessions"
+            resolver_time = [0.0]
+            write_session_files(
+                events_dir,
+                [
+                    {
+                        "provider": "claude",
+                        "phase": "SessionStart",
+                        "cwd": str(repo),
+                        "timestamp": 1000,
+                        "raw": {"session_id": "sid"},
+                    }
+                ],
+            )
+            reader = AgentHookEventReader(
+                sessions_dir=events_dir,
+                git_resolver=GitResolver(clock=lambda: resolver_time[0]),
+                claude_sessions_dir=sessions,
+                claude_projects_dir=None,
+                opencode_db_path=None,
+                ttl_ms=1000,
+            )
+
+            with patch("git_juggler.agents.hook_events._pid_alive", return_value=True):
+                self._card(sessions, "busy")
+                active = reader.recent_scans(now=1500)[0].worktrees[0]
+                self.assertEqual((active.state, active.commit), ("active", first_commit))
+
+                second_commit = self._commit(repo, "y\n", "second")
+                resolver_time[0] = 1.0
+                self._card(sessions, "idle")
+                idle = reader.recent_scans(now=2500)[0].worktrees[0]
+                self.assertEqual((idle.state, idle.commit), ("idle", first_commit))
+                self.assertNotEqual(idle.commit, second_commit)
+
+                resolver_time[0] = 2.0
+                self._card(sessions, "busy")
+                active_again = reader.recent_scans(now=3500)[0].worktrees[0]
+                self.assertEqual((active_again.state, active_again.commit), ("active", second_commit))
 
 
 if __name__ == "__main__":
