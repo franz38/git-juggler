@@ -3,10 +3,13 @@ import { testJenkinsConnection, testJenkinsRule } from "../../api/client";
 import type { JenkinsConfig, JenkinsRuleConfig } from "../../api/types";
 import { CiPollField } from "./CiPollField";
 import { NumberField } from "../inputs/NumberField";
+import { TemplateInput } from "../inputs/TemplateInput";
 import { TextField } from "../inputs/TextField";
 import { ToggleField } from "../inputs/ToggleField";
 import { MultiSelect } from "../Search/MultiSelect";
 import { jenkinsConfig, jenkinsConfigError, repos, saveJenkinsConfig } from "../../state/store";
+import { activeTheme } from "../../state/themes";
+import { jenkinsUrlVariables } from "../../lib/jenkinsUrlTemplate";
 
 const emptyJenkinsConfig: JenkinsConfig = {
   enabled: true,
@@ -250,7 +253,7 @@ export function JenkinsSettings() {
       <div class="menu-field">
         <span>Rules</span>
         <p class="menu-hint">
-          Each repo can belong to one rule. The pipeline URL supports <span class="mono">{"{repo_name}"}</span>, <span class="mono">{"{repo_name_url}"}</span>, <span class="mono">{"{repo_slug}"}</span>, <span class="mono">{"{repo_slug_url}"}</span>, <span class="mono">{"{branch_name}"}</span>, and <span class="mono">{"{branch_name_url}"}</span>. Branch placeholders are resolved after pushes; git-juggler does not query every branch.
+          Each repo can belong to one rule. The pipeline URL supports placeholders such as <span class="mono">{"{repo_name_url}"}</span> and <span class="mono">{"{branch_name_url}"}</span>: type <span class="mono">{"{"}</span> in it to pick one. Branch placeholders are resolved after pushes; git-juggler does not query every branch.
         </p>
         <div class="jenkins-rules">
           <Show when={ruleCount() > 0} fallback={<div class="menu-empty">No Jenkins rules configured</div>}>
@@ -267,7 +270,12 @@ export function JenkinsSettings() {
                     </Show>
                   </div>
                   <MultiSelect options={repoOptionsForRule(ruleIndex)} selected={rule().repo_paths} onChange={(next) => updateRule(ruleIndex, "repo_paths", next)} placeholder="Select repos" />
-                  <input type="text" value={rule().job_url} placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}" onInput={(e) => updateRule(ruleIndex, "job_url", e.currentTarget.value)} />
+                  <TemplateInput
+                    value={rule().job_url}
+                    placeholder="https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}"
+                    variables={jenkinsUrlVariables(activeTheme(), rule().repo_paths[0])}
+                    onInput={(value) => updateRule(ruleIndex, "job_url", value)}
+                  />
                   <Show when={rule().repo_paths.length > 0}>
                     <div class="jenkins-rule-repo-tests">
                       <Index each={rule().repo_paths}>

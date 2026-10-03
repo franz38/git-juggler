@@ -353,6 +353,99 @@ body.tab-dragging * {
   white-space: nowrap;
 }
 
+/* TemplateInput: the input keeps its own look; only its text goes
+   transparent so the mirror on top can paint it with colored tokens. */
+.template-input {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.template-input > input.template-input-filled {
+  color: transparent;
+  caret-color: var(--text);
+}
+
+.template-input-mirror {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--text);
+  white-space: pre;
+}
+
+.template-input-mirror-text {
+  flex: none;
+}
+
+.template-input-token {
+  border-radius: 2px;
+}
+
+.template-input-token.unknown {
+  color: var(--danger);
+  text-decoration: underline wavy var(--danger);
+  text-underline-offset: 3px;
+}
+
+.template-suggest {
+  position: fixed;
+  z-index: 131;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px var(--shadow-soft);
+}
+
+.template-suggest-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.template-suggest-option.active {
+  background: var(--active-bg);
+}
+
+.template-suggest-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.template-suggest-name,
+.template-suggest-example {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.template-suggest-name {
+  flex: none;
+  font-size: 12px;
+}
+
+.template-suggest-example {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.template-suggest-description {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .content {
   flex: 1;
   min-height: 0;
