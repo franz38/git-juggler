@@ -230,6 +230,8 @@ class AgentHookEventReader:
         self._cached_signature: tuple | None = None
         self._cached_scans: list[AgentRepositoryScan] = []
         self._cached_valid_until = 0
+        self._last_active_heads: dict[tuple[tuple[str, str], str], GitWorktreeInfo] = {}
+        self._idle_heads: dict[tuple[tuple[str, str], str], GitWorktreeInfo] = {}
 
     def recent_scans(self, now: int | None = None) -> list[AgentRepositoryScan]:
         """One scan per open agent session.
@@ -294,6 +296,7 @@ class AgentHookEventReader:
         opencode_signature = db_signature(self.opencode_db_path)
         scans: list[AgentRepositoryScan] = []
         next_change: int | None = None
+        seen_head_keys: set[tuple[tuple[str, str], str]] = set()
         for session_key, session_events in sessions.items():
             # A session is open until its end hook fires (or its process dies),
             # however long it has been quiet.
@@ -374,6 +377,8 @@ class AgentHookEventReader:
             elif busy is True:
                 # Working right now: the most recently touched worktree is where.
                 max(activities.values(), key=lambda item: item.last_activity).state = "active"
+            for activity in activities.values():
+                self._pin_idle_head(session_key, activity, seen_head_keys)
             details: SessionDetails | None = None
             if card is not None and session_id:
                 details = self._session_details(card, session_id)
@@ -404,7 +409,47 @@ class AgentHookEventReader:
                     parent_provider=provider if parent_opencode_session is not None else None,
                 )
             )
+        self._prune_head_state(seen_head_keys)
         return scans, next_change
+
+    def _pin_idle_head(
+        self,
+        session_key: tuple[str, str],
+        activity: AgentWorktreeActivity,
+        seen: set[tuple[tuple[str, str], str]],
+    ) -> None:
+        key = (session_key, activity.worktree_path)
+        seen.add(key)
+        current = self._worktree_info(activity)
+        if activity.state == "active":
+            self._idle_heads.pop(key, None)
+            self._last_active_heads[key] = current
+            return
+
+        anchor = self._idle_heads.get(key)
+        if anchor is None or anchor.repository_id != activity.repository_id:
+            anchor = self._last_active_heads.get(key)
+            if anchor is None or anchor.repository_id != activity.repository_id:
+                anchor = current
+            self._idle_heads[key] = anchor
+        activity.branch = anchor.branch
+        activity.commit = anchor.commit
+
+    def _prune_head_state(self, seen: set[tuple[tuple[str, str], str]]) -> None:
+        for cache in (self._last_active_heads, self._idle_heads):
+            for key in list(cache):
+                if key not in seen:
+                    del cache[key]
+
+    @staticmethod
+    def _worktree_info(activity: AgentWorktreeActivity) -> GitWorktreeInfo:
+        return GitWorktreeInfo(
+            repository_id=activity.repository_id,
+            worktree_path=activity.worktree_path,
+            common_git_dir=activity.repository_id,
+            branch=activity.branch,
+            commit=activity.commit,
+        )
 
     @staticmethod
     def _since_last_prompt(events: list[HookEvent]) -> list[HookEvent]:

@@ -27,9 +27,10 @@ function ringKey(scan: AgentRepositoryScan, activity: AgentWorktreeActivity): st
 
 /**
  * Which commit each agent ring is drawn on in one repository's graph: the
- * worktree's HEAD. Right after an agent commits, the activity poll reports the
- * new HEAD before the graph has reloaded with it; until it has, the ring stays
- * on the commit it was last drawn on (`previous`) instead of disappearing.
+ * active worktree's HEAD, or the HEAD it had when an idle session stopped.
+ * Right after an agent commits, the activity poll reports the new HEAD before
+ * the graph has reloaded with it; until it has, the ring stays on the commit it
+ * was last drawn on (`previous`) instead of disappearing.
  * Returns the rings by commit, and the placements to pass back as `previous`.
  */
 export function placeAgentRings(
