@@ -17,7 +17,7 @@ def create_terminal_router(root_path: Path) -> APIRouter:
         repo_id = websocket.query_params.get("repo")
         cwd = root_path
         if repo_id:
-            resolved = resolve_repo_path(config.load_repo_paths(), repo_id)
+            resolved = resolve_repo_path(config.load_repo_paths(), repo_id, config.load_individual_repo_paths())
             if resolved is None:
                 await websocket.close(code=1008)
                 return

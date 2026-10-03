@@ -25,6 +25,7 @@ def create_config_router(root_path: Path) -> APIRouter:
     def _current_config() -> ConfigResponse:
         return ConfigResponse(
             repo_paths=[str(p) for p in config.load_repo_paths()],
+            individual_repo_paths=[str(p) for p in config.load_individual_repo_paths()],
             pinned_repo_paths=config.load_pinned_repo_paths(),
             repo_groups=config.load_repo_groups(),
             excluded_paths=config.load_excluded_paths(),
@@ -39,21 +40,29 @@ def create_config_router(root_path: Path) -> APIRouter:
     def api_get_config() -> ConfigResponse:
         return _current_config()
 
+    def _resolve_dirs(raw_paths: list[str], *, require_git: bool) -> list[Path]:
+        resolved: list[Path] = []
+        seen: set[str] = set()
+        for raw in raw_paths:
+            path = Path(raw).expanduser().resolve()
+            if not path.is_dir():
+                raise HTTPException(status_code=400, detail=f"not a directory: {raw}")
+            if require_git and not (path / ".git").exists():
+                raise HTTPException(status_code=400, detail=f"not a git repository: {raw}")
+            key = str(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            resolved.append(path)
+        return resolved
+
     @router.put("/api/config", response_model=ConfigResponse)
     def api_update_config(body: ConfigUpdateRequest) -> ConfigResponse:
         if body.repo_paths is not None:
-            resolved: list[Path] = []
-            seen: set[str] = set()
-            for raw in body.repo_paths:
-                path = Path(raw).expanduser().resolve()
-                if not path.is_dir():
-                    raise HTTPException(status_code=400, detail=f"not a directory: {raw}")
-                key = str(path)
-                if key in seen:
-                    continue
-                seen.add(key)
-                resolved.append(path)
-            config.save_repo_paths(resolved)
+            config.save_repo_paths(_resolve_dirs(body.repo_paths, require_git=False))
+
+        if body.individual_repo_paths is not None:
+            config.save_individual_repo_paths(_resolve_dirs(body.individual_repo_paths, require_git=True))
 
         if body.pinned_repo_paths is not None:
             deduped = list(dict.fromkeys(body.pinned_repo_paths))

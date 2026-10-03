@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from git_juggler.repo_discovery import get_scan_progress, list_repos
+from git_juggler.repo_discovery import get_scan_progress, list_repos, resolve_repo_path
 
 
 class RepoListTest(unittest.TestCase):
@@ -83,6 +83,36 @@ class RepoListTest(unittest.TestCase):
 
             self.assertEqual(progress["found"], 2)
             self.assertFalse(progress["scanning"])
+
+    def test_individual_repos_are_listed_and_resolvable_without_a_search_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve() / "deep" / "nested" / "repo"
+            self._init_repo(repo)
+
+            summaries = list_repos([], [repo])
+
+            self.assertEqual([summary.name for summary in summaries], ["repo"])
+            self.assertEqual(summaries[0].path, str(repo))
+            self.assertEqual(resolve_repo_path([], summaries[0].id, [repo]), repo)
+            self.assertIsNone(resolve_repo_path([], summaries[0].id))
+
+    def test_individual_repo_already_under_a_search_path_is_listed_once_with_the_same_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            repo = root / "repo"
+            self._init_repo(repo)
+
+            [individual_only] = list_repos([], [repo])
+            both = list_repos([root], [repo])
+
+            self.assertEqual([summary.id for summary in both], [individual_only.id])
+
+    def test_individual_repo_without_git_dir_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / "not-a-repo"
+            folder.mkdir()
+
+            self.assertEqual(list_repos([], [folder]), [])
 
 
 if __name__ == "__main__":

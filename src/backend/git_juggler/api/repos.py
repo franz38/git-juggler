@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.get("/api/repos", response_model=list[RepoSummary])
 def api_list_repos() -> list[RepoSummary]:
-    return list_repos(config.load_repo_paths())
+    return list_repos(config.load_repo_paths(), config.load_individual_repo_paths())
 
 
 @router.get("/api/repos/scan-progress", response_model=RepoScanProgress)

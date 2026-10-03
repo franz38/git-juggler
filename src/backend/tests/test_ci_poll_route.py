@@ -43,7 +43,7 @@ class CiPollRouteTest(unittest.TestCase):
 
         route = self._route()
         with (
-            patch.object(ci_api, "resolve_repo_path", lambda paths, repo_id: Path("/tmp/repo")),
+            patch.object(ci_api, "resolve_repo_path", lambda paths, repo_id, individual_repos=(): Path("/tmp/repo")),
             patch.object(ci_api, "poll_ci_runs", fake_poll),
         ):
             runs = route.endpoint(repo_id="k::x", run=["github_actions:1"], head_sha="abc", branch_name="main")

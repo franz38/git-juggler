@@ -2188,6 +2188,11 @@ const [repoPaths, setRepoPaths] = createSignal<string[]>([]);
 const [repoPathsError, setRepoPathsError] = createSignal<string | null>(null);
 export { repoPaths, repoPathsError };
 
+// Repos added one by one, on top of what the search paths turn up.
+const [individualRepoPaths, setIndividualRepoPaths] = createSignal<string[]>([]);
+const [individualRepoPathsError, setIndividualRepoPathsError] = createSignal<string | null>(null);
+export { individualRepoPaths, individualRepoPathsError };
+
 // Which shell run_terminal_session actually spawns on the backend (see
 // terminal.py) -- posix until /api/config says otherwise, since that's the
 // correct default for the very first render before the initial fetch lands.
@@ -2482,6 +2487,7 @@ export async function loadConfig(): Promise<void> {
   try {
     const data = await fetchConfig();
     setRepoPaths(data.repo_paths);
+    setIndividualRepoPaths(data.individual_repo_paths);
     setPinnedRepos(new Set(data.pinned_repo_paths));
     updateGroupsFromConfig(data.repo_groups);
     setExcludedPaths(data.excluded_paths);
@@ -2491,6 +2497,7 @@ export async function loadConfig(): Promise<void> {
     setTerminalShell(data.terminal_shell);
     setTerminalHelperCommand(data.terminal_helper_command.length > 0 ? data.terminal_helper_command : ["git-juggler"]);
     setRepoPathsError(null);
+    setIndividualRepoPathsError(null);
     setExcludedPathsError(null);
     setGraphPageSizeError(null);
     setGitHubConfigError(null);
@@ -2671,6 +2678,27 @@ export async function addRepoPath(path: string): Promise<void> {
 
 export async function removeRepoPath(path: string): Promise<void> {
   await saveRepoPaths(repoPaths().filter((p) => p !== path));
+}
+
+async function saveIndividualRepoPaths(next: string[]): Promise<void> {
+  try {
+    const data = await updateConfig({ individual_repo_paths: next });
+    setIndividualRepoPaths(data.individual_repo_paths);
+    setIndividualRepoPathsError(null);
+    void loadRepos();
+  } catch (e) {
+    setIndividualRepoPathsError((e as Error).message);
+  }
+}
+
+export async function addIndividualRepoPath(path: string): Promise<void> {
+  const trimmed = path.trim();
+  if (!trimmed || individualRepoPaths().includes(trimmed)) return;
+  await saveIndividualRepoPaths([...individualRepoPaths(), trimmed]);
+}
+
+export async function removeIndividualRepoPath(path: string): Promise<void> {
+  await saveIndividualRepoPaths(individualRepoPaths().filter((p) => p !== path));
 }
 
 export async function saveExcludedPaths(next: string[]): Promise<void> {

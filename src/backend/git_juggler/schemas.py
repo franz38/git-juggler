@@ -108,6 +108,7 @@ class RepoGroupConfig(BaseModel):
 
 class ConfigResponse(BaseModel):
     repo_paths: list[str]
+    individual_repo_paths: list[str] = Field(default_factory=list)
     pinned_repo_paths: list[str]
     repo_groups: list[RepoGroupConfig] = Field(default_factory=list)
     excluded_paths: list[str] = Field(default_factory=lambda: [".claude"])
@@ -124,6 +125,7 @@ class ConfigResponse(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     repo_paths: list[str] | None = None
+    individual_repo_paths: list[str] | None = None
     pinned_repo_paths: list[str] | None = None
     repo_groups: list[RepoGroupConfig] | None = None
     excluded_paths: list[str] | None = None

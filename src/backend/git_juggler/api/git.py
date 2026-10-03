@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 def _resolve_repo_path(repo_id: str) -> Path:
-    path = resolve_repo_path(config.load_repo_paths(), repo_id)
+    path = resolve_repo_path(config.load_repo_paths(), repo_id, config.load_individual_repo_paths())
     if path is None:
         raise HTTPException(status_code=404, detail="repo not found")
     return path

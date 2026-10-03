@@ -26,6 +26,7 @@ const SECTION_LABELS: Record<MenuSection, string> = {
 const SETTINGS_ENTRIES: SettingEntry[] = [
   ...(Object.keys(SECTION_LABELS) as MenuSection[]).map((section) => ({ label: SECTION_LABELS[section], section, sectionLabel: SECTION_LABELS[section] })),
   { label: "Search paths", section: "repos", sectionLabel: SECTION_LABELS.repos },
+  { label: "Repositories", section: "repos", sectionLabel: SECTION_LABELS.repos },
   { label: "Theme", section: "appearance", sectionLabel: SECTION_LABELS.appearance },
   { label: "Branch colors", section: "appearance", sectionLabel: SECTION_LABELS.appearance },
   { label: "Reset onboarding", section: "configuration", sectionLabel: SECTION_LABELS.configuration },

@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 def _resolve_repo_path(repo_id: str) -> Path:
-    path = resolve_repo_path(config.load_repo_paths(), repo_id)
+    path = resolve_repo_path(config.load_repo_paths(), repo_id, config.load_individual_repo_paths())
     if path is None:
         raise HTTPException(status_code=404, detail="repo not found")
     return path
@@ -82,7 +82,7 @@ def api_ci_stages(repo_id: str, provider: str, run_id: str) -> list[CiStage]:
 @router.get("/api/ci/recent", response_model=list[ActivePipeline])
 def api_ci_recent(limit: Annotated[int, Query(ge=1, le=50)] = 10) -> list[ActivePipeline]:
     return get_recent_pipelines(
-        list_repos(config.load_repo_paths()),
+        list_repos(config.load_repo_paths(), config.load_individual_repo_paths()),
         config.load_github_config(),
         config.load_jenkins_config(),
         limit,

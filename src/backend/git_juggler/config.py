@@ -52,6 +52,21 @@ def save_repo_paths(paths: list[Path]) -> None:
     _save_raw(data)
 
 
+def load_individual_repo_paths() -> list[Path]:
+    """Repos the user added one by one, on top of whatever the search paths
+    (``repo_paths``) turn up."""
+    raw = _load_raw().get("individual_repo_paths", [])
+    if not isinstance(raw, list):
+        return []
+    return [Path(p) for p in raw if isinstance(p, str)]
+
+
+def save_individual_repo_paths(paths: list[Path]) -> None:
+    data = _load_raw()
+    data["individual_repo_paths"] = [str(p) for p in paths]
+    _save_raw(data)
+
+
 def load_pinned_repo_paths() -> list[str]:
     raw = _load_raw().get("pinned_repo_paths", [])
     if not isinstance(raw, list):

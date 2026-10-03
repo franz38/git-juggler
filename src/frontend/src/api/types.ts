@@ -43,6 +43,7 @@ export type TerminalShell = "posix" | "cmd";
 
 export interface ConfigResponse {
   repo_paths: string[];
+  individual_repo_paths: string[];
   pinned_repo_paths: string[];
   repo_groups: RepoGroupConfig[];
   excluded_paths: string[];
@@ -55,6 +56,7 @@ export interface ConfigResponse {
 
 export interface ConfigUpdateRequest {
   repo_paths?: string[];
+  individual_repo_paths?: string[];
   pinned_repo_paths?: string[];
   repo_groups?: RepoGroupConfig[];
   excluded_paths?: string[];
