@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import threading
 import webbrowser
 from importlib import resources
@@ -11,6 +12,7 @@ import uvicorn
 
 from .agents.hooks import upgrade_installed_hooks
 from .app import create_app
+from .git.conflicts import consume_resolution_token
 
 
 def packaged_frontend_dist() -> Path | None:
@@ -27,6 +29,14 @@ def packaged_frontend_dist() -> Path | None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[:1] == ["resolve-file"]:
+        parser = argparse.ArgumentParser(prog="git-juggler resolve-file")
+        parser.add_argument("--token", required=True)
+        parser.add_argument("--path", required=True)
+        args = parser.parse_args(argv[1:])
+        args.command = "resolve-file"
+        return args
     parser = argparse.ArgumentParser(prog="git-juggler")
     parser.add_argument(
         "path",
@@ -38,7 +48,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", help="Enable dev auto-reload")
     parser.add_argument("--no-open", action="store_true", help="Do not open the app in a browser")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    args.command = "serve"
+    return args
 
 
 def browser_url(host: str, port: int) -> str:
@@ -48,6 +60,10 @@ def browser_url(host: str, port: int) -> str:
 
 def cli() -> None:
     args = parse_args()
+    if args.command == "resolve-file":
+        consume_resolution_token(args.token, args.path, Path.cwd())
+        return
+
     root_path = Path(args.path).expanduser().resolve()
     if not root_path.is_dir():
         raise SystemExit(f"Not a directory: {root_path}")

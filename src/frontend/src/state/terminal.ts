@@ -4,6 +4,7 @@ export {
   createLightweightTagInTerminal,
   feedTerminalOutput,
   flushPendingCommands,
+  gitJugglerTerminalCommand,
   markTerminalOutputReceived,
   noteTerminalOutput,
   openTerminal,

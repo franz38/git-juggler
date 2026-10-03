@@ -17,7 +17,7 @@ class GitCommandError(RuntimeError):
     pass
 
 
-def run_git(repo_path: Path, *args: str, stdin: str | None = None) -> str:
+def run_git_bytes(repo_path: Path, *args: str, stdin: str | None = None) -> bytes:
     """Run one read-only git command and return its stdout.
 
     `--no-optional-locks` keeps `git status` from refreshing (and so locking)
@@ -40,7 +40,18 @@ def run_git(repo_path: Path, *args: str, stdin: str | None = None) -> str:
         raise GitCommandError(
             f"git {' '.join(args[:2])} failed ({proc.returncode}): {detail}"
         )
-    return proc.stdout.decode("utf-8", errors="replace")
+    return proc.stdout
+
+
+def run_git(repo_path: Path, *args: str, stdin: str | None = None) -> str:
+    """Run one read-only git command and return its stdout.
+
+    `--no-optional-locks` keeps `git status` from refreshing (and so locking)
+    the index behind the user's back while they run their own git commands.
+    Output is decoded leniently: a commit message in some odd encoding must not
+    take the whole graph down.
+    """
+    return run_git_bytes(repo_path, *args, stdin=stdin).decode("utf-8", errors="replace")
 
 
 def run_git_or_empty(repo_path: Path, *args: str) -> str:

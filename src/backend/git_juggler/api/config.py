@@ -32,6 +32,7 @@ def create_config_router(root_path: Path) -> APIRouter:
             github=config.load_github_config(),
             jenkins=config.load_jenkins_config(),
             terminal_shell=terminal_shell,
+            terminal_helper_command=[sys.executable, "-m", "git_juggler.main"],
         )
 
     @router.get("/api/config", response_model=ConfigResponse)
