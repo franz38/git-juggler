@@ -5,10 +5,20 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .schemas import Preferences
+from .schemas import JenkinsConfig, JenkinsRuleConfig, Preferences
 
 CONFIG_DIR = Path.home() / ".config" / "git-juggler"
 CONFIG_PATH = CONFIG_DIR / "config.json"
+
+# A fresh install ships one example Jenkins rule so the settings show how
+# pipeline URL placeholders work. It has no repos, so nothing is ever requested
+# from the placeholder host until the user assigns some.
+EXAMPLE_JENKINS_BASE_URL = "https://jenkins.example.com"
+EXAMPLE_JENKINS_RULE = JenkinsRuleConfig(
+    id="example",
+    name="Example rule",
+    job_url=EXAMPLE_JENKINS_BASE_URL + "/job/{repo_name_url}/job/{branch_name_url}",
+)
 
 
 def _load_raw() -> dict:
@@ -201,10 +211,12 @@ def save_jenkins_config(jenkins: dict | None) -> None:
 
 def ensure_seeded(default_path: Path) -> None:
     """On first run (no config file yet), seed it with the CLI-provided path
-    so existing single-path usage keeps working without extra setup."""
+    so existing single-path usage keeps working without extra setup, plus the
+    example Jenkins rule."""
     if CONFIG_PATH.exists():
         return
     save_repo_paths([default_path])
+    save_jenkins_config(JenkinsConfig(base_url=EXAMPLE_JENKINS_BASE_URL, rules=[EXAMPLE_JENKINS_RULE]).model_dump())
 
 
 def reset_to_factory(default_path: Path) -> None:

@@ -56,21 +56,26 @@ export function JenkinsSettings() {
     else if (saveTimer) clearTimeout(saveTimer);
   });
 
-  const normalize = (config: JenkinsConfig): JenkinsConfig => ({
-    ...config,
-    base_url: config.base_url.trim(),
-    username: config.username.trim(),
-    api_token_env: config.api_token_env.trim() || "JENKINS_API_TOKEN",
-    build_limit: Math.max(1, Math.min(Number(config.build_limit) || 50, 500)),
-    rules: config.rules
-      .map((rule) => ({
-        id: rule.id || newId(),
-        name: rule.name.trim() || "Jenkins rule",
-        repo_paths: Array.from(new Set(rule.repo_paths.map((path) => path.trim()).filter(Boolean))),
-        job_url: rule.job_url.trim(),
-      }))
-      .filter((rule) => rule.repo_paths.length > 0 && rule.job_url),
-  });
+  // Unsaved rules need repos to be kept; an already saved rule without repos
+  // (the example rule a fresh install ships with) survives autosaves.
+  const normalize = (config: JenkinsConfig): JenkinsConfig => {
+    const savedIds = new Set(jenkinsConfig().rules.map((rule) => rule.id));
+    return {
+      ...config,
+      base_url: config.base_url.trim(),
+      username: config.username.trim(),
+      api_token_env: config.api_token_env.trim() || "JENKINS_API_TOKEN",
+      build_limit: Math.max(1, Math.min(Number(config.build_limit) || 50, 500)),
+      rules: config.rules
+        .map((rule) => ({
+          id: rule.id || newId(),
+          name: rule.name.trim() || "Jenkins rule",
+          repo_paths: Array.from(new Set(rule.repo_paths.map((path) => path.trim()).filter(Boolean))),
+          job_url: rule.job_url.trim(),
+        }))
+        .filter((rule) => rule.job_url && (rule.repo_paths.length > 0 || savedIds.has(rule.id))),
+    };
+  };
 
   const normalizeRule = (rule: JenkinsRuleConfig): JenkinsRuleConfig | null => {
     const next = {

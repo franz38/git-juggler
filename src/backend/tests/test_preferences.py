@@ -4,7 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from git_juggler import config
-from git_juggler.schemas import Preferences
+from git_juggler.ci import jenkins
+from git_juggler.schemas import JenkinsConfig, Preferences
 
 
 @pytest.fixture(autouse=True)
@@ -117,9 +118,40 @@ def test_reset_to_factory_wipes_everything_and_reseeds_the_default_path(tmp_path
     config.save_repo_paths([tmp_path / "a", tmp_path / "b"])
     config.save_pinned_repo_paths(["x"])
     config.update_preferences(patch(theme_id="builtin:light", onboarding_complete=True))
+    config.save_jenkins_config({"base_url": "https://ci.internal", "rules": []})
 
     config.reset_to_factory(tmp_path / "default")
 
     assert config.load_repo_paths() == [tmp_path / "default"]
     assert config.load_pinned_repo_paths() == []
     assert config.load_preferences() == Preferences()
+    assert config.load_jenkins_config()["rules"] == [config.EXAMPLE_JENKINS_RULE.model_dump()]
+
+
+def test_first_run_seeds_an_example_jenkins_rule_using_placeholders(tmp_path):
+    config.ensure_seeded(tmp_path / "default")
+
+    jenkins_config = JenkinsConfig(**config.load_jenkins_config())
+    assert jenkins_config.base_url == "https://jenkins.example.com"
+    [rule] = jenkins_config.rules
+    assert rule.job_url == "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}"
+    assert rule.repo_paths == []
+
+
+def test_example_jenkins_rule_never_matches_a_repo(tmp_path):
+    config.ensure_seeded(tmp_path)
+    repo_path = tmp_path / "some-repo"
+    repo_path.mkdir()
+
+    # No repo -> no request ever goes to the placeholder Jenkins host.
+    assert jenkins._matching_job_configs(config.load_jenkins_config(), repo_path, "main") == []
+    assert jenkins._job_url_prefixes(config.load_jenkins_config(), repo_path) == []
+
+
+def test_existing_config_is_not_seeded_again(tmp_path):
+    config.save_repo_paths([tmp_path / "mine"])
+
+    config.ensure_seeded(tmp_path / "default")
+
+    assert config.load_repo_paths() == [tmp_path / "mine"]
+    assert config.load_jenkins_config() is None
