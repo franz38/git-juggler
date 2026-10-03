@@ -1,4 +1,4 @@
-import { For, Show, createEffect, onCleanup, onMount, untrack } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from "solid-js";
 import "./App.css";
 import { GraphPanel } from "./components/Graph/GraphPanel";
 import { DeleteBranchModal } from "./components/Branches/DeleteBranchModal";
@@ -11,6 +11,7 @@ import { FileDiffModal } from "./components/Diff/FileDiffModal";
 import { RepoContextMenu } from "./components/ContextMenu/RepoContextMenu";
 import { TagContextMenu } from "./components/ContextMenu/TagContextMenu";
 import { CommitList } from "./components/Commits/CommitList";
+import { ConflictsPanel } from "./components/Conflicts/ConflictsPanel";
 import { CommandPalette } from "./components/CommandPalette/CommandPalette";
 import { DirectoryBrowserModal } from "./components/Menu/DirectoryBrowserModal";
 import { MainMenu } from "./components/Menu/MainMenu";
@@ -36,6 +37,7 @@ import {
   refreshPipelines,
   refreshActiveRepoCiRuns,
   CI_COMPLETED_REFRESH_INTERVAL_MS,
+  conflictStateForRepo,
   repoUnavailable,
   leftTabs,
   rightTabs,
@@ -58,6 +60,16 @@ import { loadPreferences } from "./state/preferences";
 import { activeTheme, loadThemes } from "./state/themes";
 
 function App() {
+  const [terminalDrawerTab, setTerminalDrawerTab] = createSignal<"terminal" | "conflicts">("terminal");
+  const activeConflictState = createMemo(() => {
+    const repo = activeRepo();
+    return repo ? conflictStateForRepo(repo) : null;
+  });
+  const conflictTabVisible = createMemo(() => {
+    const state = activeConflictState();
+    return !!state && (state.files.length > 0 || state.can_continue);
+  });
+
   // Applies the active theme: `data-theme` picks color-scheme, and each
   // resolved variable is set inline so it overrides the stylesheet defaults.
   createEffect(() => {
@@ -76,6 +88,12 @@ function App() {
       void pollRepoStatus(repo);
     }, 2500);
     onCleanup(() => window.clearInterval(timer));
+  });
+
+  createEffect(() => {
+    if (!conflictTabVisible() && terminalDrawerTab() === "conflicts") {
+      setTerminalDrawerTab("terminal");
+    }
   });
 
   // Agent activity feeds the agents tab, the repo-tab badges and the graph's
@@ -259,23 +277,37 @@ function App() {
             <div class="terminal-resize-handle" onMouseDown={startResize} />
           </Show>
           <div class="terminal-header" onClick={() => toggleTerminalOpen()}>
-            <span>Terminal</span>
+            <div class="terminal-tabs" onClick={(e) => e.stopPropagation()}>
+              <button type="button" class="terminal-tab" classList={{ active: terminalDrawerTab() === "terminal" }} onClick={() => setTerminalDrawerTab("terminal")}>
+                Terminal
+              </button>
+              <Show when={conflictTabVisible()}>
+                <button type="button" class="terminal-tab" classList={{ active: terminalDrawerTab() === "conflicts" }} onClick={() => setTerminalDrawerTab("conflicts")}>
+                  Conflicts<span class="terminal-tab-badge">{activeConflictState()?.files.length || "ready"}</span>
+                </button>
+              </Show>
+            </div>
             <span class="chevron">{terminalOpen() ? "▾" : "▸"}</span>
           </div>
           {/* Each open repo keeps its own persistent shell — instances stay
               mounted (hidden via CSS, not unmounted) so switching tabs or
               collapsing the drawer never kills a running shell. */}
           <div class="terminal-body">
-            <div class="terminal-instance" classList={{ hidden: tabs().length > 0 }}>
-              <TerminalPanel repo={null} />
+            <div class="terminal-tab-body" classList={{ hidden: terminalDrawerTab() !== "terminal" }}>
+              <div class="terminal-instance" classList={{ hidden: tabs().length > 0 }}>
+                <TerminalPanel repo={null} />
+              </div>
+              <For each={tabs()}>
+                {(tab) => (
+                  <div class="terminal-instance" classList={{ hidden: activeRepo() !== tab.id }}>
+                    <TerminalPanel repo={tab.id} />
+                  </div>
+                )}
+              </For>
             </div>
-            <For each={tabs()}>
-              {(tab) => (
-                <div class="terminal-instance" classList={{ hidden: activeRepo() !== tab.id }}>
-                  <TerminalPanel repo={tab.id} />
-                </div>
-              )}
-            </For>
+            <Show when={terminalDrawerTab() === "conflicts" && activeRepo()}>
+              {(repo) => <ConflictsPanel repoId={repo()} />}
+            </Show>
           </div>
         </div>
       </main>

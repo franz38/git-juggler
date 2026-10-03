@@ -5,11 +5,12 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
 from .. import config
+from ..git.conflicts import create_resolution_token, get_conflict_file_content
 from ..git.data import GRAPH_PAGE_SIZE, HistoryChangedError, get_graph, get_repo_status
 from ..git.detail import get_commit_detail
 from ..git.diff import get_commit_file_diff, get_working_file_diff
 from ..repo_discovery import resolve_repo_path
-from ..schemas import CommitDetail, FileDiff, GraphResponse, RepoStatusResponse
+from ..schemas import CommitDetail, ConflictFileContent, ConflictResolutionTokenRequest, ConflictResolutionTokenResponse, FileDiff, GraphResponse, RepoStatusResponse
 
 
 router = APIRouter()
@@ -75,3 +76,24 @@ def api_working_file_diff(
         return get_working_file_diff(repo_path, path, old_path, full)
     except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
         raise HTTPException(status_code=404, detail="diff not found") from exc
+
+
+@router.get("/api/repos/{repo_id}/conflicts/content", response_model=ConflictFileContent)
+def api_conflict_file_content(repo_id: str, path: str) -> ConflictFileContent:
+    repo_path = _resolve_repo_path(repo_id)
+    try:
+        return get_conflict_file_content(repo_path, path)
+    except Exception as exc:  # noqa: BLE001 - surfaced as a 404 either way
+        raise HTTPException(status_code=404, detail="conflict file not found") from exc
+
+
+@router.post("/api/repos/{repo_id}/conflicts/resolution-token", response_model=ConflictResolutionTokenResponse)
+def api_create_conflict_resolution_token(
+    repo_id: str, request: ConflictResolutionTokenRequest
+) -> ConflictResolutionTokenResponse:
+    if request.repo_id != repo_id:
+        raise HTTPException(status_code=400, detail="repo mismatch")
+    _resolve_repo_path(repo_id)
+    return ConflictResolutionTokenResponse(
+        token=create_resolution_token(repo_id, request.path, request.content)
+    )
