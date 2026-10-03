@@ -24,7 +24,9 @@ import {
   fetchAgentHooks,
   fetchCiRuns,
   fetchCommitDetail,
+  createConflictResolutionToken,
   fetchConfig,
+  fetchConflictFileContent,
   fetchGraph,
   fetchRepoScanProgress,
   fetchRepoStatus,
@@ -47,6 +49,8 @@ import type {
   CiStage,
   CommitDetail,
   CommitSummary,
+  ConflictFileContent,
+  ConflictState,
   FileChange,
   GitHubConfig,
   JenkinsConfig,
@@ -103,6 +107,7 @@ interface RepoState {
   loadingMore: boolean;
   isDirty: boolean;
   uncommittedFiles: FileChange[];
+  conflictState: ConflictState;
   uncommittedExpanded: boolean;
   expanded: Set<string>;
   details: Record<string, CommitDetail>;
@@ -189,6 +194,12 @@ const [repoStates, setRepoStates] = createStore<Record<string, RepoState>>({});
 const inFlightDetailRequests = new Set<string>();
 const pendingGraphRefreshes = new Set<string>();
 export { activePane, splitRatio };
+
+const EMPTY_CONFLICT_STATE: ConflictState = {
+  operation: null,
+  files: [],
+  can_continue: false,
+};
 
 export const splitActive = createMemo(() =>
   tabs().some((tab) => tab.pane === "right"),
@@ -1039,6 +1050,7 @@ function ensureRepoState(name: string): void {
       loadingMore: false,
       isDirty: false,
       uncommittedFiles: [],
+      conflictState: EMPTY_CONFLICT_STATE,
       uncommittedExpanded: false,
       expanded: new Set(),
       details: {},
@@ -1147,6 +1159,7 @@ async function loadGraphInto(
     setRepoStates(name, "refsSignature", data.refs_signature);
     setRepoStates(name, "isDirty", data.is_dirty);
     setRepoStates(name, "uncommittedFiles", data.uncommitted_files);
+    setRepoStates(name, "conflictState", data.conflict_state ?? EMPTY_CONFLICT_STATE);
     void loadCiRunsInto(name);
   } catch (e) {
     setRepoStates(name, "error", (e as Error).message);
@@ -1208,6 +1221,7 @@ export async function pollRepoStatus(repoId: string): Promise<void> {
     setRepoStates(repoId, "upstreamBranch", status.upstream_branch);
     setRepoStates(repoId, "isDirty", status.is_dirty);
     setRepoStates(repoId, "uncommittedFiles", status.uncommitted_files);
+    setRepoStates(repoId, "conflictState", status.conflict_state ?? EMPTY_CONFLICT_STATE);
   } catch {
     // Status polling is opportunistic; the next graph load can surface errors.
   }
@@ -1752,6 +1766,24 @@ export function uncommittedFilesForRepo(repoId: string): FileChange[] {
   return repoStates[repoId]?.uncommittedFiles ?? [];
 }
 
+export const conflictState = createMemo<ConflictState>(() => {
+  const name = activeRepo();
+  return name ? (repoStates[name]?.conflictState ?? EMPTY_CONFLICT_STATE) : EMPTY_CONFLICT_STATE;
+});
+
+export function conflictStateForRepo(repoId: string): ConflictState {
+  return repoStates[repoId]?.conflictState ?? EMPTY_CONFLICT_STATE;
+}
+
+export function fetchConflictContent(repoId: string, path: string): Promise<ConflictFileContent> {
+  return fetchConflictFileContent(repoId, path);
+}
+
+export async function createConflictToken(repoId: string, path: string, content: string): Promise<string> {
+  const response = await createConflictResolutionToken(repoId, path, content);
+  return response.token;
+}
+
 export const uncommittedExpanded = createMemo<boolean>(() => {
   const name = activeRepo();
   return name ? (repoStates[name]?.uncommittedExpanded ?? false) : false;
@@ -2161,6 +2193,7 @@ export { repoPaths, repoPathsError };
 // correct default for the very first render before the initial fetch lands.
 const [terminalShell, setTerminalShell] = createSignal<TerminalShell>("posix");
 export { terminalShell };
+const [terminalHelperCommand, setTerminalHelperCommand] = createSignal<string[]>(["git-juggler"]);
 
 const [excludedPaths, setExcludedPaths] = createSignal<string[]>([]);
 const [excludedPathsError, setExcludedPathsError] = createSignal<string | null>(
@@ -2456,6 +2489,7 @@ export async function loadConfig(): Promise<void> {
     applyGitHubConfig(data.github);
     applyJenkinsConfig(data.jenkins);
     setTerminalShell(data.terminal_shell);
+    setTerminalHelperCommand(data.terminal_helper_command.length > 0 ? data.terminal_helper_command : ["git-juggler"]);
     setRepoPathsError(null);
     setExcludedPathsError(null);
     setGraphPageSizeError(null);
@@ -2879,6 +2913,10 @@ export function closeFileDiff(): void {
 // quotes are meaningless to it.
 export function shellQuote(value: string): string {
   return terminalShell() === "cmd" ? quoteForCmd(value) : quoteForPosix(value);
+}
+
+export function gitJugglerTerminalCommand(args: string[]): string {
+  return [...terminalHelperCommand(), ...args].map(shellQuote).join(" ");
 }
 
 function quoteForPosix(value: string): string {

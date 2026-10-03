@@ -50,6 +50,7 @@ export interface ConfigResponse {
   github: GitHubConfig | null;
   jenkins: JenkinsConfig | null;
   terminal_shell: TerminalShell;
+  terminal_helper_command: string[];
 }
 
 export interface ConfigUpdateRequest {
@@ -170,6 +171,7 @@ export interface GraphResponse {
   upstream_branch: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
+  conflict_state: ConflictState;
   checked_out_branches: string[];
   refs_signature: string;
   /** More (older) commits exist beyond this page; pass `next_cursor` as `before` to fetch them. */
@@ -185,6 +187,7 @@ export interface RepoStatusResponse {
   upstream_branch: string | null;
   is_dirty: boolean;
   uncommitted_files: FileChange[];
+  conflict_state: ConflictState;
   refs_signature: string;
 }
 
@@ -201,6 +204,34 @@ export interface FileDiff {
   patch: string;
   binary: boolean;
   truncated: boolean;
+}
+
+export interface ConflictFile {
+  path: string;
+  status: string;
+  ours_available: boolean;
+  theirs_available: boolean;
+  base_available: boolean;
+}
+
+export interface ConflictState {
+  operation: "merge" | "rebase" | "cherry-pick" | "revert" | "unknown" | null;
+  files: ConflictFile[];
+  can_continue: boolean;
+}
+
+export interface ConflictFileContent {
+  path: string;
+  binary: boolean;
+  too_large: boolean;
+  base: string | null;
+  ours: string | null;
+  theirs: string | null;
+  worktree: string | null;
+}
+
+export interface ConflictResolutionTokenResponse {
+  token: string;
 }
 
 export interface CommitDetail {

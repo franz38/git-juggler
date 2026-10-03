@@ -12,7 +12,8 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 # A fresh install ships one example Jenkins rule so the settings show how
 # pipeline URL placeholders work. It has no repos, so nothing is ever requested
-# from the placeholder host until the user assigns some.
+# from the placeholder host until the user assigns some. The settings' "Add
+# rule" starts from the same rule (lib/jenkinsUrlTemplate.ts in the frontend).
 EXAMPLE_JENKINS_BASE_URL = "https://jenkins.example.com"
 EXAMPLE_JENKINS_RULE = JenkinsRuleConfig(
     id="example",

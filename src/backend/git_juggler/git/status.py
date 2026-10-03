@@ -37,6 +37,7 @@ class ParsedStatus:
     current_branch: str | None = None
     head_commit: str | None = None
     changes: dict[str, str] = field(default_factory=dict)
+    conflicts: dict[str, str] = field(default_factory=dict)
 
 
 def parse_status(raw: str) -> ParsedStatus:
@@ -70,7 +71,10 @@ def parse_status(raw: str) -> ParsedStatus:
             i += 1  # the rename source path follows as its own NUL-terminated field
         elif kind == "u":
             fields = token.split(" ", 10)
-            xy, path = "MM", fields[10]
+            xy, path = fields[1], fields[10]
+            parsed.conflicts[path] = xy
+            parsed.changes[path] = "conflicted"
+            continue
         else:
             continue
         staged, unstaged = xy[0], xy[1]

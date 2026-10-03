@@ -119,6 +119,7 @@ class ConfigResponse(BaseModel):
     # needs this to know how to quote arguments for commands it sends through
     # the terminal (POSIX single-quoting is meaningless to cmd.exe).
     terminal_shell: Literal["posix", "cmd"] = "posix"
+    terminal_helper_command: list[str] = Field(default_factory=list)
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -209,6 +210,40 @@ class FileDiff(BaseModel):
     truncated: bool = False
 
 
+class ConflictFile(BaseModel):
+    path: str
+    status: str
+    ours_available: bool = False
+    theirs_available: bool = False
+    base_available: bool = False
+
+
+class ConflictState(BaseModel):
+    operation: Literal["merge", "rebase", "cherry-pick", "revert", "unknown"] | None = None
+    files: list[ConflictFile] = Field(default_factory=list)
+    can_continue: bool = False
+
+
+class ConflictFileContent(BaseModel):
+    path: str
+    binary: bool = False
+    too_large: bool = False
+    base: str | None = None
+    ours: str | None = None
+    theirs: str | None = None
+    worktree: str | None = None
+
+
+class ConflictResolutionTokenRequest(BaseModel):
+    repo_id: str
+    path: str
+    content: str
+
+
+class ConflictResolutionTokenResponse(BaseModel):
+    token: str
+
+
 class GraphResponse(BaseModel):
     commits: list[CommitSummary]
     branches: list[str]
@@ -221,6 +256,7 @@ class GraphResponse(BaseModel):
     upstream_branch: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
+    conflict_state: ConflictState = Field(default_factory=ConflictState)
     checked_out_branches: list[str] = Field(default_factory=list)
     refs_signature: str = ""
     # Paging: commits are the newest page (oldest-first within it); when
@@ -238,6 +274,7 @@ class RepoStatusResponse(BaseModel):
     upstream_branch: str | None = None
     is_dirty: bool = False
     uncommitted_files: list[FileChange] = Field(default_factory=list)
+    conflict_state: ConflictState = Field(default_factory=ConflictState)
     refs_signature: str = ""
 
 

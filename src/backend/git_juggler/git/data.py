@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .. import config
-from ..schemas import CommitSummary, FileChange, PersonInfo, RefsInfo, RepoStatusResponse, TagInfo
+from ..schemas import CommitSummary, ConflictState, FileChange, PersonInfo, RefsInfo, RepoStatusResponse, TagInfo
 from .command import GIT_POOL as _pool
 from .command import GitCommandError, run_git as _run_git, run_git_or_empty as _run_git_or_empty
+from .conflicts import build_conflict_state
 from .refs import HEADS as _HEADS
 from .refs import REF_FORMAT as _REF_FORMAT
 from .refs import REMOTES as _REMOTES
@@ -355,6 +356,7 @@ def _status_response(
         upstream_branch=upstream.branch if upstream else None,
         is_dirty=bool(files),
         uncommitted_files=files,
+        conflict_state=build_conflict_state(repo_path, parsed) if repo_path is not None else ConflictState(),
         refs_signature=_refs_signature(refs, parse_worktree_branches(worktree_raw)),
     )
 
@@ -390,6 +392,7 @@ class GraphData(NamedTuple):
     upstream_branch: str | None
     is_dirty: bool
     uncommitted_files: list[FileChange]
+    conflict_state: ConflictState
     checked_out_branches: list[str]
     refs_signature: str
     has_more: bool
@@ -429,6 +432,7 @@ def _empty_graph(
         status.upstream_branch,
         status.is_dirty,
         status.uncommitted_files,
+        status.conflict_state,
         checked_out,
         status.refs_signature,
         False,
@@ -567,6 +571,7 @@ def get_graph(
         status.upstream_branch,
         status.is_dirty,
         status.uncommitted_files,
+        status.conflict_state,
         checked_out,
         status.refs_signature,
         has_more,

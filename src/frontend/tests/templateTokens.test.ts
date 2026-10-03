@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BUILTIN_DARK, BUILTIN_LIGHT } from "../src/lib/appTheme.ts";
 import { contrast, parseColor } from "../src/lib/color.ts";
-import { jenkinsUrlVariables } from "../src/lib/jenkinsUrlTemplate.ts";
+import { exampleJobUrl, jenkinsUrlVariables } from "../src/lib/jenkinsUrlTemplate.ts";
 import { matchVariables, openTokenAt, splitTemplate, tokenReplaceEnd, type TemplateVariable } from "../src/lib/templateTokens.ts";
 
 const vars = (...names: string[]): TemplateVariable[] => names.map((name) => ({ name, color: "#000000", description: name }));
@@ -70,4 +70,11 @@ test("jenkinsUrlVariables examples follow the backend's slug and quote rules", (
   assert.equal(example("repo_path"), "/work/My Repo (old)");
   assert.equal(example("branch_name_url"), "feature%2Flogin");
   assert.equal(example("branch_slug"), "feature-login");
+});
+
+test("exampleJobUrl builds the example rule's URL on the configured base URL", () => {
+  // Same URL the backend seeds a fresh install with (EXAMPLE_JENKINS_RULE).
+  assert.equal(exampleJobUrl(""), "https://jenkins.example.com/job/{repo_name_url}/job/{branch_name_url}");
+  assert.equal(exampleJobUrl("  https://ci.acme.dev/ "), "https://ci.acme.dev/job/{repo_name_url}/job/{branch_name_url}");
+  assert.equal(exampleJobUrl("https://ci.acme.dev/jenkins//"), "https://ci.acme.dev/jenkins/job/{repo_name_url}/job/{branch_name_url}");
 });

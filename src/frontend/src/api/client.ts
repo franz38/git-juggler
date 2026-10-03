@@ -1,5 +1,5 @@
 import type { RawVscodeTheme } from "../lib/appTheme";
-import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiConnectionTestResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, FileChange, FileDiff, GitHubConfig, GraphResponse, JenkinsConfig, JenkinsRuleTestRequest, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
+import type { ActivePipeline, AgentActivityResponse, AgentHookProviderStatus, AgentHooksResponse, BrowseDirectoryResponse, CiConnectionTestResponse, CiRunInfo, CiStage, CommitDetail, ConfigResponse, ConfigUpdateRequest, ConflictFileContent, ConflictResolutionTokenResponse, FileChange, FileDiff, GitHubConfig, GraphResponse, JenkinsConfig, JenkinsRuleTestRequest, PickFolderResponse, Preferences, RepoScanProgress, RepoStatusResponse, RepoSummary, ThemesResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -91,6 +91,15 @@ export function fetchWorkingFileDiff(repoId: string, file: FileChange, full = fa
   if (file.old_path) query.set("old_path", file.old_path);
   if (full) query.set("full", "true");
   return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/diff?${query}`);
+}
+
+export function fetchConflictFileContent(repoId: string, path: string): Promise<ConflictFileContent> {
+  const query = new URLSearchParams({ path });
+  return getJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/conflicts/content?${query}`);
+}
+
+export function createConflictResolutionToken(repoId: string, path: string, content: string): Promise<ConflictResolutionTokenResponse> {
+  return postJson(`${API_BASE}/repos/${encodeURIComponent(repoId)}/conflicts/resolution-token`, { repo_id: repoId, path, content });
 }
 
 export function fetchCiRuns(repoId: string): Promise<Record<string, CiRunInfo[]>> {
